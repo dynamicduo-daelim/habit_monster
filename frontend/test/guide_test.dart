@@ -41,7 +41,7 @@ void main() {
     expect(find.text('루틴몬에 온 걸 환영해요!'), findsOneWidget);
     expect(find.text('1 / 8'), findsOneWidget);
 
-    for (final title in ['나의 필드', '오늘의 성실도', '챗봇에서 습관 체크', '골드와 성실볼', '상점 · 가방 · 출석', '목표와 도감']) {
+    for (final title in ['나의 필드', '오늘의 성실도', '챗봇에서 습관 체크', '골드와 성실볼', '상점 · 가방 · 출석 · 습관', '목표와 도감']) {
       await tapAndWait(tester, find.text('다음 ▶'));
       expect(find.text(title), findsOneWidget);
     }

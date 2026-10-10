@@ -126,8 +126,8 @@ class MainShellState extends State<MainShell> {
         ),
         TutorialStep(
           targets: [_iconsKey],
-          title: '상점 · 가방 · 출석',
-          body: '상점에서 물건을 사고, 가방에서 꺼내 써요. 출석부에서는 며칠째 연속으로 출석했는지 볼 수 있어요.',
+          title: '상점 · 가방 · 출석 · 습관',
+          body: '상점에서 물건을 사고, 가방에서 꺼내 써요. 출석부에서는 연속 출석을 보고, 습관에서는 새 습관을 추가하거나 그만둘 수 있어요.',
         ),
         TutorialStep(
           targets: [_tabKeys[MainShell.goalsTab], _tabKeys[MainShell.dexTab]],

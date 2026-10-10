@@ -186,7 +186,8 @@ class GameState extends ChangeNotifier {
   int? rewardedScoreOf(Habit h) => rewardedScores[h.id];
 
   /// 오늘의 성실도 = 반영된 습관의 첫 확정 점수 합 (받은 골드와 같다).
-  int get todayScore => countedHabits.fold(0, (a, h) => a + (rewardedScoreOf(h) ?? 0));
+  /// 확정 뒤 습관을 그만둬도 줄지 않게, 습관 목록이 아니라 확정 기록에서 더한다.
+  int get todayScore => countedToday.fold(0, (a, id) => a + (rewardedScores[id] ?? 0));
   int get checkedCount => activeHabits.where((h) => todayRecords.containsKey(h.id)).length;
 
   /// 상단 바의 연속 출석 (오늘 체크인을 확정하면 +1).
@@ -348,6 +349,47 @@ class GameState extends ChangeNotifier {
     if (toField && fieldMonsters.length >= Economy.fieldCapacity) return false;
     if (!toField && fieldMonsters.length <= 1) return false;
     m.inField = toField;
+    notifyListeners();
+    return true;
+  }
+
+  // ---------- 습관 추가 · 그만두기 (서버: POST · DELETE /habits) ----------
+  int _habitSeq = 0;
+
+  /// 습관을 더 넣을 수 있는지 (최대 [Economy.maxActiveHabits]개).
+  bool get canAddHabit => habits.length < Economy.maxActiveHabits;
+
+  /// 습관을 그만둘 수 있는지 (마지막 1개는 남긴다 — 체크할 습관이 없으면 앱의 흐름이 끊긴다).
+  bool get canRemoveHabit => habits.length > 1;
+
+  /// 새 습관을 등록한다. 꽉 찼거나, 열지 않은 카테고리거나, 이름 · 목표가 비었으면 null.
+  /// 오늘 이미 체크인을 확정했다면 이 습관은 내일부터 보상에 반영된다 (보상은 첫 확정 기준).
+  Habit? addHabit({
+    required String name,
+    required String categoryId,
+    required int measureIndex,
+    required double target,
+    required int periodIndex,
+  }) {
+    final trimmed = name.trim();
+    if (!canAddHabit || trimmed.isEmpty || target <= 0 || !pickedCategories.contains(categoryId)) return null;
+    final h = Habit(
+      id: 'nh${_habitSeq++}',
+      name: trimmed,
+      categoryId: categoryId,
+      measureIndex: measureIndex,
+      target: target,
+      periodIndex: periodIndex,
+    );
+    habits.add(h);
+    notifyListeners();
+    return h;
+  }
+
+  /// 습관을 그만둔다. 이미 받은 골드 · 카테고리 경험치 · 오늘의 성실도는 그대로 둔다. 마지막 1개면 false.
+  bool removeHabit(Habit h) {
+    if (!canRemoveHabit || !habits.remove(h)) return false;
+    todayRecords.remove(h.id);
     notifyListeners();
     return true;
   }
