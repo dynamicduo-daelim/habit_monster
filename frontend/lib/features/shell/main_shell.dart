@@ -33,8 +33,9 @@ class MainShell extends StatefulWidget {
 
   static const int homeTab = 0;
   static const int chatTab = 1;
+  static const int goalsTab = 2;
   static const int dexTab = 3;
-  static const int goalsTab = 4;
+  static const int statsTab = 4;
 
   static MainShellState of(BuildContext context) => context.findAncestorStateOfType<MainShellState>()!;
 
@@ -51,7 +52,10 @@ class MainShellState extends State<MainShell> {
   bool _toastCoin = false;
   Timer? _toastTimer;
 
-  static const _tabs = ['홈', '챗봇', '통계', '도감', '목표'];
+  static const _tabs = ['홈', '챗봇', '목표', '도감', '통계'];
+
+  /// 탭 순서 → `PixelIcons.nav`(시안 순서: 홈 · 챗봇 · 통계 · 도감 · 목표)의 아이콘 번호.
+  static const _tabIcons = [0, 1, 4, 3, 2];
 
   /// 탭 안에서 잠깐 바꾸는 곡 (홈의 상점 → 상점 곡, 챗봇의 탐색 → 탐색 곡).
   final Map<int, BgmTrack> _musicOverrides = {};
@@ -126,9 +130,9 @@ class MainShellState extends State<MainShell> {
           body: '상점에서 물건을 사고, 가방에서 꺼내 써요. 출석부에서는 며칠째 연속으로 출석했는지 볼 수 있어요.',
         ),
         TutorialStep(
-          targets: [_tabKeys[MainShell.dexTab], _tabKeys[MainShell.goalsTab]],
-          title: '도감과 목표',
-          body: '도감에는 만난 몬스터가 기록돼요. 목표 탭에서 주간 · 월간 목표를 달성하면 골드를 받아요.',
+          targets: [_tabKeys[MainShell.goalsTab], _tabKeys[MainShell.dexTab]],
+          title: '목표와 도감',
+          body: '목표 탭에서 주간 · 월간 목표를 달성하면 골드를 받아요. 도감에는 만난 몬스터가 기록돼요.',
         ),
         const TutorialStep(
           title: '이제 시작해 볼까요?',
@@ -205,9 +209,9 @@ class MainShellState extends State<MainShell> {
                           sheetKey: _sheetKey,
                         ),
                         ChatScreen(active: _tab == MainShell.chatTab),
-                        const StatsScreen(),
-                        DexScreen(active: _tab == MainShell.dexTab),
                         const GoalsScreen(),
+                        DexScreen(active: _tab == MainShell.dexTab),
+                        const StatsScreen(),
                       ],
                     ),
                   ),
@@ -250,7 +254,7 @@ class MainShellState extends State<MainShell> {
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           PixelIcon(
-                            layers: [PixelLayer(PixelIcons.nav[i], _tab == i ? AppColors.gold : AppColors.textMuted)],
+                            layers: [PixelLayer(PixelIcons.nav[_tabIcons[i]], _tab == i ? AppColors.gold : AppColors.textMuted)],
                             size: 20,
                           ),
                           const SizedBox(height: 5),

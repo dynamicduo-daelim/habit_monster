@@ -1,6 +1,6 @@
 # backend
 
-서버는 **Spring Boot**로 만들어요 (DB: PostgreSQL, 스키마는 공유 폴더의 `schema.sql` v1.5 — 메모는 `backend/db/README.md`).
+서버는 **Spring Boot**로 만들어요 (DB: PostgreSQL, 스키마는 공유 폴더의 `schema.sql` v1.6 — 메모는 `backend/db/README.md`).
 
 ## API 초안
 
@@ -118,5 +118,5 @@
 
 ## DB v1.5
 
-공식 스키마 v1.5에서 바뀐 것, 서버 · 앱에 반영한 것, DB 담당에게 요청할 변경: [`db/README.md`](db/README.md)
-(위 API 초안의 탐색 3줄은 2026-10-10에 정한 규칙이에요. 중복 → 골드, 넘기기는 DB가 아직 따라오지 않았어요.)
+공식 스키마 v1.5 · v1.6에서 바뀐 것, 서버 · 앱에 반영한 것, 검증 결과: [`db/README.md`](db/README.md)
+(위 API 초안의 탐색 3줄은 2026-10-10에 정한 규칙이고, DB v1.6에 반영돼 있어요.)

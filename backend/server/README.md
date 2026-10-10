@@ -19,7 +19,7 @@ curl -X POST localhost:8080/auth/signup -H "Content-Type: application/json" -d '
 
 ## PostgreSQL로 띄우기
 
-1. DB를 만들고 공유 폴더의 `schema.sql`(v1.5) → `seed.sql` 순서로 실행 (v1.5 메모: `backend/db/README.md`)
+1. DB를 만들고 공유 폴더의 `schema.sql`(v1.6) → `seed.sql` 순서로 실행 (메모: `backend/db/README.md`)
 2. 환경변수를 넣고 실행
 
 | 환경변수 | 설명 |
