@@ -7,9 +7,14 @@ plugins {
 group = 'kr.habitmonster'
 version = '0.0.1-SNAPSHOT'
 
-// 설치된 JDK(21 이상)로 빌드하고, 결과물은 Java 21용
+// JAVA_HOME과 상관없이 JDK 21로 빌드 (없으면 Gradle이 자동으로 내려받음)
+java {
+	toolchain {
+		languageVersion = JavaLanguageVersion.of(21)
+	}
+}
+
 tasks.withType(JavaCompile).configureEach {
-	options.release = 21
 	options.encoding = 'UTF-8'
 }
 

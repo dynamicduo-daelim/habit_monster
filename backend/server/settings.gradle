@@ -1,1 +1,6 @@
+plugins {
+	// toolchain에 맞는 JDK가 PC에 없을 때 자동으로 내려받기
+	id 'org.gradle.toolchains.foojay-resolver-convention' version '1.0.0'
+}
+
 rootProject.name = 'server'
