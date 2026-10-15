@@ -34,11 +34,38 @@ void main() {
       c.toggleCategory('sl');
       c.habits.add(Habit(id: 'h', name: '7시간 자기', categoryId: 'sl', measureIndex: 0, target: 7, periodIndex: 0));
       c.commit(s);
-      expect(s.monsters.map((m) => m.speciesId), ['wolf']);
+      expect(s.monsters.map((m) => m.speciesId), ['wolf', 'moon']); // 고른 길마다 초기 몬스터
       expect(s.chatPartnerUid, 'm1');
       expect(s.pickedCategories, ['ex', 'sl']);
-      expect(s.discoveredSpecies, {'wolf'});
+      expect(s.discoveredSpecies, {'wolf', 'moon'});
       c.dispose();
+    });
+
+    test('고른 길마다 초기 몬스터 1마리, 대화 상대는 고른 첫 파트너', () {
+      final s = GameState.sample(gold: 1240, balls: 1);
+      final c = OnboardingController(onToast: (_) {});
+      for (final id in ['ex', 'sl', 'md']) {
+        c.toggleCategory(id);
+      }
+      c.pickStarter(1); // 수면 길의 그믐 꼬마
+      c.habits.add(Habit(id: 'h', name: '7시간 자기', categoryId: 'sl', measureIndex: 0, target: 7, periodIndex: 0));
+      c.commit(s);
+      expect(s.monsters.map((m) => m.speciesId), ['wolf', 'moon']); // 명상 길은 아직 몬스터가 없다
+      final moon = s.monsters.last;
+      expect(s.chatPartnerUid, moon.uid);
+      expect(moon.affection, 3);
+      expect(moon.inField, isTrue);
+      c.dispose();
+    });
+
+    test('나중에 새 길을 열어도 그 길의 초기 몬스터가 온다', () {
+      final s = GameState.sample(gold: 1240, balls: 1);
+      s.discoveredSpecies.addAll(['chick', 'moon2']); // 도감 5종 → 칸 +1
+      expect(s.openCategory('sl'), isTrue);
+      expect(s.monsters.last.speciesId, 'moon');
+      expect(s.discoveredSpecies, contains('moon'));
+      expect(s.grantStarter('sl'), same(s.monsters.last)); // 두 번 주지 않는다
+      expect(s.monsters.where((m) => m.speciesId == 'moon').length, 1);
     });
 
     test('데려갈 몬스터가 없고 파트너도 안 골랐으면 첫 후보가 자동으로', () {
@@ -80,7 +107,7 @@ void main() {
 
   testWidgets('놓치면 "놓쳤다…" 팝업, 대화창에는 안 남는다', (tester) async {
     _view(tester);
-    final s = GameState.sample(gold: 1240, balls: 1, random: FixedRandom(double_: 0.1, int_: 2));
+    final s = GameState.sample(gold: 1240, balls: 1, random: FixedRandom(double_: 0.9, int_: 2));
     await tester.pumpWidget(GameScope(notifier: s, child: const MaterialApp(home: MainShell())));
     await _checkAllNo(tester);
     final before = s.monsters.length;
@@ -119,7 +146,7 @@ void main() {
 
   testWidgets('볼이 없으면 "볼 사기" → 그 자리에서 사서 던진다', (tester) async {
     _view(tester);
-    final s = GameState.sample(gold: 1240, balls: 1, random: FixedRandom(double_: 0.9, int_: 2))..balls = 0;
+    final s = GameState.sample(gold: 1240, balls: 1, random: FixedRandom(double_: 0.5, int_: 2))..balls = 0;
     await tester.pumpWidget(GameScope(notifier: s, child: const MaterialApp(home: MainShell())));
     await _checkAllNo(tester);
     await tester.tap(find.text('탐색하기 (3회 남음)'));

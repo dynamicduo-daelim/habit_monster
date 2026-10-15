@@ -125,11 +125,8 @@ public class AuthService {
 	}
 
 	@Transactional
-	public UserView updateOnboarding(Long userId, User.OnboardingStep step) {
-		if (step == null) {
-			throw new ApiException(ErrorCode.BAD_REQUEST);
-		}
-		activeUser(userId).changeOnboardingStep(step, clock.instant());
+	public UserView completeOnboarding(Long userId) {
+		activeUser(userId).completeOnboarding(clock.instant());
 		return me(userId);
 	}
 

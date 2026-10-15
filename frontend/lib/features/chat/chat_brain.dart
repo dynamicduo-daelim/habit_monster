@@ -27,6 +27,12 @@ abstract class ChatBrain {
   /// 오늘 이미 체크를 확정한 뒤 대화를 다시 열었을 때.
   Future<String> alreadyCheckedIn();
 
+  /// 확정한 오늘 기록을 고치려고 "다시 체크"를 눌렀을 때 (이어서 습관을 처음부터 다시 묻는다).
+  Future<String> recheckIntro();
+
+  /// 다시 체크한 기록을 저장했을 때. 보상은 첫 확정 그대로다.
+  Future<String> recheckDone(DailyCheckinResult result);
+
   /// 탐색에서 몬스터를 잡았을 때 대화창에 남길 말 (잡았을 때만 불린다).
   Future<String> catchReport(CatchResult result);
 }
@@ -66,6 +72,14 @@ class ScriptedChatBrain implements ChatBrain {
 
   @override
   Future<String> alreadyCheckedIn() => SynchronousFuture('오늘 체크는 이미 끝났어! 탐색하러 갈래?');
+
+  @override
+  Future<String> recheckIntro() =>
+      SynchronousFuture('잘못 적은 게 있었어? 처음부터 다시 물어볼게. 골드랑 탐색 횟수는 처음 확정한 그대로야.');
+
+  @override
+  Future<String> recheckDone(DailyCheckinResult r) =>
+      SynchronousFuture('기록을 고쳐 뒀어! 보상은 처음 확정한 그대로야.');
 
   @override
   Future<String> catchReport(CatchResult r) {

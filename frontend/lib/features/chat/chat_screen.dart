@@ -33,6 +33,10 @@ class ChatScreen extends StatefulWidget {
 class _ChatScreenState extends State<ChatScreen> {
   ChatController? _c;
   String? _partnerUid;
+
+  /// 습관 목록이 바뀌었는지 보는 표시 (홈에서 습관을 추가 · 그만두면 묻던 질문을 처음부터 다시).
+  String? _habitSig;
+  static String _sigOf(GameState s) => s.habits.map((h) => h.id).join(',');
   final _scroll = ScrollController();
   final _amount = TextEditingController();
   int _lastCount = 0;
@@ -53,6 +57,7 @@ class _ChatScreenState extends State<ChatScreen> {
     final s = GameScope.read(context);
     _c = (widget.controllerBuilder ?? (st) => ChatController(state: st))(s)..addListener(_onChange);
     _partnerUid = s.chatPartnerUid;
+    _habitSig = _sigOf(s);
     _c!.start();
     _syncTicker();
   }
@@ -129,6 +134,14 @@ class _ChatScreenState extends State<ChatScreen> {
     if (s.chatPartnerUid != _partnerUid) {
       _partnerUid = s.chatPartnerUid;
       WidgetsBinding.instance.addPostFrameCallback((_) => c.start());
+    }
+    // 질문하던 중에 습관 목록이 바뀌면 순서가 어긋나므로 처음부터 다시 묻는다.
+    final sig = _sigOf(s);
+    if (sig != _habitSig) {
+      _habitSig = sig;
+      if (c.step == ChatStep.yesNo || c.step == ChatStep.amount) {
+        WidgetsBinding.instance.addPostFrameCallback((_) => c.start());
+      }
     }
     return Stack(
       children: [
@@ -321,8 +334,13 @@ class _ChatScreenState extends State<ChatScreen> {
         final noEnc = s.encountersLeft <= 0;
         content = Row(
           children: [
-
+            // 확정한 기록 고치기 (보상은 첫 확정 그대로)
+            if (s.checkedInToday) ...[
+              Expanded(flex: 2, child: _DarkButton(label: '다시 체크', onTap: c.recheck)),
+              const SizedBox(width: 9),
+            ],
             Expanded(
+              flex: 3,
               child: Semantics(
                 button: true,
                 enabled: !noEnc,

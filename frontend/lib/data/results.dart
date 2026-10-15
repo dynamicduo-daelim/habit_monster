@@ -41,13 +41,16 @@ class DailyCheckinResult {
 /// 탐색 1회 결과: 몬스터를 만났는지. 백엔드 `POST /explore` 응답과 같은 모양.
 /// 아직 잡은 게 아니다. 잡기는 [GameState.throwBall] → [CatchResult].
 class EncounterResult {
-  const EncounterResult({this.species, this.alreadyOwned = false});
+  const EncounterResult({this.species, this.alreadyOwned = false, this.emptyPool = false});
 
   /// 만난 몬스터 종 (아무도 없었으면 null).
   final MonsterSpecies? species;
 
   /// 이미 가진 종인지 (잡으면 골드로 바뀐다).
   final bool alreadyOwned;
+
+  /// 아무도 없었던 이유가 "오늘 체크인한 길에 만날 몬스터가 아예 없어서"인지 (아니면 이번에만 안 나온 것).
+  final bool emptyPool;
 
   bool get found => species != null;
 }

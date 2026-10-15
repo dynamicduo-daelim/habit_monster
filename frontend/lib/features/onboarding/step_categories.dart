@@ -198,7 +198,7 @@ class _StarterBox extends StatelessWidget {
                     Text('첫 파트너는 누구?',
                         style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.white)),
                     SizedBox(height: 3),
-                    Text('고른 길마다 한 마리씩 기다리고 있어요. 두근두근, 하나를 골라보세요!',
+                    Text('고른 길마다 한 마리씩 함께 가요. 먼저 이야기 나눌 첫 파트너를 골라보세요!',
                         style: TextStyle(fontSize: 9.5, height: 1.6, color: AppColors.purpleSoft)),
                   ],
                 ),

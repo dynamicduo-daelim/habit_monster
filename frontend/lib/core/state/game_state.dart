@@ -38,13 +38,17 @@ class GameState extends ChangeNotifier {
   final Map<String, int> inventory = {'s': 3, 'm': 1, 'l': 0};
   String? chatPartnerUid;
 
-  /// 오늘 확정한 체크인 값 (습관 id → 값, O/X는 1/0). 확정 전엔 비어 있다 (임시값은 챗봇에만).
+  /// 오늘 체크인의 최신 값 (습관 id → 값, O/X는 1/0). 확정 전엔 비어 있다 (임시값은 챗봇에만).
+  /// 다시 제출하면 이 값만 바뀐다 (DB `habit_checkin.value`).
   final Map<String, double> todayRecords = {};
 
-  /// 오늘 점수 상위 [Economy.dailyHabitCap]개로 반영된 습관 id.
+  /// 첫 확정 때의 점수 (습관 id → 점수). 보상 기준이라 다시 제출해도 그대로다 (DB `habit_checkin.rewarded_score`).
+  final Map<String, int> rewardedScores = {};
+
+  /// 오늘 점수 상위 [Economy.dailyHabitCap]개로 반영된 습관 id (첫 확정 때 정해지고 바뀌지 않는다).
   final Set<String> countedToday = {};
 
-  /// 오늘 체크인을 확정했는지 (하루 1번, 이후 수정 불가 — DB Q-4).
+  /// 오늘 체크인을 확정했는지. 확정 뒤에도 기록은 고칠 수 있지만([resubmitCheckin]) 보상은 첫 확정 그대로 (DB v1.5).
   bool checkedInToday = false;
 
   /// 오늘 체크인한 카테고리 = 오늘 탐색 풀 (DB Q-15 `explore_quota_category`).
@@ -120,12 +124,31 @@ class GameState extends ChangeNotifier {
 
   bool get canOpenCategory => pickedCategories.length < categorySlotCount;
 
-  /// 빈 칸에 새 길을 연다.
+  /// 빈 칸에 새 길을 연다. 그 길의 초기 몬스터도 함께 온다 ([grantStarter]).
   bool openCategory(String id) {
     if (!canOpenCategory || pickedCategories.contains(id)) return false;
     pickedCategories.add(id);
+    grantStarter(id);
     notifyListeners();
     return true;
+  }
+
+  /// [categoryId] 길의 초기 몬스터를 준다 — 연 카테고리마다 1마리 (DB v1.5 `monster.starter_grant`).
+  /// 그 종을 이미 데리고 있으면 그 몬스터를, 아직 그림이 없는 길(명상 · 절약)이면 null을 돌려준다.
+  OwnedMonster? grantStarter(String categoryId) {
+    final speciesId = Catalog.starters[categoryId];
+    if (speciesId == null) return null;
+    final own = monsters.where((m) => m.speciesId == speciesId).firstOrNull;
+    if (own != null) return own;
+    final m = OwnedMonster(
+      uid: 'st_$speciesId',
+      speciesId: speciesId,
+      affection: Economy.starterAffection,
+      inField: fieldMonsters.length < Economy.fieldCapacity,
+    );
+    monsters.add(m);
+    discoveredSpecies.add(speciesId);
+    return m;
   }
 
   /// 물약을 먹인다. 올라간 레벨 수를 돌려준다 (실패 시 -1).
@@ -152,14 +175,19 @@ class GameState extends ChangeNotifier {
 
   Measure measureOf(Habit h) => Catalog.category(h.categoryId).measures[h.measureIndex];
 
-  /// 오늘 기록한 값의 성실도. 기록이 없으면 null.
+  /// 오늘 기록한 (최신) 값의 성실도. 기록이 없으면 null.
   int? scoreOf(Habit h) {
     final v = todayRecords[h.id];
     if (v == null) return null;
     return sincerityScore(measure: measureOf(h), target: h.target, value: v);
   }
 
-  int get todayScore => countedHabits.fold(0, (a, h) => a + (checkedInToday ? (scoreOf(h) ?? 0) : 0));
+  /// 보상에 쓰인 점수 = 첫 확정 때의 점수. 그때 답하지 않은 습관은 null.
+  int? rewardedScoreOf(Habit h) => rewardedScores[h.id];
+
+  /// 오늘의 성실도 = 반영된 습관의 첫 확정 점수 합 (받은 골드와 같다).
+  /// 확정 뒤 습관을 그만둬도 줄지 않게, 습관 목록이 아니라 확정 기록에서 더한다.
+  int get todayScore => countedToday.fold(0, (a, id) => a + (rewardedScores[id] ?? 0));
   int get checkedCount => activeHabits.where((h) => todayRecords.containsKey(h.id)).length;
 
   /// 상단 바의 연속 출석 (오늘 체크인을 확정하면 +1).
@@ -177,7 +205,7 @@ class GameState extends ChangeNotifier {
   bool isCounted(Habit h) => countedToday.contains(h.id);
 
   // ---------- 체크인 (서버: POST /checkins) ----------
-  /// 오늘 체크인을 한 번에 확정한다 (하루 1번, 이후 수정 불가). 이미 확정했으면 null.
+  /// 오늘 체크인을 한 번에 확정한다 (하루 1번). 이미 확정했으면 null — 기록을 고치려면 [resubmitCheckin].
   /// [answers]: 습관 id → 값. 점수 상위 [Economy.dailyHabitCap]개만 골드 · 카테고리 EXP에 반영하고,
   /// 카테고리 레벨이 오르면 레벨당 보너스를 준다. 확정하면 오늘 탐색 횟수와 탐색 풀(체크인한 카테고리)이 생긴다.
   DailyCheckinResult? confirmCheckin(Map<String, double> answers) {
@@ -210,6 +238,9 @@ class GameState extends ChangeNotifier {
     todayRecords
       ..clear()
       ..addAll({for (final e in scored) e.$1.id: e.$2});
+    rewardedScores
+      ..clear()
+      ..addAll({for (final e in scored) e.$1.id: e.$3});
     countedToday
       ..clear()
       ..addAll(counted);
@@ -227,6 +258,25 @@ class GameState extends ChangeNotifier {
     );
   }
 
+  /// 확정한 오늘 체크인을 다시 제출한다 (DB v1.5 `checkin_submission`). 아직 확정 전이면 null.
+  /// 기록(값 · 점수)만 최신으로 바뀌고, 골드 · 카테고리 EXP · 반영 습관 · 탐색 횟수는 첫 확정 그대로다.
+  /// 돌려주는 결과의 `counted`는 첫 확정 때 반영됐는지, `goldEarned`는 항상 0.
+  DailyCheckinResult? resubmitCheckin(Map<String, double> answers) {
+    if (!checkedInToday || answers.isEmpty) return null;
+    final order = activeHabits.where((h) => answers.containsKey(h.id)).toList();
+    todayRecords.addAll({for (final h in order) h.id: answers[h.id]!});
+    notifyListeners();
+    return DailyCheckinResult(
+      scores: [
+        for (final h in order)
+          HabitScore(habit: h, value: answers[h.id]!, score: scoreOf(h)!, counted: countedToday.contains(h.id)),
+      ],
+      goldEarned: 0,
+      levelUps: const {},
+      exploreCount: 0,
+    );
+  }
+
   // ---------- 탐색 (서버: POST /explore) ----------
   /// 지금 탐색에서 만날 수 있는 종: 오늘 체크인한 (열린) 카테고리이고, 카테고리 레벨이 출현 레벨 이상.
   List<MonsterSpecies> get encounterPool => Catalog.species
@@ -237,23 +287,28 @@ class GameState extends ChangeNotifier {
       .toList();
 
   /// 탐색 1회: 고른 길의 몬스터 중 하나를 만난다 (아직 잡은 건 아님). 남은 횟수가 없으면 null.
+  /// [Economy.exploreMissRate] 확률로 아무도 안 나온다 (횟수는 쓴다).
   EncounterResult? explore() {
     if (encountersLeft <= 0) return null;
     encountersLeft -= 1;
     final pool = encounterPool;
     notifyListeners();
-    if (pool.isEmpty) return const EncounterResult();
+    if (pool.isEmpty) return const EncounterResult(emptyPool: true);
+    if (_rand.nextDouble() < Economy.exploreMissRate) return const EncounterResult();
     final sp = pool[_rand.nextInt(pool.length)];
     return EncounterResult(species: sp, alreadyOwned: monsters.any((m) => m.speciesId == sp.id));
   }
 
+  /// 성실볼을 던졌을 때 [sp]가 잡힐 확률 (희귀할수록 낮다).
+  double captureRateOf(MonsterSpecies sp) => Economy.captureRate[sp.stars] ?? Economy.captureRate.values.last;
+
   /// 만난 몬스터에게 성실볼 1개를 던진다. 볼이 없으면 null.
-  /// [Economy.encounterMissRate] 확률로 도망가고, 잡았는데 이미 가진 종이면 골드로 바뀐다.
+  /// [captureRateOf] 확률로 잡히고(아니면 도망), 잡았는데 이미 가진 종이면 골드로 바뀐다.
   CatchResult? throwBall(MonsterSpecies sp) {
     if (balls <= 0) return null;
     balls -= 1;
     final CatchResult result;
-    if (_rand.nextDouble() < Economy.encounterMissRate) {
+    if (_rand.nextDouble() >= captureRateOf(sp)) {
       result = CatchResult(kind: CatchKind.escaped, species: sp);
     } else if (monsters.any((m) => m.speciesId == sp.id)) {
       gold += Economy.duplicateMonsterGold;
@@ -294,6 +349,47 @@ class GameState extends ChangeNotifier {
     if (toField && fieldMonsters.length >= Economy.fieldCapacity) return false;
     if (!toField && fieldMonsters.length <= 1) return false;
     m.inField = toField;
+    notifyListeners();
+    return true;
+  }
+
+  // ---------- 습관 추가 · 그만두기 (서버: POST · DELETE /habits) ----------
+  int _habitSeq = 0;
+
+  /// 습관을 더 넣을 수 있는지 (최대 [Economy.maxActiveHabits]개).
+  bool get canAddHabit => habits.length < Economy.maxActiveHabits;
+
+  /// 습관을 그만둘 수 있는지 (마지막 1개는 남긴다 — 체크할 습관이 없으면 앱의 흐름이 끊긴다).
+  bool get canRemoveHabit => habits.length > 1;
+
+  /// 새 습관을 등록한다. 꽉 찼거나, 열지 않은 카테고리거나, 이름 · 목표가 비었으면 null.
+  /// 오늘 이미 체크인을 확정했다면 이 습관은 내일부터 보상에 반영된다 (보상은 첫 확정 기준).
+  Habit? addHabit({
+    required String name,
+    required String categoryId,
+    required int measureIndex,
+    required double target,
+    required int periodIndex,
+  }) {
+    final trimmed = name.trim();
+    if (!canAddHabit || trimmed.isEmpty || target <= 0 || !pickedCategories.contains(categoryId)) return null;
+    final h = Habit(
+      id: 'nh${_habitSeq++}',
+      name: trimmed,
+      categoryId: categoryId,
+      measureIndex: measureIndex,
+      target: target,
+      periodIndex: periodIndex,
+    );
+    habits.add(h);
+    notifyListeners();
+    return h;
+  }
+
+  /// 습관을 그만둔다. 이미 받은 골드 · 카테고리 경험치 · 오늘의 성실도는 그대로 둔다. 마지막 1개면 false.
+  bool removeHabit(Habit h) {
+    if (!canRemoveHabit || !habits.remove(h)) return false;
+    todayRecords.remove(h.id);
     notifyListeners();
     return true;
   }
@@ -376,26 +472,13 @@ class GameState extends ChangeNotifier {
     discoveredSpecies
       ..clear()
       ..addAll(monsters.map((m) => m.speciesId));
-    if (monsterByUid(chatPartnerUid) == null) chatPartnerUid = monsters.firstOrNull?.uid;
 
-    // 첫 파트너를 안 골랐는데 데려갈 몬스터가 하나도 없으면, 고른 길 중 그림이 있는 첫 후보로.
-    final starterCat = starterCategory ??
-        (monsters.isEmpty ? pickedCategories.where((c) => Catalog.starters[c] != null).firstOrNull : null);
-    final speciesId = starterCat == null ? null : Catalog.starters[starterCat];
-    if (speciesId != null) {
-      var own = monsters.where((m) => m.speciesId == speciesId).firstOrNull;
-      if (own == null) {
-        own = OwnedMonster(
-          uid: 'st_$speciesId',
-          speciesId: speciesId,
-          affection: Economy.starterAffection,
-          inField: fieldMonsters.length < Economy.fieldCapacity,
-        );
-        monsters.add(own);
-        discoveredSpecies.add(speciesId);
-      }
-      chatPartnerUid = own.uid;
+    // 고른 길마다 초기 몬스터 1마리. 대화 상대는 고른 첫 파트너, 안 골랐으면 원래 상대나 첫 몬스터.
+    for (final c in pickedCategories) {
+      final m = grantStarter(c);
+      if (m != null && c == starterCategory) chatPartnerUid = m.uid;
     }
+    if (monsterByUid(chatPartnerUid) == null) chatPartnerUid = monsters.firstOrNull?.uid;
     notifyListeners();
   }
 

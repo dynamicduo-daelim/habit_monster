@@ -124,6 +124,16 @@ class PixelIcons {
     PixelLayer('M10 8h2v2h-2z M7 11h2v2H7z M10 11h2v2h-2z', Color(0xFFF0B23C)),
   ];
 
+  /// 필드 오른쪽 위 습관(퀘스트 두루마리 + 추가) 아이콘.
+  static const List<PixelLayer> fieldQuest = [
+    PixelLayer('M3 2h10v12H3z', Color(0xFFF4EAD2)),
+    PixelLayer('M2 1h12v2H2z M2 13h12v2H2z', Color(0xFFC98A4B)),
+    PixelLayer('M2 2h12v1H2z M2 14h12v1H2z', Color(0xFF8A5A2B)),
+    PixelLayer('M5 5h6v1H5z M5 7h4v1H5z', Color(0xFF8A5A2B)),
+    PixelLayer('M9 8h3v2h2v3h-2v2H9v-2H7v-3h2z', Color(0xFF3F8F3A)),
+    PixelLayer('M10 9h1v2h2v1h-2v2h-1v-2H8v-1h2z', Color(0xFFFFFAF0)),
+  ];
+
   /// 골드 칩 안의 + (골드 얻는 법).
   static const String plus = 'M6 2h4v4h4v4h-4v4H6v-4H2V6h4z';
 

@@ -17,6 +17,7 @@ import '../../data/pixel_icons.dart';
 import '../shell/main_shell.dart';
 import 'attendance_popup.dart';
 import 'bag_overlay.dart';
+import 'habit_manage_screen.dart';
 import 'habit_sheet.dart';
 import 'home_parts.dart';
 import 'monster_overlay.dart';
@@ -331,6 +332,17 @@ class _HomeScreenState extends State<HomeScreen> {
                     onTap: () => showAttendancePopup(
                       context,
                       onGoChat: () => MainShell.of(context).goTab(MainShell.chatTab),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  _IconSpot(
+                    label: '습관',
+                    semantic: '습관 관리',
+                    icon: PixelIcons.fieldQuest,
+                    labelColor: AppColors.text,
+                    bob: bobUp ? 0 : -4,
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(builder: (_) => const HabitManageScreen()),
                     ),
                   ),
                 ],

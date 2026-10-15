@@ -22,7 +22,7 @@ class AuthSession {
   final String? email;
   final String? nickname;
 
-  /// 온보딩을 끝냈는지 (DB `identity.users.onboarding_step = 'DONE'`).
+  /// 온보딩을 끝냈는지 (DB `identity.users.onboarded_at`이 있으면 끝).
   final bool onboardingDone;
 
   final String accessToken;

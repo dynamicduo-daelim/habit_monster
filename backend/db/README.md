@@ -1,64 +1,91 @@
-# DB 변경안 v1.5 — 성실볼을 "던져서 잡는 볼"로
+# DB v1.5 → v1.6 (공식 설계) — 앱 · 서버에 맞추기
 
-원본 설계(`database/schema.sql` v1.4 — 습관 기간 7일/30일/100일, `seed.sql`, `verify.sql`)는 그대로 두고, 그 위에 덮어 적용하는 파일입니다.
-(원래 v1.4로 만들었는데, 원본 스키마의 기간 변경이 v1.4가 되어 v1.5로 이름을 바꿨어요.)
+DB 담당이 보내 준 공식 스키마 기준 메모예요. 원본 파일은 저장소에 넣지 않고 공유 폴더(OneDrive `카카오톡 받은 파일/`)에 둬요.
 
-```
-psql -v ON_ERROR_STOP=1 -f schema.sql -f seed.sql -f v1.5_ball_catch.sql -f v1.5_verify.sql
-```
+- 2026-10-08 작성본 **v1.5**: `habit_monster_erd.md`, `seed.sql`, `verify.sql`, `verify_later.sql` (`schema_erd/`)
+- 2026-10-10 작성본 **v1.6**: `schema.sql` — 아래 "요청" 두 가지가 반영된 판
 
-PostgreSQL 18 임시 DB에서 `schema.sql`(v1.4) → `seed.sql` → `v1.5_ball_catch.sql` → `v1.5_verify.sql` 순서로 돌려 **23개 검사 모두 통과**를 확인했습니다 (2026-10-07). 원본 `schema.sql` → `seed.sql` → `verify.sql`도 92개 모두 통과. `schema_later.sql`을 함께 적용해도 같습니다.
+## 검증 결과 (2026-10-10, 임시 PostgreSQL 18.4)
 
-## 무엇이 바뀌나 (한눈에)
-
-| | v1.3 (지금 설계) | v1.5 (앱과 같은 규칙) |
-|---|---|---|
-| 성실볼 | 오늘 탐색 +1회 (하루 2개까지) | 나타난 몬스터에게 던지는 볼. 던질 때마다 1개, 하루 제한 없음 |
-| 탐색 1회 | 바로 결과: 꽝 / 새 몬스터 / 중복 | 몬스터가 **나타남** → 던지기 or 넘기기 |
-| 탐색 결과 | `MISS` `NEW` `DUPLICATE` | `NONE`(아무도 없음) `FOUND`(나타남, 대기) `SKIPPED`(넘김) `NEW` `DUPLICATE` `ESCAPED`(도망) |
-| 볼 사용 기록 | `monster.ball_use` 테이블 | `explore_log.ball_consumption_id` (어느 탐색에 던졌는지 바로 연결) |
-| 탐색 횟수 | 기본 + 볼 추가분 (`ball_bonus`) | 기본만 (체크인 확정 때 받은 횟수) |
-
-## 테이블별로
-
-1. **`shop.item_effect` / `shop.shop_item`** — 효과 코드 `CATCH` 추가, 성실볼(`BALL`)의 효과를 `CATCH`로. `EXPLORE_TICKET`은 쓰는 아이템이 없으면 삭제.
-2. **`monster.explore_log`** (핵심)
-   - 탐색하면 몬스터가 나타난 상태(`FOUND`)로 한 줄 넣고, 사용자가 행동하면 **그 줄의 결과를 한 번만** 바꿉니다.
-   - 새 컬럼 `ball_consumption_id` → `shop.item_consumption(id)`, UNIQUE: 볼 1개로는 한 번만 던질 수 있음.
-   - 새 컬럼 `resolved_at`: 결과가 정해진 시각 (`FOUND`일 때만 비어 있음).
-   - 결과별로 들어가야 하는 값 (CHECK):
-
-     | 결과 | 종 | 볼 | 새 개체 | 골드 |
-     |---|---|---|---|---|
-     | NONE | ✗ | ✗ | ✗ | 0 |
-     | FOUND / SKIPPED | ○ | ✗ | ✗ | 0 |
-     | NEW | ○ | ○ | ○ | 0 |
-     | DUPLICATE | ○ | ○ | ✗ | > 0 |
-     | ESCAPED | ○ | ○ | ✗ | 0 |
-
-   - 트리거 `tg_explore_no_reresolve`: 결과가 정해진 뒤에는 결과·볼·시각·종을 못 바꿈 → **같은 몬스터에 두 번 던지기, 넘긴 몬스터에 나중에 던지기를 DB가 막음** (목표의 `forbid_goal_reopen`과 같은 방식).
-   - 부분 유니크 인덱스 `uq_explore_pending`: 사용자당 대기 중(`FOUND`) 몬스터는 1마리. 새로 탐색할 땐 이전 `FOUND`를 `SKIPPED`로 마감한 뒤 넣습니다.
-3. **`monster.daily_explore_quota`** — `ball_bonus` 컬럼 삭제, `used_count ≤ base_count`.
-4. **`monster.ball_use`** — 테이블 삭제.
-5. **`config.balance_config`** — `ball_daily_max` 삭제.
-
-그대로인 것: 체크인 확정 때만 쿼터가 생김(체크인 안 하면 탐색 불가), 탐색 풀은 그날 체크인한 카테고리(`explore_quota_category`), 종당 1마리(중복은 골드), 볼 소모 멱등 키 `consumer_key`.
-
-## 서버 처리 순서 (F7 탐색 · 새 F8 던지기)
-
-- **탐색** `POST /explore`: 쿼터 잠금 → 이전 `FOUND`가 있으면 `SKIPPED`로 마감 → `used_count + 1` → 풀에서 종 뽑기 → `FOUND`(또는 `NONE`) INSERT.
-- **던지기** `POST /explore/throw`: 가방 볼 −1 + `item_consumption`(consumer_key `BALL:<uuid>`) → 도망 확률(`explore_miss_rate`) 판정 → `NEW`면 개체·도감 추가(+해금권 기준 달성 시 지급) / `DUPLICATE`면 지갑 +15G (원장 `DUPLICATE`, ref_id = explore_log.id) → explore_log 결과 UPDATE. 모두 한 트랜잭션.
-- **넘기기**: `FOUND` → `SKIPPED` UPDATE (볼·골드 변화 없음).
-
-## `verify.sql`에서 고칠 곳 (v1.5 적용 후 실패하는 3개 + 의미가 없어지는 4개)
-
-| 검사 | 처리 |
+| 실행 | 결과 |
 |---|---|
-| S-1 스키마 간 FK 허용 목록 | `('monster.ball_use','shop.item_consumption')` → `('monster.explore_log','shop.item_consumption')` 로 교체 (개수는 15개 그대로) |
-| 성실볼 = 소모 1건 + 사용 기록 + 추가 횟수 | 삭제 → `v1.5_verify.sql` V-13 |
-| 성실볼 재시도: 같은 소모 키는 소모 단계에서 차단 | 위 검사가 만들던 `BALL:u1`이 없어져서 실패. V-13 다음에 같은 키 재삽입으로 옮기거나 삭제 (소모 키 UNIQUE는 "소모 키 재사용 차단" 검사가 이미 확인) |
-| 같은 소모 행으로 성실볼 두 번 반영 불가 · 소모 행 없이 성실볼 기록 불가 · 쿼터 없는 날 성실볼 사용 불가 | `ball_use`가 없어서 **잘못된 이유로 PASS** 됨 → 삭제 (V-15, V-16, V-31이 대신) |
-| 꽝인데 종 기록 불가 | `'MISS'` → `'NONE'`, `resolved_at` 값 추가 (V-25와 같음) |
-| BR-50 사용 횟수 > 기본 + 성실볼 불가 | 이름만 "사용 횟수 > 기본 불가"로 (V-30) |
+| `schema.sql`(v1.6) → `seed.sql`(v1.5) | 오류 없이 적용 |
+| → `verify.sql`(v1.5) | **104개 통과, 2개 실패** — 실패한 둘은 v1.6에서 일부러 뒤집은 규칙을 v1.5 기준으로 검사하는 항목 |
+| → [`v1.6_extra_verify.sql`](v1.6_extra_verify.sql) (우리가 쓴 추가 검사) | **15개 모두 통과** — 종당 1마리, 중복 포획 = 볼 + 골드 15 + 원장 `DUPLICATE`, 넘기기 = 볼 · 골드 없이 마감, `CONVERTED` · `EXPLORE_GOLD` 없음 |
+| `schema.sql` → `seed.sql` → `schema_later.sql`(v1.4 때 받은 것) | 오류 없이 적용 |
 
-`04_논리물리모델.md`의 F6(성실볼 사용) 절과 업무 규칙 표의 "성실볼 하루 ≤ 2" 줄도 위 내용으로 바꾸면 됩니다.
+실패한 `verify.sql` 두 항목 (스키마 문제가 아니라 검사 쪽이 옛 판):
+- "v1.5 같은 종 중복 보유 가능 (BR-54 폐지)" — v1.6은 `uq_user_species`로 막는 게 맞음
+- "골드 전환 = 볼 없이 골드 + 원장 EXPLORE_GOLD" — v1.6은 골드 전환이 없음
+
+→ DB 담당에게 **`verify.sql` · `seed.sql` · ERD의 v1.6 판**을 받아야 해요. 그 전까지 `verify.sql`은 2개 실패가 정상이에요.
+
+```
+psql -v ON_ERROR_STOP=1 -f schema.sql -f seed.sql -f verify.sql
+psql -v ON_ERROR_STOP=1 -f schema.sql -f seed.sql -f backend/db/v1.6_extra_verify.sql
+```
+
+확인할 것:
+- v1.6 `schema.sql`의 로그인 제공자 시드에 `APPLE`이 다시 들어 있어요. 앱 · 서버는 애플 로그인을 지원하지 않아요 (결정 D-02). 행이 있어도 서버 동작에는 영향이 없지만, 뺄지 DB 담당과 맞춰요.
+- 중복 포획 골드의 원장 사유가 `EXPLORE_GOLD` → `DUPLICATE`로 바뀌었어요. 설정 키 이름은 아직 `convert_gold`예요 (시드가 v1.5).
+
+이 폴더에 있던 변경안(`v1.5_ball_catch.sql`, `v1.5_verify.sql`)은 **지웠어요**. v1.4 위에 덮어 쓰는 우리 쪽 제안이었는데,
+공식 v1.5가 "던져서 잡는 볼"을 다른 모양으로 넣어서 더는 맞지 않아요 (git 기록에는 남아 있어요).
+
+## v1.4 → v1.5 무엇이 바뀌었나
+
+| 영역 | v1.4 | v1.5 |
+|---|---|---|
+| 온보딩 | `users.onboarding_step` (INTRO…DONE) | `users.onboarded_at` 하나. 온보딩 결과는 **마지막에 한 번** 저장 |
+| 성실볼 | 탐색 +1회 (`EXPLORE_TICKET`, 하루 2개) | 포획용 (`CAPTURE`). 하루 상한 없음, 탐색 횟수는 늘리지 않음 |
+| 탐색 1회 | 바로 결과 `MISS` / `NEW` / `DUPLICATE` | `result` = `MISS`(꽝) / `ENCOUNTER`(등장) → 등장하면 `outcome`을 한 번 정함 |
+| 등장 뒤 선택 | — | `CAPTURED`(볼 1개, 개체 생김) · `ESCAPED`(볼 1개, 놓침) · `CONVERTED`(볼 없이 골드 +15) |
+| 포획 확률 | — | 희귀도별 `capture_rate` = 1: 0.8 · 2: 0.6 · 3: 0.4 (임시값) |
+| 같은 종 | 종당 1마리, 중복은 골드 | **여러 마리 보유 가능** (BR-54 폐지). 골드는 `CONVERTED`를 골랐을 때만 |
+| 초기 몬스터 | 1마리 | **연 카테고리마다 1마리** (`starter_grant`), 대화 상대는 1마리 |
+| 체크인 | 하루 1번 확정, 수정 불가 | 하루 1행 + **다시 제출 가능** (`checkin_submission`, `revision`). 최신 값만 바뀌고 골드 · 반영 습관은 **첫 확정 값 그대로** |
+| 볼 사용 기록 | `monster.ball_use` | 삭제 → `explore_log.consumption_id` |
+| 설정 | `duplicate_gold`, `ball_daily_max` | `convert_gold`, `capture_rate` (`ball_daily_max` 삭제) |
+
+그대로인 것: 처리 전 등장은 사용자당 1건(다음 탐색 전에 처리), 체크인을 확정해야 탐색 횟수가 생김, 탐색 풀 = 그날 체크인한 카테고리,
+볼 · 물약 소모 멱등 키는 `shop.item_consumption.consumer_key` 한 곳, 완료한 목표는 되돌리거나 지울 수 없음.
+
+## 서버에 반영한 것
+
+- `identity.User`: `onboarding_step` → `onboarded_at`. `PATCH /me/onboarding`은 본문 없이 완료 시각만 찍어요 (여러 번 불러도 처음 시각 유지).
+- 로그인 응답의 `onboardingDone`은 그대로라 앱 화면은 바뀌지 않아요.
+
+## 앱과 DB 규칙 맞추기 (2026-10-10 결정)
+
+앱은 서버 없이 `GameState`가 규칙을 계산해요. v1.5와 달랐던 여섯 가지를 이렇게 정했어요.
+
+| | 정한 규칙 | 맞춘 쪽 |
+|---|---|---|
+| 탐색 | 40% 확률로 아무도 안 나옴 (`explore_miss_rate`, 횟수는 씀) | **앱을 DB에** — 반영함 |
+| 볼 던지기 | 희귀도별 포획 확률 0.8 / 0.6 / 0.4 (`capture_rate`) | **앱을 DB에** — 반영함 |
+| 체크인 | 확정 뒤에도 다시 제출 가능. 기록만 바뀌고 보상은 첫 확정 그대로 | **앱을 DB에** — 반영함 (챗봇 "다시 체크") |
+| 초기 몬스터 | 연 카테고리마다 1마리 (그림 없는 명상 · 절약은 아직 없음) | **앱을 DB에** — 반영함 |
+| 이미 가진 종을 잡으면 | 볼은 쓰고, 몬스터는 늘지 않고 골드 +15 (종당 1마리) | **DB를 앱에** — v1.6에 반영됨 (`DUPLICATE`, `uq_user_species`) |
+| 던지지 않을 때 | 보상 없이 넘김 ("다시 탐색" · "그만") | **DB를 앱에** — v1.6에 반영됨 (`SKIPPED`, `CONVERTED` 삭제) |
+
+앱 코드: `Economy.exploreMissRate` · `Economy.captureRate`, `GameState.explore / throwBall / resubmitCheckin / grantStarter`.
+
+## DB 담당에게 요청했던 변경 — v1.6에 반영됨 (2026-10-10)
+
+아래 두 가지는 앱 규칙을 유지하기로 해서 스키마가 바뀌어야 했어요. **v1.6 `schema.sql`에 그대로 들어왔고**, 위 검증 결과의 추가 검사 15개로 확인했어요. 요청 내용은 기록으로 남겨 둬요.
+
+1. **같은 종은 1마리** (BR-54 되살리기)
+   - `monster.user_monster`에 사용자 × 종 유일 제약. `verify.sql`의 "v1.5 같은 종 중복 보유 가능"은 반대로 (막혀야 통과).
+2. **`monster.explore_log.outcome` 값 바꾸기**: `CAPTURED` · `ESCAPED` · `CONVERTED` → `CAPTURED` · `ESCAPED` · `DUPLICATE` · `SKIPPED`
+
+   | outcome | 뜻 | 볼(`consumption_id`) | 개체(`user_monster_id`) | 골드(`gold_awarded`) |
+   |---|---|---|---|---|
+   | `CAPTURED` | 던져서 잡음 (처음 얻는 종) | ○ | ○ | 0 |
+   | `ESCAPED` | 던졌는데 도망 | ○ | ✗ | 0 |
+   | `DUPLICATE` | 던져서 잡았는데 이미 가진 종 → 골드 | ○ | ✗ | > 0 (`convert_gold` 15) |
+   | `SKIPPED` | 던지지 않고 넘김 | ✗ | ✗ | 0 |
+
+   - `CONVERTED`(볼 없이 골드로 전환)는 없애요. 골드는 `DUPLICATE`일 때만 나오고 원장 사유는 지금의 `EXPLORE_GOLD`를 그대로 써요.
+   - "처리 전 등장은 1건"은 그대로 두고, 다음 탐색을 시작하거나 탐색을 그만둘 때 남아 있는 등장을 `SKIPPED`로 마감해요.
+   - `verify.sql`: "골드 전환 = 볼 없이 골드 + 원장" → "중복 포획 = 볼 소모 + 골드 + 원장", "골드 전환인데 골드 0 불가" → `DUPLICATE` 기준으로, `SKIPPED` 검사 추가.
+3. (확인만) `explore_miss_rate` 0.40은 시드에 "확인 필요"로 적혀 있는데, 앱도 0.40으로 맞췄어요. 바뀌면 `Economy.exploreMissRate`도 같이 바꿔요.

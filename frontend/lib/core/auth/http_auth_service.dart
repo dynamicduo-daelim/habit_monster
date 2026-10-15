@@ -94,7 +94,7 @@ class HttpAuthService implements AuthService {
 
   @override
   Future<void> completeOnboarding(AuthSession session) async {
-    final body = {'step': 'DONE'};
+    const body = <String, Object?>{}; // 본문 없음: 서버가 완료 시각(onboarded_at)을 찍는다
     try {
       await _send('PATCH', '/me/onboarding', body, access: _accessToken ?? session.accessToken);
     } on AuthException catch (e) {

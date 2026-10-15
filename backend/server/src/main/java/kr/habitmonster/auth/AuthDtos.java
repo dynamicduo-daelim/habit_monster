@@ -18,9 +18,6 @@ public final class AuthDtos {
 	public record RefreshRequest(String refreshToken) {
 	}
 
-	public record OnboardingRequest(User.OnboardingStep step) {
-	}
-
 	public record UserView(String id, AuthProvider provider, String email, String nickname, boolean onboardingDone) {
 
 		static UserView of(User user, AuthProvider provider, String email) {

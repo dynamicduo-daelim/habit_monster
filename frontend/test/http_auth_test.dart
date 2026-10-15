@@ -133,7 +133,7 @@ void main() {
     expect(patches, 2);
     expect(requests.last.method, 'PATCH');
     expect(requests.last.headers['Authorization'], 'Bearer new');
-    expect(jsonDecode(requests.last.body), {'step': 'DONE'});
+    expect(jsonDecode(requests.last.body), isEmpty);
   });
 
   test('로그아웃: 서버에 refresh 폐기 요청 + 저장소 비움 + SDK 로그아웃', () async {

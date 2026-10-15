@@ -17,8 +17,6 @@ import jakarta.persistence.Table;
 @Table(schema = "identity", name = "users")
 public class User {
 
-	public enum OnboardingStep { INTRO, CATEGORY, HABIT, GOAL, DONE }
-
 	public enum Status { ACTIVE, WITHDRAWN }
 
 	@Id
@@ -28,9 +26,9 @@ public class User {
 	@Column(length = 30)
 	private String nickname;
 
-	@Enumerated(EnumType.STRING)
-	@Column(name = "onboarding_step", nullable = false)
-	private OnboardingStep onboardingStep = OnboardingStep.INTRO;
+	/** 온보딩을 끝낸 시각. 끝내기 전엔 null (DB v1.5: 단계 컬럼 없이 마지막에 한 번만 저장). */
+	@Column(name = "onboarded_at")
+	private Instant onboardedAt;
 
 	@Enumerated(EnumType.STRING)
 	@Column(nullable = false)
@@ -67,20 +65,24 @@ public class User {
 		return nickname;
 	}
 
-	public OnboardingStep getOnboardingStep() {
-		return onboardingStep;
+	public Instant getOnboardedAt() {
+		return onboardedAt;
 	}
 
 	public boolean isOnboardingDone() {
-		return onboardingStep == OnboardingStep.DONE;
+		return onboardedAt != null;
 	}
 
 	public boolean isWithdrawn() {
 		return status == Status.WITHDRAWN;
 	}
 
-	public void changeOnboardingStep(OnboardingStep step, Instant now) {
-		this.onboardingStep = step;
+	/** 온보딩 완료. 이미 끝냈으면 처음 시각을 그대로 둔다. */
+	public void completeOnboarding(Instant now) {
+		if (onboardedAt != null) {
+			return;
+		}
+		this.onboardedAt = now;
 		this.updatedAt = now;
 	}
 }

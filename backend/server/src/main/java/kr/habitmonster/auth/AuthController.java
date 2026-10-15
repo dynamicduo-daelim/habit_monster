@@ -2,7 +2,6 @@ package kr.habitmonster.auth;
 
 import kr.habitmonster.auth.AuthDtos.AuthResponse;
 import kr.habitmonster.auth.AuthDtos.EmailRequest;
-import kr.habitmonster.auth.AuthDtos.OnboardingRequest;
 import kr.habitmonster.auth.AuthDtos.RefreshRequest;
 import kr.habitmonster.auth.AuthDtos.SocialRequest;
 import kr.habitmonster.auth.AuthDtos.UserView;
@@ -60,8 +59,9 @@ public class AuthController {
 		return auth.me(Long.valueOf(jwt.getSubject()));
 	}
 
+	/** 온보딩 완료 (본문 없음). 예전 앱이 보내던 {@code {"step":"DONE"}} 본문은 읽지 않는다. */
 	@PatchMapping("/me/onboarding")
-	UserView onboarding(@AuthenticationPrincipal Jwt jwt, @RequestBody OnboardingRequest req) {
-		return auth.updateOnboarding(Long.valueOf(jwt.getSubject()), req.step());
+	UserView onboarding(@AuthenticationPrincipal Jwt jwt) {
+		return auth.completeOnboarding(Long.valueOf(jwt.getSubject()));
 	}
 }

@@ -19,7 +19,10 @@ class Economy {
   // 지출 / 탐색
   static const int seongsilBallPrice = 50; // 던질 때마다 1개
   static const int encountersPerDay = 3;
-  static const double encounterMissRate = 0.35; // 성실볼을 던졌을 때 몬스터가 빠져나와 도망갈 확률
+  static const double exploreMissRate = 0.40; // 탐색했는데 아무도 안 나올 확률 (DB explore_miss_rate)
+
+  /// 성실볼을 던졌을 때 잡힐 확률 — 희귀도(별 1~3)별. 희귀할수록 잘 도망간다 (DB capture_rate, 임시값).
+  static const Map<int, double> captureRate = {1: 0.8, 2: 0.6, 3: 0.4};
 
   // 몬스터 성장
   static const int expPerLevel = 125;

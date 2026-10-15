@@ -44,6 +44,9 @@ class ChatController extends ChangeNotifier {
   /// 확정 전 임시 답 (습관 id → 값).
   final Map<String, double> _answers = {};
 
+  /// 확정한 기록을 고치려고 다시 묻는 중 ([recheck]).
+  bool _rechecking = false;
+
   /// 챗봇이 대답을 만드는 중 (AI 연결 시 입력을 막고 "…"을 보여준다).
   bool busy = false;
 
@@ -94,6 +97,7 @@ class ChatController extends ChangeNotifier {
     messages.clear();
     encounter = null;
     _answers.clear();
+    _rechecking = false;
     final p = partner;
     final sp = p == null ? null : Catalog.speciesById(p.speciesId);
     messages.add(ChatMessage.bot(await _think(brain.greet(sp))));
@@ -156,8 +160,28 @@ class ChatController extends ChangeNotifier {
     await _ask(_habitIndex + 1);
   }
 
+  /// 확정한 오늘 기록을 고친다: 습관을 처음부터 다시 묻고 마지막에 다시 제출한다 (DB v1.5).
+  /// 보상(골드 · 레벨 · 탐색 횟수)은 첫 확정 그대로다.
+  Future<void> recheck() async {
+    if (!state.checkedInToday || step != ChatStep.done || busy) return;
+    _rechecking = true;
+    _answers.clear();
+    messages.add(ChatMessage.bot(await _think(brain.recheckIntro())));
+    await _ask(0);
+  }
+
   /// 마지막 답까지 받으면 한 번에 확정: 상위 3개 반영 · 골드 · 레벨업 · 오늘 탐색 횟수.
+  /// 다시 체크 중이었으면 기록만 고친다.
   Future<void> _confirm() async {
+    if (_rechecking) {
+      _rechecking = false;
+      final again = state.resubmitCheckin(_answers);
+      _answers.clear();
+      if (again != null) messages.add(ChatMessage.bot(await _think(brain.recheckDone(again))));
+      step = ChatStep.done;
+      _notify();
+      return;
+    }
     final r = state.confirmCheckin(_answers);
     _answers.clear();
     if (r == null) {

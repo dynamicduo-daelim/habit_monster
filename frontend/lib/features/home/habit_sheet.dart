@@ -289,7 +289,8 @@ class _HabitRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final m = s.measureOf(habit);
     final v = s.todayRecords[habit.id];
-    final score = s.scoreOf(habit);
+    // 값은 최신 기록, +점수는 보상에 쓰인 첫 확정 점수 (다시 체크해도 보상은 그대로)
+    final score = s.rewardedScoreOf(habit) ?? 0;
     final meta = '${m.label}${m.isOX ? ' · O/X' : ' · 목표 ${formatNum(habit.target)}${m.unit}'}'
         ' · ${Catalog.periods[habit.periodIndex].$1} ${Catalog.periodMult(habit.periodIndex)}';
     final String state;
@@ -301,7 +302,7 @@ class _HabitRow extends StatelessWidget {
       final value = m.isOX ? (v > 0 ? '완료' : '못 함') : '${formatNum(v)}${m.unit}';
       state = '$value · +$score';
     }
-    final stateColor = v == null ? AppColors.lavender : ((score ?? 0) > 0 ? AppColors.gold : AppColors.orange);
+    final stateColor = v == null ? AppColors.lavender : (score > 0 ? AppColors.gold : AppColors.orange);
     return Container(
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
@@ -390,14 +391,14 @@ class _ScorePage extends StatelessWidget {
               const SizedBox(width: 10),
               Expanded(
                 child: _ProgressBar(
-                  pct: (s.scoreOf(h) ?? 0) / Economy.maxSincerityPerHabit,
+                  pct: (s.rewardedScoreOf(h) ?? 0) / Economy.maxSincerityPerHabit,
                   color: Catalog.category(h.categoryId).color,
                 ),
               ),
               const SizedBox(width: 10),
               SizedBox(
                 width: 40,
-                child: Text('${s.scoreOf(h) ?? 0}/${Economy.maxSincerityPerHabit}',
+                child: Text('${s.rewardedScoreOf(h) ?? 0}/${Economy.maxSincerityPerHabit}',
                     textAlign: TextAlign.right, style: const TextStyle(fontSize: 10.5, color: AppColors.textMuted)),
               ),
             ],

@@ -1,6 +1,6 @@
 # backend
 
-서버는 **Spring Boot**로 만들어요 (DB: PostgreSQL, 스키마는 공유 폴더의 `database/schema.sql` + `backend/db/`).
+서버는 **Spring Boot**로 만들어요 (DB: PostgreSQL, 스키마는 공유 폴더의 `schema.sql` v1.6 — 메모는 `backend/db/README.md`).
 
 ## API 초안
 
@@ -9,9 +9,10 @@
 | POST | /auth/… | 회원가입 · 로그인 · 소셜 로그인 · 토큰 갱신 · 로그아웃 (아래 "인증 API") |
 | GET | /me | 골드 · 성실볼 · 탐색 남은 횟수 · 연속 출석 |
 | GET/POST/PATCH/DELETE | /habits | 습관 CRUD (카테고리, 측정 방식, 목표량, 기간) |
-| POST | /checkins | 오늘 습관 기록 → 성실도·골드·카테고리 레벨 계산 결과 반환 |
-| POST | /explore | 탐색 1회 → 몬스터 등장 (아직 안 잡음) / 아무도 없음 |
-| POST | /explore/throw | 나타난 몬스터에게 성실볼 1개 → 잡음(새 몬스터) / 잡음(중복 +15G) / 놓침(도망) |
+| POST | /checkins | 오늘 습관 기록 → 성실도·골드·카테고리 레벨 계산 결과 반환. 같은 날 다시 보내면 기록만 고침 (보상은 첫 확정 그대로) |
+| POST | /explore | 탐색 1회 → 몬스터 등장 (`ENCOUNTER`, 아직 안 잡음) / 아무도 없음 (`MISS`, 40%) |
+| POST | /explore/throw | 나타난 몬스터에게 성실볼 1개 → 잡음(새 몬스터) / 잡음(이미 가진 종 → +15G) / 놓침(도망). 잡힐 확률은 희귀도별 80 · 60 · 40% |
+| POST | /explore/skip | 던지지 않고 넘기기 (보상 없음) |
 | GET | /monsters | 내 몬스터 목록 (레벨 · EXP · 호감도 · 필드/가방) |
 | POST | /monsters/{id}/pet, /play | 하루 1회 교감 → 호감도 |
 | POST | /monsters/{id}/feed | 물약 사용 → EXP · 레벨업 · 진화 |
@@ -37,13 +38,13 @@
 
 | 메서드 | 경로 | 요청 | 설명 |
 | --- | --- | --- | --- |
-| POST | /auth/signup | `{email, password}` | 이메일 가입. `EMAIL` 자격 생성 + `users.onboarding_step='INTRO'` |
+| POST | /auth/signup | `{email, password}` | 이메일 가입. `EMAIL` 자격 생성 (`users.onboarded_at`은 비어 있음) |
 | POST | /auth/login | `{email, password}` | 이메일 로그인 |
 | POST | /auth/social/{kakao\|google} | `{token}` | 소셜 로그인. 처음이면 자동 가입 |
 | POST | /auth/refresh | `{refreshToken}` | access 재발급 + refresh 교체(rotation) |
 | POST | /auth/logout | `{refreshToken}` | 그 refresh 토큰 폐기 (`revoked_at`) |
 | GET | /me | (Bearer) | 위 공통 응답의 `user` + 게임 요약 |
-| PATCH | /me/onboarding | `{step: "DONE"}` | 온보딩 완료 |
+| PATCH | /me/onboarding | (본문 없음) | 온보딩 완료 → `users.onboarded_at` 기록 (DB v1.5: 단계 없이 마지막에 한 번) |
 
 로그인 계열 응답 (앱의 `AuthSession`과 같은 모양):
 
@@ -97,7 +98,7 @@
 
 | 지금 (Flutter, 로컬) | 바꿀 곳 | 돌려주는 모양 |
 | --- | --- | --- |
-| `GameState.confirmCheckin(answers)` | `POST /checkins` 호출 (하루 1번 일괄 확정) → 응답을 `DailyCheckinResult`로 | `lib/data/results.dart` |
+| `GameState.confirmCheckin(answers)` · `resubmitCheckin(answers)` | `POST /checkins` 호출 (첫 확정 / 다시 제출) → 응답을 `DailyCheckinResult`로 | `lib/data/results.dart` |
 | `GameState.explore()` | `POST /explore` 호출 → `EncounterResult` | 〃 |
 | `GameState.throwBall(species)` | `POST /explore/throw` 호출 → `CatchResult` | 〃 |
 | `GameState.pet / play / feed / buy(item, count:) / toggleGoal / openCategory …` | 각 API 호출 후 응답으로 상태 갱신 | |
@@ -115,6 +116,7 @@
 - 보상 계산은 계속 `GameState`(나중엔 서버)가 해요. AI는 말만 하고 숫자는 정하지 않게 두는 게 안전해요.
 - 자유 입력("30분 뛰었어")을 받으려면 `ChatController`에 문장 → 값 해석 단계를 추가하면 돼요 (지금은 버튼/숫자 입력).
 
-## DB 변경안
+## DB v1.5
 
-성실볼을 "던져서 잡는 볼"로 바꾼 v1.5 변경안과 검증 스크립트: [`db/README.md`](db/README.md)
+공식 스키마 v1.5 · v1.6에서 바뀐 것, 서버 · 앱에 반영한 것, 검증 결과: [`db/README.md`](db/README.md)
+(위 API 초안의 탐색 3줄은 2026-10-10에 정한 규칙이고, DB v1.6에 반영돼 있어요.)

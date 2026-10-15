@@ -11,11 +11,19 @@ import 'package:habit_monster/features/shell/main_shell.dart';
 
 /// 정해진 값을 돌려주는 Random (탐색 결과 고정용).
 class FixedRandom implements Random {
-  FixedRandom({required this.double_, this.int_ = 0});
+  FixedRandom({required this.double_, this.int_ = 0, this.doubles});
   final double double_;
   final int int_;
+
+  /// 있으면 nextDouble이 이 순서대로 나오고, 다 쓰면 [double_]가 나온다.
+  final List<double>? doubles;
+  int _used = 0;
+
   @override
-  double nextDouble() => double_;
+  double nextDouble() {
+    final d = doubles;
+    return d != null && _used < d.length ? d[_used++] : double_;
+  }
   @override
   int nextInt(int max) => int_ % max;
   @override
@@ -46,13 +54,34 @@ void main() {
       expect(r.goldEarned, 20 + 20);
     });
 
-    test('확정은 하루 1번, 이후엔 수정 불가', () {
+    test('확정은 하루 1번 (두 번째 확정은 무시)', () {
       final s = GameState.sample(gold: 1240, balls: 1);
       s.confirmCheckin({'h1': 30, 'h2': 0, 'h3': 0});
       final gold = s.gold;
       expect(s.confirmCheckin({'h1': 60, 'h2': 60, 'h3': 2}), isNull);
       expect(s.gold, gold);
       expect(s.todayRecords['h1'], 30);
+    });
+
+    test('다시 제출하면 기록만 바뀌고 보상은 첫 확정 그대로', () {
+      final s = GameState.sample(gold: 1240, balls: 1);
+      expect(s.resubmitCheckin({'h1': 30}), isNull); // 확정 전엔 다시 제출할 게 없다
+      s.confirmCheckin({'h1': 30, 'h2': 0, 'h3': 0}); // 러닝 20점만
+      final gold = s.gold;
+      final exPoints = s.categoryPoints['ex'];
+      s.encountersLeft = 1; // 탐색을 두 번 쓴 뒤
+
+      final r = s.resubmitCheckin({'h1': 45, 'h2': 60, 'h3': 2})!; // 러닝 25 · 공부 20 · 물 20으로 고침
+      expect(r.goldEarned, 0);
+      expect(r.scores.map((x) => x.score), [25, 20, 20]);
+      expect(s.todayRecords, {'h1': 45, 'h2': 60, 'h3': 2});
+      expect(s.scoreOf(s.habits[0]), 25); // 최신 점수
+      expect(s.rewardedScoreOf(s.habits[0]), 20); // 보상 기준은 그대로
+      expect(s.todayScore, 20);
+      expect(s.gold, gold);
+      expect(s.categoryPoints['ex'], exPoints);
+      expect(s.encountersLeft, 1); // 탐색 횟수도 다시 생기지 않는다
+      expect(s.currentStreak, 12);
     });
 
     test('확정하면 탐색 3회 + 오늘 체크인한 카테고리가 탐색 풀', () {
@@ -92,8 +121,29 @@ void main() {
       expect(s.explore()!.found, isFalse);
     });
 
+    test('탐색은 40% 확률로 아무도 안 나온다 (횟수는 쓴다)', () {
+      final s = _checkedIn(GameState.sample(gold: 1240, balls: 1, random: FixedRandom(double_: 0.39, int_: 2)));
+      final e = s.explore()!;
+      expect(e.found, isFalse);
+      expect(e.emptyPool, isFalse); // 만날 몬스터는 있는데 이번에만 안 나옴
+      expect(s.encountersLeft, 2);
+      final s2 = _checkedIn(GameState.sample(gold: 1240, balls: 1, random: FixedRandom(double_: 0.4, int_: 2)));
+      expect(s2.explore()!.found, isTrue);
+    });
+
+    test('잡힐 확률은 희귀도별 80 · 60 · 40%', () {
+      final s = GameState.sample(gold: 1240, balls: 10);
+      expect(s.captureRateOf(Catalog.speciesById('spark')), 0.8); // 흔함
+      expect(s.captureRateOf(Catalog.speciesById('chick')), 0.6); // 보통
+      expect(s.captureRateOf(Catalog.speciesById('wolf')), 0.4); // 희귀
+      // 같은 운(0.5)이면 보통은 잡히고 희귀는 도망간다
+      final lucky = GameState.sample(gold: 1240, balls: 10, random: FixedRandom(double_: 0.5));
+      expect(lucky.throwBall(Catalog.speciesById('chick'))!.caught, isTrue);
+      expect(lucky.throwBall(Catalog.speciesById('wolf'))!.caught, isFalse);
+    });
+
     test('던지면 볼 1개를 쓰고 잡으면 새 몬스터', () {
-      final s = _checkedIn(GameState.sample(gold: 1240, balls: 1, random: FixedRandom(double_: 0.9, int_: 2)));
+      final s = _checkedIn(GameState.sample(gold: 1240, balls: 1, random: FixedRandom(double_: 0.5, int_: 2)));
       final e = s.explore()!;
       final r = s.throwBall(e.species!)!;
       expect(r.kind, CatchKind.newMonster);
@@ -104,7 +154,7 @@ void main() {
     });
 
     test('놓치면 볼만 쓰고 몬스터는 안 생긴다', () {
-      final s = _checkedIn(GameState.sample(gold: 1240, balls: 1, random: FixedRandom(double_: 0.1, int_: 2)));
+      final s = _checkedIn(GameState.sample(gold: 1240, balls: 1, random: FixedRandom(double_: 0.9, int_: 2)));
       final r = s.throwBall(s.explore()!.species!)!;
       expect(r.kind, CatchKind.escaped);
       expect(r.caught, isFalse);
@@ -113,7 +163,7 @@ void main() {
     });
 
     test('이미 있는 몬스터를 잡으면 +15G', () {
-      final s = _checkedIn(GameState.sample(gold: 1240, balls: 1, random: FixedRandom(double_: 0.9, int_: 0))); // 잿불 늑대
+      final s = _checkedIn(GameState.sample(gold: 1240, balls: 1, random: FixedRandom(double_: 0.9, int_: 0, doubles: [0.9, 0.1]))); // 잿불 늑대(희귀): 등장 → 포획
       final e = s.explore()!;
       expect(e.alreadyOwned, isTrue);
       final before = s.gold;
@@ -134,7 +184,7 @@ void main() {
     tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
-    final s = GameState.sample(gold: 1240, balls: 1, random: FixedRandom(double_: 0.9, int_: 2));
+    final s = GameState.sample(gold: 1240, balls: 1, random: FixedRandom(double_: 0.5, int_: 2));
     await tester.pumpWidget(GameScope(notifier: s, child: const MaterialApp(home: MainShell())));
     await tester.tap(find.text('챗봇'));
     await tester.pump();
@@ -173,7 +223,7 @@ void main() {
     expect(find.text('식습관/건강 Lv.3 달성! +20G'), findsOneWidget); // 물 25점으로 21 → 46점
     expect(s.gold, 1240 + 45 + 20);
     expect(find.text('DAY 12 · 연속 12일'), findsOneWidget);
-    expect(find.text('다시 체크'), findsNothing);
+    expect(find.text('다시 체크'), findsOneWidget); // 기록은 고칠 수 있다 (보상은 그대로)
 
     await tester.tap(find.text('탐색하기 (3회 남음)'));
     await tester.pump();
@@ -197,6 +247,27 @@ void main() {
     await tester.pump();
     expect(find.text('탐색하기 (2회 남음)'), findsOneWidget);
     expect(find.textContaining('번쩍 병아리를 잡았어! 새 친구가 생겼네.'), findsOneWidget);
+
+    // 다시 체크: 기록만 고치고 보상 · 탐색 횟수는 그대로
+    final goldBefore = s.gold;
+    await tester.tap(find.text('다시 체크'));
+    await tester.pump();
+    await tester.pump();
+    expect(find.textContaining('처음부터 다시 물어볼게'), findsOneWidget);
+    await tester.tap(find.text('했어!').last); // 아침 러닝 30 → 45분
+    await tester.pump();
+    await tester.tap(find.text('45분'));
+    await tester.pump();
+    await tester.tap(find.text('못 했어')); // 전공 공부
+    await tester.pump();
+    await tester.tap(find.text('못 했어')); // 물 3L → 못 함
+    await tester.pump();
+    await tester.pump();
+    expect(find.text('기록을 고쳐 뒀어! 보상은 처음 확정한 그대로야.'), findsOneWidget);
+    expect(s.todayRecords, {'h1': 45, 'h2': 0, 'h3': 0});
+    expect(s.todayScore, 45);
+    expect(s.gold, goldBefore);
+    expect(find.text('탐색하기 (2회 남음)'), findsOneWidget);
     await tester.pump(const Duration(seconds: 7));
   });
 }

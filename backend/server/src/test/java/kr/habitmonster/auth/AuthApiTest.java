@@ -76,6 +76,10 @@ class AuthApiTest {
 			.andExpect(jsonPath("$.code").value("EMAIL_TAKEN"))
 			.andExpect(jsonPath("$.message").value("이미 가입된 이메일이에요"));
 
+		mvc.perform(patch("/me/onboarding").header("Authorization", "Bearer " + access))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.onboardingDone").value(true));
+		// 다시 불러도 그대로 완료 (예전 앱이 보내던 본문이 있어도 됨)
 		mvc.perform(patch("/me/onboarding").header("Authorization", "Bearer " + access)
 			.contentType(MediaType.APPLICATION_JSON).content("{\"step\":\"DONE\"}"))
 			.andExpect(status().isOk())
