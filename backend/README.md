@@ -6,7 +6,7 @@
 
 | 메서드 | 경로 | 설명 |
 | --- | --- | --- |
-| POST | /auth/… | 회원가입 · 로그인 · 소셜 로그인 · 토큰 갱신 · 로그아웃 (아래 "인증 API") |
+| POST | /auth/… | 회원가입 · 로그인 · 소셜 로그인 · 토큰 갱신 · 로그아웃 (아래 "인증 API"). 경로는 모두 `/api/v1` 뒤 |
 | GET | /me | 골드 · 성실볼 · 탐색 남은 횟수 · 연속 출석 |
 | GET/POST/PATCH/DELETE | /habits | 습관 CRUD (카테고리, 측정 방식, 목표량, 기간) |
 | POST | /checkins | 오늘 습관 기록 → 성실도·골드·카테고리 레벨 계산 결과 반환. 같은 날 다시 보내면 기록만 고침 (보상은 첫 확정 그대로) |
@@ -23,68 +23,57 @@
 
 ## 인증 API (Spring Boot)
 
-앱은 `frontend/lib/core/auth/auth_service.dart`의 `AuthService` 인터페이스만 써요.
-지금은 `FakeAuthService`(앱 안에서만 동작)이고, 서버가 생기면 아래 API를 부르는 `HttpAuthService`로 바꾸면 돼요.
-화면(로그인 · 이메일 가입 · 설정의 로그아웃)은 그대로예요.
+계약 기준은 「습관몬스터 API 명세 v5」 "1. 회원 · 설정"(저장소 밖 `D:/teamProject/docs/api/`) + `docs/진행현황-및-계획.md`의 구현 결정. 경로는 모두 **`/api/v1`** 뒤예요.
+앱은 `frontend/lib/core/auth/auth_service.dart`의 `AuthService` 인터페이스만 써요 (`HttpAuthService` = 진짜 서버, `FakeAuthService` = 앱 안에서만).
 
 ### 흐름
 
-1. 앱 시작 → 저장된 refresh 토큰이 있으면 `POST /auth/refresh` (자동 로그인), 없으면 로그인 화면
-2. 로그인 성공 → `onboardingDone`이 false면 온보딩, true면 홈
-3. 온보딩 끝 → `PATCH /me/onboarding` (다음 로그인부터 바로 홈)
-4. 설정 → 로그아웃 → `POST /auth/logout` → 로그인 화면
+1. 앱 시작 → 저장된 refresh 토큰이 있으면 `POST /auth/refresh` → `GET /me` (자동 로그인), 없으면 로그인 화면
+2. 로그인 성공 → 토큰 저장 → `GET /me`로 계정 정보 → `onboarded`가 false면 온보딩, true면 홈
+3. 온보딩 끝 → `PATCH /me/onboarding` (3단계에서 `POST /onboarding` 일괄 제출로 바뀜)
+4. 설정 → 로그아웃 → `POST /auth/logout` (+ 푸시를 붙이면 `DELETE /me/device-token`) → 로그인 화면
+5. 다른 요청이 401 `TOKEN_EXPIRED`면 재발급을 **한 번만** 하고 다시 보냄. `INVALID_TOKEN`이면 로그인 화면
 
 ### 엔드포인트
 
-| 메서드 | 경로 | 요청 | 설명 |
+| 메서드 | 경로 | 요청 | 응답 · 설명 |
 | --- | --- | --- | --- |
-| POST | /auth/signup | `{email, password}` | 이메일 가입. `EMAIL` 자격 생성 (`users.onboarded_at`은 비어 있음) |
-| POST | /auth/login | `{email, password}` | 이메일 로그인 |
-| POST | /auth/social/{kakao\|google} | `{token}` | 소셜 로그인. 처음이면 자동 가입 |
-| POST | /auth/refresh | `{refreshToken}` | access 재발급 + refresh 교체(rotation) |
-| POST | /auth/logout | `{refreshToken}` | 그 refresh 토큰 폐기 (`revoked_at`) |
-| GET | /me | (Bearer) | 위 공통 응답의 `user` + 게임 요약 |
-| PATCH | /me/onboarding | (본문 없음) | 온보딩 완료 → `users.onboarded_at` 기록 (DB v1.5: 단계 없이 마지막에 한 번) |
+| POST | /auth/signup | `{email, password}` | 201 `{accessToken, refreshToken, onboarded}` |
+| POST | /auth/login | `{email, password}` | 200 같은 모양 |
+| POST | /auth/social/{kakao\|google} | `{providerToken}` | 200 `{accessToken, refreshToken, isNewUser, onboarded}`. 처음이면 자동 가입 |
+| POST | /auth/refresh | `{refreshToken}` | 200 `{accessToken, refreshToken}` — refresh도 교체(rotation) |
+| POST | /auth/logout | `{refreshToken}` | 204. 그 refresh 폐기 |
+| GET | /me | (Bearer) | `{userId, email, provider, onboarded}` — 명세에 없어서 더함 (결정 D4) |
+| DELETE | /me | (Bearer) | 204 탈퇴 |
+| PUT | /me/device-token | `{fcmToken, platform}` | 204. 같은 토큰이 다른 계정에 있으면 이 계정으로 옮김 |
+| DELETE | /me/device-token | `{fcmToken}` | 204. 로그아웃 때 해제 — 명세에 없어서 더함 (결정 A5) |
+| PATCH | /me/onboarding | (본문 없음) | 임시. 3단계에서 지움 |
 
-로그인 계열 응답 (앱의 `AuthSession`과 같은 모양):
-
-```json
-{
-  "accessToken": "eyJ...",
-  "refreshToken": "랜덤 64바이트 base64url",
-  "user": { "id": "123", "provider": "KAKAO", "email": "a@b.com", "nickname": null, "onboardingDone": false }
-}
-```
-
-오류 응답은 `{ "code": "...", "message": "화면에 보여줄 문구" }` — 코드는 앱과 같아요.
+오류 응답은 `{ "code": "...", "message": "화면에 보여줄 문구" }` (+ 경우에 따라 `errors`, `provider`).
 
 | code | HTTP | 언제 |
 | --- | --- | --- |
-| INVALID_EMAIL | 400 | 이메일 형식 오류 |
-| WEAK_PASSWORD | 400 | 비밀번호 8자 미만 (`AuthRules.minPasswordLength`) |
-| EMAIL_TAKEN | 409 | 이미 가입된 이메일 |
+| INVALID_EMAIL · WEAK_PASSWORD | 400 | 이메일 형식 · 비밀번호 8자 미만 |
 | INVALID_CREDENTIALS | 401 | 이메일/비밀번호 불일치 (어느 쪽이 틀렸는지 알려주지 않음) |
-| INVALID_TOKEN | 401 | 소셜 토큰 검증 실패 · refresh 만료/폐기 |
+| INVALID_PROVIDER_TOKEN | 401 | 카카오 · 구글 토큰 검증 실패 |
+| INVALID_TOKEN / TOKEN_EXPIRED | 401 | 토큰 없음 · 위조 · 폐기 / access 만료 |
+| EMAIL_TAKEN | 409 | 같은 방법(이메일)으로 이미 가입된 이메일 |
+| EMAIL_REGISTERED_WITH_OTHER_METHOD | 409 | 다른 방법으로 가입된 이메일. `provider`(kakao · google · email)로 원래 방법을 알려 줌 |
 
-### 서버가 지킬 것 (DB `identity` 스키마)
+### 서버가 지키는 것 (DB v1.7 `identity` 스키마)
 
-- **이메일**: 소문자 + 앞뒤 공백 제거 후 `auth_credential.provider_subject`에 저장. 비밀번호는 **BCrypt**(`password_hash`), 원문 저장·로그 금지.
-- **소셜**: 앱이 보낸 토큰을 서버가 **직접 검증**하고 그 결과의 사용자 ID만 믿어요. 앱이 보낸 이메일·ID는 믿지 않아요.
-  - 카카오: access token → `GET https://kapi.kakao.com/v2/user/me` → `id`
+- **이메일 하나에 계정 하나**: `users.email`(소문자, 유일). 이메일 가입과 소셜 가입이 같은 이메일이어도 **자동으로 합치지 않고** 409로 원래 가입 방법을 알려 준다.
+  이메일 가입은 인증 메일이 없어서, 자동으로 합치면 남의 이메일로 먼저 가입해 두는 방식으로 계정을 빼앗을 수 있기 때문.
+- **소셜 이메일은 제공자가 검증한 것만** 계정 이메일로 쓴다 (구글 `email_verified`, 카카오 `is_email_valid` · `is_email_verified` — 결정 C4). 검증 안 됐으면 이메일 없이 가입.
+- **소셜 토큰은 서버가 직접 검증**하고 그 결과의 사용자 ID만 믿는다. 앱이 보낸 이메일 · ID는 믿지 않는다.
+  - 카카오: access token → `/v1/user/access_token_info`(우리 앱 ID인지) → `/v2/user/me`
   - 구글: ID token → 구글 공개키로 서명 · `aud`(우리 클라이언트 ID) · 만료 검증 → `sub`
-  - 애플: 유료 개발자 계정(연 $99)이 필요해 **지금은 지원하지 않음** (`/auth/social/apple` → 404 `UNSUPPORTED_PROVIDER`)
-  - `provider_subject` = 그 ID. `(provider, provider_subject)`가 없으면 새 `users` + `auth_credential` 생성.
-- **계정 합치지 않기 (Q-20)**: 구글 이메일이 이메일 가입 계정과 같아도 **다른 계정**이에요. 소셜 이메일은 표시용(`auth_credential.email`, 유일하지 않음).
-- **토큰**: access는 JWT 15~30분 (`sub` = users.id). refresh는 랜덤 문자열, DB엔 **SHA-256 hex만** (`refresh_token.token_hash`), 30일.
-  갱신할 때마다 새 refresh를 주고 옛것은 `revoked_at` — 이미 폐기된 refresh가 다시 오면 그 사용자의 refresh를 전부 폐기 (탈취 의심).
-- **탈퇴 사용자**(`status='WITHDRAWN'`)는 로그인 거부. 로그인 성공 시 `auth_credential.last_login_at` 갱신.
-- Spring Security: `/auth/**`만 열고 나머지는 JWT 필터. 의존성 예: `spring-boot-starter-security`, `spring-boot-starter-oauth2-resource-server`(JWT 검증), `jjwt` 또는 Nimbus(발급), 구글 ID 토큰은 Nimbus `JWKSource`로 검증.
-
-### 앱 쪽 남은 일 (서버 붙일 때)
-
-- `HttpAuthService` 구현 + refresh 토큰을 `flutter_secure_storage`에 저장 (`restore()`에서 읽어 `/auth/refresh`)
-- 소셜 SDK로 토큰 받기: `kakao_flutter_sdk_user`, `google_sign_in` — 각 개발자 콘솔의 앱 키 · 패키지명 등록 필요
-- 다른 API 요청엔 `Authorization: Bearer <accessToken>`, 401이면 한 번 refresh 후 재시도
+  - 애플: 유료 개발자 계정(연 $99)이 필요해 지원하지 않음 (`/auth/social/apple` → 404)
+- **비밀번호**는 BCrypt(`auth_credential.password_hash`), 원문 저장 · 로그 금지.
+- **토큰**: access는 JWT 30분 (`sub` = users.id). refresh는 랜덤 문자열, DB엔 SHA-256 hex만, 30일.
+  쓸 때마다 새것으로 바꾸고, 이미 폐기된 refresh가 다시 오면 그 사용자의 refresh를 전부 폐기 (탈취 의심).
+- **탈퇴**: `users`는 지우지 않고 `WITHDRAWN` + 이메일 비우기(같은 이메일로 재가입 가능). 로그인 수단 · refresh · 푸시 토큰 삭제,
+  다른 모듈 데이터는 각 모듈의 `WithdrawalStep`이 정리 (지금은 중복 방지 키 기록). 남아 있는 access 토큰은 `UserGateFilter`가 막는다.
 
 ## 서버가 꼭 검증해야 하는 것
 

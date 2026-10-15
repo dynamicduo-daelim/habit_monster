@@ -106,7 +106,8 @@ class CommonApiTest {
 
 	@BeforeEach
 	void clean() {
-		jdbc.update("delete from identity.idempotency_record");
+		jdbc.update("delete from api.idempotency_record");
+		jdbc.update("delete from identity.device_token");
 		jdbc.update("delete from identity.refresh_token");
 		jdbc.update("delete from identity.auth_credential");
 		jdbc.update("delete from identity.users");
@@ -146,8 +147,8 @@ class CommonApiTest {
 	@Test
 	void 만료된_토큰은_TOKEN_EXPIRED_위조는_INVALID_TOKEN() throws Exception {
 		String access = signUp("t@habit.kr", true);
-		String sub = JsonPath.read(mvc.perform(get("/me").header("Authorization", "Bearer " + access))
-			.andReturn().getResponse().getContentAsString(), "$.id");
+		String sub = String.valueOf((Integer) JsonPath.read(mvc.perform(get("/me").header("Authorization", "Bearer " + access))
+			.andReturn().getResponse().getContentAsString(), "$.userId"));
 		Instant past = Instant.now().minusSeconds(3600);
 		String expired = token(sub, "habit-monster", past, past.plusSeconds(60));
 		String otherIssuer = token(sub, "someone-else", Instant.now(), Instant.now().plusSeconds(600));
@@ -208,7 +209,9 @@ class CommonApiTest {
 		nick(access, key, "몽이", "none")
 			.andExpect(status().isCreated())
 			.andExpect(header().string(IdempotencyFilter.REPLAYED_HEADER, "true"))
-			.andExpect(result -> assertThat(result.getResponse().getContentAsString()).isEqualTo(first));
+			// PostgreSQL은 JSONB로 저장해 키 순서 · 공백이 바뀔 수 있다 → 글자가 아니라 내용을 비교
+			.andExpect(jsonPath("$.run").value((Integer) JsonPath.read(first, "$.run")))
+			.andExpect(jsonPath("$.nickname").value((String) JsonPath.read(first, "$.nickname")));
 
 		assertThat(TestApi.runs.get()).isEqualTo(1);
 		assertThat(nicknameOf("i@habit.kr")).isEqualTo("몽이");

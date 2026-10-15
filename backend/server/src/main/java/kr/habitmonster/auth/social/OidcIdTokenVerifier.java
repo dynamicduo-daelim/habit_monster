@@ -44,12 +44,14 @@ abstract class OidcIdTokenVerifier implements SocialVerifier {
 		try {
 			Jwt jwt = decoder.decode(token);
 			if (jwt.getSubject() == null || jwt.getSubject().isBlank()) {
-				throw new ApiException(ErrorCode.INVALID_TOKEN);
+				throw new ApiException(ErrorCode.INVALID_PROVIDER_TOKEN);
 			}
-			return new SocialIdentity(jwt.getSubject(), jwt.getClaimAsString("email"));
+			Object verified = jwt.getClaim("email_verified"); // 구글은 true 또는 "true"
+			return new SocialIdentity(jwt.getSubject(), jwt.getClaimAsString("email"),
+					Boolean.TRUE.equals(verified) || "true".equals(verified));
 		}
 		catch (JwtException e) {
-			throw new ApiException(ErrorCode.INVALID_TOKEN);
+			throw new ApiException(ErrorCode.INVALID_PROVIDER_TOKEN);
 		}
 	}
 }

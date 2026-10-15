@@ -9,6 +9,8 @@ public class ApiException extends RuntimeException {
 
 	private final ErrorCode code;
 	private final List<FieldError> errors;
+	/** {@code EMAIL_REGISTERED_WITH_OTHER_METHOD}일 때 원래 가입 방법 (kakao · google · email). */
+	private final String provider;
 
 	public ApiException(ErrorCode code) {
 		this(code, code.message);
@@ -20,9 +22,19 @@ public class ApiException extends RuntimeException {
 
 	/** 온보딩 일괄 제출처럼 틀린 항목을 한꺼번에 알려줄 때. */
 	public ApiException(ErrorCode code, String message, List<FieldError> errors) {
+		this(code, message, errors, null);
+	}
+
+	private ApiException(ErrorCode code, String message, List<FieldError> errors, String provider) {
 		super(message);
 		this.code = code;
 		this.errors = List.copyOf(errors);
+		this.provider = provider;
+	}
+
+	/** 다른 방법으로 가입된 이메일 — 사용자에게 원래 가입 방법을 알려 준다. */
+	public static ApiException registeredWithOtherMethod(String provider, String message) {
+		return new ApiException(ErrorCode.EMAIL_REGISTERED_WITH_OTHER_METHOD, message, List.of(), provider);
 	}
 
 	public ErrorCode code() {
@@ -31,5 +43,9 @@ public class ApiException extends RuntimeException {
 
 	public List<FieldError> errors() {
 		return errors;
+	}
+
+	public String provider() {
+		return provider;
 	}
 }

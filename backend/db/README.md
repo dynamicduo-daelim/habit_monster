@@ -1,9 +1,31 @@
-# DB v1.5 → v1.6 (공식 설계) — 앱 · 서버에 맞추기
+# DB 공식 설계 메모 — 앱 · 서버에 맞추기
 
-> **로컬 DB 띄우기 (10-15)**: `backend/docker-compose.yml`이 공유 폴더의 공식 `schema.sql` → `seed.sql` → 이 폴더의 [`server_additions.sql`](server_additions.sql) 순서로 적용해요 (서버 README "PostgreSQL로 띄우기").
-> `server_additions.sql`은 서버가 추가로 쓰는 테이블(지금은 중복 방지 키 `identity.idempotency_record` 하나)이고, **DB 담당에게 넘길 제안**이에요.
+## v1.7 (2026-10-15) — 지금 기준
 
-DB 담당이 보내 준 공식 스키마 기준 메모예요. 원본 파일은 저장소에 넣지 않고 공유 폴더(OneDrive `카카오톡 받은 파일/`)에 둬요.
+원본은 저장소 밖 `D:/teamProject/docs/데이터베이스/` (`schema.sql` · `seed.sql` · `schema_later.sql` · `verify.sql` · `verify_later.sql`).
+로컬 DB는 `backend/docker-compose.yml`이 이 폴더(`backend/.env`의 `HM_DB_DIR`)의 `schema.sql` → `seed.sql`을 자동 적용해요.
+> Docker Desktop은 `C:\Desktop`처럼 공유 범위 밖 폴더를 빈 폴더로 보여요. D: 드라이브나 `C:\Users` 아래에 두세요.
+
+**검증**: 임시 PostgreSQL 16에서 `schema → seed → schema_later → verify → verify_later` **173개 모두 통과** (기본 158 + 나중 블록 15).
+
+**v1.7에서 바뀐 것 (API 명세 v4 반영)**: 업무 날짜 00시 · 이메일은 계정당 하나(`users.email`, `auth_credential.email` 삭제) · 애플 제외 ·
+출석 테이블(`habit.attendance`) · 습관 상태 ACTIVE/ENDED/STOPPED + 기간 테이블(`habit.habit_period`, 채운 날 수 기준) ·
+탐색 결과 MISS/DUPLICATE/ENCOUNTER + CAPTURED/ESCAPED/SKIPPED/EXPIRED · 체크인 대사(`ai.checkin_dialogue`) ·
+**중복 요청 방지 키(`api.idempotency_record`)** · 카테고리 최대 레벨 20 · 꽝 0.35 · 탐색 가중치.
+
+**서버 반영 (10-15)**
+- 중복 방지 키를 공식 `api.idempotency_record`로 옮기고, 우리 쪽 제안이던 `server_additions.sql`(`identity.idempotency_record`)은 지웠어요 (D-19).
+- 로그인: `users.email` 사용, `auth_credential.email` 제거 (1단계 인증).
+
+**DB에 더할 것 (다음 판에서 결정 — DB · API 명세는 윤서 작성)**
+- 도감 "본 종"(API 명세 v5): `monster.dex_entry`에 처음 본 시각 (지금은 잡은 시각만)
+- 몬스터 종이 5마리뿐 — 운동 · 식습관 · 수면은 시작 몬스터 1종이라 탐색하면 "가진 종 → 15G"만 나옴 (결정 B5는 아트가 나와야 가능)
+
+---
+
+## v1.5 → v1.6 (10-10, 이전 기록)
+
+공식 스키마(윤서 작성) 기준 메모예요. 원본 파일은 저장소에 넣지 않고 공유 폴더(OneDrive `카카오톡 받은 파일/`)에 둬요.
 
 - 2026-10-08 작성본 **v1.5**: `habit_monster_erd.md`, `seed.sql`, `verify.sql`, `verify_later.sql` (`schema_erd/`)
 - 2026-10-10 작성본 **v1.6**: `schema.sql` — 아래 "요청" 두 가지가 반영된 판

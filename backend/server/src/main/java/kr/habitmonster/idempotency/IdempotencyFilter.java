@@ -27,6 +27,7 @@ import kr.habitmonster.idempotency.IdempotencyStore.Scope;
 
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.http.MediaType;
 import org.springframework.http.server.RequestPath;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -106,7 +107,7 @@ public class IdempotencyFilter extends OncePerRequestFilter {
 			return;
 		}
 		CachedBodyRequest request = new CachedBodyRequest(req);
-		String path = req.getRequestURI().substring(req.getContextPath().length());
+		String path = req.getRequestURI(); // 전체 경로 (/api/v1/…) — DB 주석과 같게
 		Scope scope = new Scope(Long.parseLong(auth.getName()), req.getMethod(), path, key);
 		String hash = sha256(req.getQueryString(), request.body);
 
@@ -125,7 +126,7 @@ public class IdempotencyFilter extends OncePerRequestFilter {
 				runChain(chain, request, response);
 				int code = response.getStatus();
 				if (code < 300) {
-					store.complete(scope, code, response.getContentType(), text(response));
+					store.complete(scope, code, text(response));
 					return new Executed(false);
 				}
 				status.setRollbackOnly();
@@ -145,7 +146,7 @@ public class IdempotencyFilter extends OncePerRequestFilter {
 			case KeyReused k -> ErrorResponses.write(res, ErrorCode.IDEMPOTENCY_KEY_REUSED);
 			case Executed e -> {
 				if (e.storeLater()) {
-					store.completeInNewTx(scope, response.getStatus(), response.getContentType(), text(response));
+					store.completeInNewTx(scope, response.getStatus(), text(response));
 				}
 				response.copyBodyToResponse();
 			}
@@ -181,10 +182,10 @@ public class IdempotencyFilter extends OncePerRequestFilter {
 	private static void replay(HttpServletResponse res, Saved saved) throws IOException {
 		res.setStatus(saved.status());
 		res.setHeader(REPLAYED_HEADER, "true");
-		if (saved.type() != null) {
-			res.setContentType(saved.type());
-		}
 		if (saved.body() != null && !saved.body().isEmpty()) {
+			// 우리 API 응답은 모두 JSON (DB에도 JSONB로 저장 — 키 순서 · 공백은 바뀔 수 있지만 내용은 같다)
+			res.setContentType(MediaType.APPLICATION_JSON_VALUE);
+			res.setCharacterEncoding(StandardCharsets.UTF_8.name());
 			res.getOutputStream().write(saved.body().getBytes(StandardCharsets.UTF_8));
 		}
 	}

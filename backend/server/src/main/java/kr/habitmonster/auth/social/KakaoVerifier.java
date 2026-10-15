@@ -25,7 +25,13 @@ public class KakaoVerifier implements SocialVerifier {
 	}
 
 	@JsonIgnoreProperties(ignoreUnknown = true)
-	record Account(String email) {
+	record Account(String email,
+			@JsonProperty("is_email_valid") Boolean emailValid,
+			@JsonProperty("is_email_verified") Boolean emailVerified) {
+
+		boolean verified() {
+			return Boolean.TRUE.equals(emailValid) && Boolean.TRUE.equals(emailVerified);
+		}
 	}
 
 	@JsonIgnoreProperties(ignoreUnknown = true)
@@ -54,18 +60,19 @@ public class KakaoVerifier implements SocialVerifier {
 				.header("Authorization", "Bearer " + token)
 				.retrieve().body(TokenInfo.class);
 			if (info == null || info.appId() == null || !appId.equals(String.valueOf(info.appId()))) {
-				throw new ApiException(ErrorCode.INVALID_TOKEN);
+				throw new ApiException(ErrorCode.INVALID_PROVIDER_TOKEN);
 			}
 			Me me = client.get().uri("/v2/user/me")
 				.header("Authorization", "Bearer " + token)
 				.retrieve().body(Me.class);
 			if (me == null || me.id() == null || !me.id().equals(info.id())) {
-				throw new ApiException(ErrorCode.INVALID_TOKEN);
+				throw new ApiException(ErrorCode.INVALID_PROVIDER_TOKEN);
 			}
-			return new SocialIdentity(String.valueOf(me.id()), me.account() == null ? null : me.account().email());
+			Account a = me.account();
+			return new SocialIdentity(String.valueOf(me.id()), a == null ? null : a.email(), a != null && a.verified());
 		}
 		catch (RestClientException e) {
-			throw new ApiException(ErrorCode.INVALID_TOKEN);
+			throw new ApiException(ErrorCode.INVALID_PROVIDER_TOKEN);
 		}
 	}
 }

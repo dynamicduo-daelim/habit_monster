@@ -1,6 +1,7 @@
 #!/bin/sh
 # Docker PostgreSQL이 처음 뜰 때 한 번만 실행된다 (데이터 볼륨이 비어 있을 때).
-# 공식 스키마는 저장소 밖(공유 폴더)에 있어서 /hm-official 로 연결해 둔다 — backend/docker-compose.yml
+# 공식 스키마(v1.7~)는 저장소 밖(공유 폴더)에 있어서 /hm-official 로 연결해 둔다 — backend/docker-compose.yml
+# (서버용 추가 테이블은 v1.7부터 공식 schema.sql에 들어 있다: api.idempotency_record)
 set -e
 
 run() {
@@ -19,4 +20,3 @@ if [ -f /hm-official/seed.sql ]; then
 else
   echo "[habit-monster] seed.sql 이 없어서 건너뜀 (카테고리 · 몬스터 마스터 데이터가 비어 있음)"
 fi
-run /hm-server/server_additions.sql

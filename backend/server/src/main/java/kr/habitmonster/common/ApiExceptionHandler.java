@@ -16,20 +16,21 @@ public class ApiExceptionHandler {
 
 	/** {@code errors}는 여러 필드가 한꺼번에 틀릴 수 있는 400에서만 담는다 (없으면 응답에서 빠짐). */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	public record ErrorBody(String code, String message, List<FieldError> errors) {
+	public record ErrorBody(String code, String message, List<FieldError> errors, String provider) {
 	}
 
 	public record FieldError(String field, String reason) {
 	}
 
 	public static ResponseEntity<ErrorBody> body(ErrorCode code, String message) {
-		return ResponseEntity.status(code.status).body(new ErrorBody(code.name(), message, null));
+		return ResponseEntity.status(code.status).body(new ErrorBody(code.name(), message, null, null));
 	}
 
 	@ExceptionHandler(ApiException.class)
 	ResponseEntity<ErrorBody> api(ApiException e) {
 		List<FieldError> errors = e.errors().isEmpty() ? null : e.errors();
-		return ResponseEntity.status(e.code().status).body(new ErrorBody(e.code().name(), e.getMessage(), errors));
+		return ResponseEntity.status(e.code().status)
+			.body(new ErrorBody(e.code().name(), e.getMessage(), errors, e.provider()));
 	}
 
 	@ExceptionHandler(MethodArgumentNotValidException.class)
@@ -38,7 +39,7 @@ public class ApiExceptionHandler {
 			.map(f -> new FieldError(f.getField(), f.getDefaultMessage()))
 			.toList();
 		return ResponseEntity.status(ErrorCode.INVALID_REQUEST.status)
-			.body(new ErrorBody(ErrorCode.INVALID_REQUEST.name(), ErrorCode.INVALID_REQUEST.message, errors));
+			.body(new ErrorBody(ErrorCode.INVALID_REQUEST.name(), ErrorCode.INVALID_REQUEST.message, errors, null));
 	}
 
 	/** 없는 경로도 {@code {code, message}} 모양으로 (Spring 기본 오류 JSON 대신). */

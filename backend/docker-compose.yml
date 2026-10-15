@@ -1,5 +1,5 @@
 # 로컬 개발용 PostgreSQL — backend/ 에서:  docker compose up -d
-# 처음 뜰 때 공식 schema.sql → seed.sql → db/server_additions.sql 순서로 적용 (db/docker-init.sh).
+# 처음 뜰 때 공식 schema.sql → seed.sql 순서로 적용 (db/docker-init.sh).
 # 스키마를 다시 적용하려면 데이터까지 지우고 다시 띄운다:  docker compose down -v && docker compose up -d
 name: habit-monster
 
@@ -16,7 +16,6 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ${HM_DB_DIR:?backend/.env 에 HM_DB_DIR(공식 schema.sql이 있는 공유 폴더)을 적어 주세요}:/hm-official:ro
-      - ./db:/hm-server:ro
       - ./db/docker-init.sh:/docker-entrypoint-initdb.d/10-habit-monster.sh:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]

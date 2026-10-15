@@ -42,8 +42,10 @@ class MemoryTokenStore implements TokenStore {
   Future<void> clear() async => value = null;
 }
 
-/// Spring 서버(backend/server)의 인증 API를 부르는 [AuthService].
+/// Spring 서버(backend/server)의 인증 API(API 명세 v5 "1. 회원 · 설정")를 부르는 [AuthService].
 /// 오류 응답 `{code, message}`는 그대로 [AuthException]이 되어 화면에 message가 뜬다.
+///
+/// 로그인 응답에는 토큰과 온보딩 여부만 오므로, 계정 정보(이메일 · 가입 방법)는 로그인 직후 `GET /me`로 받는다.
 class HttpAuthService implements AuthService {
   HttpAuthService({
     required String baseUrl,
@@ -62,15 +64,21 @@ class HttpAuthService implements AuthService {
   /// 가장 최근 access 토큰 (30분짜리). 만료되면 refresh로 다시 받는다.
   String? _accessToken;
 
+  /// 진행 중인 토큰 재발급. 요청 여러 개가 동시에 만료돼도 재발급은 한 번만 한다 —
+  /// refresh 토큰은 쓸 때마다 바뀌어서, 두 번 동시에 쓰면 두 번째가 "재사용"으로 걸려 로그아웃되기 때문 (API 명세 공통 규칙).
+  Future<void>? _refreshing;
+
   static const _timeout = Duration(seconds: 15);
   static const _network = AuthException('NETWORK', '서버에 연결할 수 없어요. 잠시 후 다시 시도해 주세요');
+  static const _relogin = AuthException('INVALID_TOKEN', '다시 로그인해 주세요');
 
   @override
   Future<AuthSession?> restore() async {
     final refresh = await store.readRefresh();
     if (refresh == null) return null;
     try {
-      return await _refresh(refresh);
+      await _rotate(refresh);
+      return await _me();
     } on AuthException catch (e) {
       // 토큰이 만료 · 폐기됐으면 지우고 로그인 화면으로. 서버가 꺼져 있을 땐 토큰은 남겨 둔다.
       if (e.code != 'NETWORK') await store.clear();
@@ -89,23 +97,14 @@ class HttpAuthService implements AuthService {
   @override
   Future<AuthSession> signInWithProvider(AuthProvider provider) async {
     final token = await social.token(provider);
-    return _login('/auth/social/${provider.name}', {'token': token});
+    return _login('/auth/social/${provider.name}', {'providerToken': token});
   }
 
   @override
   Future<void> completeOnboarding(AuthSession session) async {
-    const body = <String, Object?>{}; // 본문 없음: 서버가 완료 시각(onboarded_at)을 찍는다
-    try {
-      await _send('PATCH', '/me/onboarding', body, access: _accessToken ?? session.accessToken);
-    } on AuthException catch (e) {
-      // 서버 0단계부터 만료는 TOKEN_EXPIRED (예전 서버는 INVALID_TOKEN)
-      if (e.code != 'TOKEN_EXPIRED' && e.code != 'INVALID_TOKEN') rethrow;
-      // access 토큰이 만료됐으면 한 번 갱신하고 다시
-      final refresh = await store.readRefresh();
-      if (refresh == null) rethrow;
-      await _refresh(refresh);
-      await _send('PATCH', '/me/onboarding', body, access: _accessToken);
-    }
+    _accessToken ??= session.accessToken;
+    // 본문 없음: 서버가 완료 시각(onboarded_at)을 찍는다. 3단계에서 POST /onboarding(일괄 제출)으로 바뀐다.
+    await _authed('PATCH', '/me/onboarding', const {});
   }
 
   @override
@@ -123,30 +122,67 @@ class HttpAuthService implements AuthService {
     await social.signOut(session.provider);
   }
 
-  Future<AuthSession> _refresh(String refresh) => _login('/auth/refresh', {'refreshToken': refresh});
-
+  /// 가입 · 로그인 → 토큰 저장 → `GET /me`로 계정 정보.
   Future<AuthSession> _login(String path, Map<String, Object?> body) async {
     final json = await _send('POST', path, body) as Map<String, dynamic>;
-    final user = json['user'] as Map<String, dynamic>;
-    final session = AuthSession(
-      userId: user['id'] as String,
-      provider: AuthProvider.values.byName((user['provider'] as String).toLowerCase()),
-      email: user['email'] as String?,
-      nickname: user['nickname'] as String?,
-      onboardingDone: user['onboardingDone'] as bool? ?? false,
-      accessToken: json['accessToken'] as String,
-      refreshToken: json['refreshToken'] as String,
+    await _keep(json);
+    return _me();
+  }
+
+  /// refresh 토큰으로 access를 다시 받는다 (refresh도 새것으로 바뀐다).
+  Future<void> _rotate(String refresh) async {
+    final json = await _send('POST', '/auth/refresh', {'refreshToken': refresh}) as Map<String, dynamic>;
+    await _keep(json);
+  }
+
+  Future<void> _keep(Map<String, dynamic> json) async {
+    _accessToken = json['accessToken'] as String;
+    await store.writeRefresh(json['refreshToken'] as String);
+  }
+
+  /// 재발급을 한 번만 진행하고, 동시에 부른 쪽은 같은 결과를 기다린다.
+  Future<void> _refreshOnce() => _refreshing ??= () async {
+        try {
+          final refresh = await store.readRefresh();
+          if (refresh == null) throw _relogin;
+          await _rotate(refresh);
+        } finally {
+          _refreshing = null;
+        }
+      }();
+
+  /// 로그인이 필요한 요청. access가 만료(TOKEN_EXPIRED)일 때만 한 번 재발급하고 다시 보낸다.
+  /// 위조 · 폐기(INVALID_TOKEN)는 재발급해도 소용없으므로 그대로 올려 보낸다 → 로그인 화면.
+  Future<Object?> _authed(String method, String path, Map<String, Object?>? body) async {
+    try {
+      return await _send(method, path, body, access: _accessToken);
+    } on AuthException catch (e) {
+      if (e.code != 'TOKEN_EXPIRED') rethrow;
+      await _refreshOnce();
+      return _send(method, path, body, access: _accessToken);
+    }
+  }
+
+  Future<AuthSession> _me() async {
+    final me = await _authed('GET', '/me', null) as Map<String, dynamic>;
+    return AuthSession(
+      userId: '${me['userId']}',
+      provider: AuthProvider.values.byName((me['provider'] as String).toLowerCase()),
+      email: me['email'] as String?,
+      onboardingDone: me['onboarded'] as bool? ?? false,
+      accessToken: _accessToken!,
+      refreshToken: (await store.readRefresh())!,
     );
-    _accessToken = session.accessToken;
-    await store.writeRefresh(session.refreshToken);
-    return session;
   }
 
   /// 요청을 보내고 JSON 본문을 돌려준다 (204면 null). 실패하면 [AuthException].
-  Future<Object?> _send(String method, String path, Map<String, Object?> body, {String? access}) async {
-    final req = http.Request(method, _base.replace(path: '${_base.path}$path'))
-      ..headers['Content-Type'] = 'application/json'
-      ..body = jsonEncode(body);
+  Future<Object?> _send(String method, String path, Map<String, Object?>? body, {String? access}) async {
+    final req = http.Request(method, _base.replace(path: '${_base.path}$path'));
+    if (body != null) {
+      req
+        ..headers['Content-Type'] = 'application/json'
+        ..body = jsonEncode(body);
+    }
     if (access != null) req.headers['Authorization'] = 'Bearer $access';
 
     final http.Response res;

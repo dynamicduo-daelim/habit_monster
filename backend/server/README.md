@@ -21,11 +21,11 @@ curl -X POST localhost:8080/api/v1/auth/signup -H "Content-Type: application/jso
 
 ## PostgreSQL로 띄우기
 
-1. **Docker로 DB 띄우기** (권장): `backend/.env.example`을 `backend/.env`로 복사하고 `HM_DB_DIR`에 공유 폴더(공식 `schema.sql` · `seed.sql`이 있는 곳) 경로를 적은 뒤
+1. **Docker로 DB 띄우기** (권장): `backend/.env.example`을 `backend/.env`로 복사하고 `HM_DB_DIR`에 공식 DB 파일 폴더(`schema.sql` · `seed.sql`, 지금은 v1.7 — `D:/teamProject/docs/데이터베이스`) 경로를 적은 뒤
    ```bash
    cd backend && docker compose up -d
    ```
-   처음 뜰 때 `schema.sql` → `seed.sql` → `db/server_additions.sql` 순서로 자동 적용돼요. 다시 적용하려면 `docker compose down -v` 후 다시 `up`.
+   처음 뜰 때 `schema.sql` → `seed.sql` 순서로 자동 적용돼요 (서버가 쓰는 중복 방지 키 테이블도 v1.7부터 공식 스키마에 있음). 다시 적용하려면 `docker compose down -v` 후 다시 `up`.
    이미 PC에 PostgreSQL이 5432를 쓰고 있으면 `.env`의 `DB_PORT`를 5433 등으로 바꾸고 `DB_URL`도 맞춰요.
    (직접 만든 DB를 쓰면 위 세 파일을 같은 순서로 실행)
 2. 환경변수를 넣고 실행

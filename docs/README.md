@@ -26,5 +26,5 @@
 
 - `backend/README.md` — API 초안, 인증 API, 앱과 서버를 잇는 지점
 - `backend/server/README.md` — 서버 실행 방법 · 환경변수
-- `backend/db/README.md` — DB v1.5에서 바뀐 것, DB 담당에게 요청할 변경
+- `backend/db/README.md` — DB v1.5에서 바뀐 것, DB에 더할 변경
 - `frontend/CLAUDE.md` — 앱 코드 규칙 (색 · 폰트 · 수치 · 디자인 기준)

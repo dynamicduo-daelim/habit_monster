@@ -5,7 +5,7 @@ import 'package:flutter/widgets.dart';
 /// 로그인 수단 (DB `identity.auth_provider`).
 enum AuthProvider { email, kakao, google }
 
-/// 로그인된 사용자. 서버 응답(`backend/README.md` 인증 API)과 같은 모양.
+/// 로그인된 사용자. 토큰은 로그인 응답, 나머지는 `GET /me` 응답 (`backend/README.md` 인증 API).
 class AuthSession {
   const AuthSession({
     required this.userId,
@@ -43,7 +43,8 @@ class AuthSession {
 class AuthException implements Exception {
   const AuthException(this.code, this.message);
 
-  /// 서버: INVALID_CREDENTIALS · EMAIL_TAKEN · WEAK_PASSWORD · INVALID_EMAIL · INVALID_TOKEN · ACCOUNT_WITHDRAWN …
+  /// 서버: INVALID_CREDENTIALS · EMAIL_TAKEN · EMAIL_REGISTERED_WITH_OTHER_METHOD · WEAK_PASSWORD · INVALID_EMAIL
+  ///       · INVALID_TOKEN · TOKEN_EXPIRED · INVALID_PROVIDER_TOKEN · ACCOUNT_WITHDRAWN …
   /// 앱: CANCELED(사용자 취소) · NETWORK · SOCIAL_FAILED · UNSUPPORTED(웹) · SERVER
   final String code;
 

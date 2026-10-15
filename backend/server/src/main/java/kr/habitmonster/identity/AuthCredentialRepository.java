@@ -10,6 +10,8 @@ public interface AuthCredentialRepository extends JpaRepository<AuthCredential, 
 	@EntityGraph(attributePaths = "user")
 	Optional<AuthCredential> findByProviderAndProviderSubject(AuthProvider provider, String providerSubject);
 
-	/** 사용자의 첫 로그인 수단 (응답의 provider 표시용 — 계정 연결 기능이 없어 보통 하나). */
+	/** 사용자의 로그인 수단 (계정 연결 기능이 없어 하나). */
 	Optional<AuthCredential> findFirstByUser_IdOrderByIdAsc(Long userId);
+
+	void deleteByUser_Id(Long userId);
 }
