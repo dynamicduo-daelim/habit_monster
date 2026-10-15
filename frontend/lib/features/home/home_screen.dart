@@ -110,6 +110,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void didUpdateWidget(HomeScreen old) {
     super.didUpdateWidget(old);
     if (widget.tutorial && !old.tutorial) {
+      _iconsHidden = false; // 튜토리얼이 아이콘을 가리킨다
       _overlay = HomeOverlayKind.none;
       _qtyItem = null;
       _purchase = null;
@@ -126,27 +127,64 @@ class _HomeScreenState extends State<HomeScreen> {
   /// 마지막으로 그린 필드 크기 (걷기 타이머가 영역을 계산할 때 쓴다).
   BoxConstraints? _fieldBox;
 
+  // ---------- 오른쪽 아이콘 줄 (숨기기) ----------
+  static const _iconRight = 8.0, _iconTop = 8.0, _iconColumnW = 64.0;
+  static const _handleW = 22.0, _handleH = 56.0;
+
+  /// 아이콘 줄을 오른쪽으로 밀어 숨겼는지.
+  bool _iconsHidden = false;
+  double _iconSwipe = 0;
+
+  /// 아이콘 줄의 높이를 재는 키 (튜토리얼이 키를 주면 그것을 쓴다).
+  final _ownIconsKey = GlobalKey();
+  GlobalKey get _iconsKey => widget.iconsKey ?? _ownIconsKey;
+
+  void _setIconsHidden(bool hidden) {
+    if (_iconsHidden != hidden) setState(() => _iconsHidden = hidden);
+  }
+
+  /// 몬스터가 가리면 안 되는 오른쪽 위 버튼 영역 (필드 안 px). 숨겼으면 손잡이만.
+  Rect _buttonsRect(double w) {
+    if (_iconsHidden) return Rect.fromLTWH(w - _handleW - 6, _iconTop + 40 - 6, _handleW + 6, _handleH + 12);
+    final colH = _iconsKey.currentContext?.size?.height ?? 300;
+    const gap = 6.0;
+    return Rect.fromLTWH(w - _iconRight - _iconColumnW - gap, 0, _iconColumnW + _iconRight + gap, _iconTop + colH + gap);
+  }
+
   _FieldPos _initialPos(int i) => _FieldPos(4.0 + i * 16, 52.0 + (i % 2) * 10, false);
 
-  /// 몬스터가 다닐 수 있는 영역 = 잔디 전체 (본문 크기 대비 %, 몬스터 왼쪽 위 기준). 걷기와 끌기가 같은 영역을 쓴다.
-  /// 위: 발(그림 아래 끝)이 숲 바로 아래 잔디에 닿는 곳. 아래: 이름표가 접힌 시트 위에 보이는 곳.
-  /// 오른쪽: 이름표가 화면 밖으로 잘리지 않는 곳. 화면 크기마다 배경이 다르게 잘려서 px로 계산한다.
-  ({double minX, double maxX, double minY, double maxY}) _area(BoxConstraints box, MonsterSpecies sp) {
+  /// 몬스터가 다닐 수 있는 영역 = 잔디 전체 (본문 크기 대비 %, 몬스터 왼쪽 위 기준). 걷기와 끌기가 같은 규칙을 쓴다.
+  /// 위: 발(그림 아래 끝)이 숲 바로 아래 잔디에 닿는 곳, 그리고 "나의 필드" 바 아래. 아래: 이름표가 접힌 시트 위에 보이는 곳.
+  /// 오른쪽 위 아이콘 줄([_buttonsRect])은 가리지 않는다 — 그 아래쪽 잔디는 다닐 수 있다.
+  /// 화면 크기마다 배경이 다르게 잘려서 px로 계산한다. [x] · [y]를 이 영역 안의 가장 가까운 곳으로 옮겨 돌려준다.
+  (double, double) _place(BoxConstraints box, MonsterSpecies sp, double x, double y) {
     final w = box.maxWidth, h = box.maxHeight;
     final scale = max(w / AppAssets.homeFieldW, h / AppAssets.homeFieldH); // BoxFit.cover
     final imgH = AppAssets.homeFieldH * scale;
     final grassPx = h - imgH + imgH * AppAssets.homeFieldGrassTop; // 아래 맞춤 (bottomCenter)
     const labelH = 24.0; // 그림자 + 이름표
     const columnW = 100.0; // 그림 · 이름표가 차지하는 폭 (대략)
-    const sideGap = 20.0; // 말풍선이 화면 밖으로 덜 잘리게 왼쪽에 남기는 틈
-    // 버튼을 가리지 않게: 위는 "나의 필드" 바 아래, 오른쪽은 상점 · 가방 · 출석 · 습관 아이콘 줄 왼쪽까지.
-    const fieldBarBottom = 12.0 + 28 + 6; // 바 위치(top 12) + 바 높이 + 틈
-    const iconColumnW = 8.0 + 64 + 6; // 아이콘 줄(right 8, 폭 64) + 틈
-    final minY = max(fieldBarBottom, grassPx - sp.fieldHeight + 6) / h * 100;
-    final maxY = (h - HabitSheet.closedHeight - sp.fieldHeight - labelH) / h * 100;
-    final minX = sideGap / w * 100;
-    final maxX = (w - iconColumnW - columnW) / w * 100;
-    return (minX: minX, maxX: max(minX, maxX), minY: minY, maxY: max(minY, maxY));
+    const leftGap = 20.0, rightGap = 6.0; // 왼쪽은 말풍선이 덜 잘리게 조금 더
+    const fieldBarBottom = 12.0 + 28 + 6; // "나의 필드" 바 위치(top 12) + 높이 + 틈
+    final monH = sp.fieldHeight + labelH;
+    final minX = leftGap, maxX = max(minX, w - columnW - rightGap);
+    final minY = max(fieldBarBottom, grassPx - sp.fieldHeight + 6);
+    final maxY = max(minY, h - HabitSheet.closedHeight - monH);
+    var px = (x / 100 * w).clamp(minX, maxX), py = (y / 100 * h).clamp(minY, maxY);
+
+    // 버튼 영역과 겹치면 왼쪽으로 비키거나 아래로 내려가기 중 덜 움직이는 쪽
+    final b = _buttonsRect(w);
+    if (Rect.fromLTWH(px, py, columnW, monH).overlaps(b)) {
+      final toLeft = b.left - columnW; // 오른쪽 끝이 버튼 왼쪽에 닿게
+      final toDown = b.bottom; // 위 끝이 버튼 아래에 닿게
+      final canLeft = toLeft >= minX, canDown = toDown <= maxY;
+      if (canLeft && (!canDown || px - toLeft <= toDown - py)) {
+        px = toLeft;
+      } else if (canDown) {
+        py = toDown;
+      }
+    }
+    return (px / w * 100, py / h * 100);
   }
 
   void _step() {
@@ -159,9 +197,7 @@ class _HomeScreenState extends State<HomeScreen> {
         if (m.uid == _dragUid || _rest.containsKey(m.uid)) continue; // 끄는 중 · 옮긴 자리에서 쉬는 중
         final c = _pos[m.uid] ?? _initialPos(i);
         final sp = Catalog.speciesById(m.speciesId);
-        final a = _area(box, sp);
-        final nx = (c.x + (_rand.nextDouble() * 34 - 17)).clamp(a.minX, a.maxX);
-        final ny = (c.y + (_rand.nextDouble() * 14 - 7)).clamp(a.minY, a.maxY);
+        final (nx, ny) = _place(box, sp, c.x + (_rand.nextDouble() * 34 - 17), c.y + (_rand.nextDouble() * 14 - 7));
         _pos[m.uid] = _FieldPos(nx, ny, sp.facesLeft && nx > c.x);
       }
     });
@@ -182,9 +218,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_dragUid != m.uid) return;
     final c = _pos[m.uid]!;
     final sp = Catalog.speciesById(m.speciesId);
-    final a = _area(box, sp);
-    final nx = (c.x + d.delta.dx / box.maxWidth * 100).clamp(a.minX, a.maxX);
-    final ny = (c.y + d.delta.dy / box.maxHeight * 100).clamp(a.minY, a.maxY);
+    final (nx, ny) = _place(box, sp, c.x + d.delta.dx / box.maxWidth * 100, c.y + d.delta.dy / box.maxHeight * 100);
     final flip = d.delta.dx == 0 ? c.flip : sp.facesLeft && d.delta.dx > 0;
     setState(() => _pos[m.uid] = _FieldPos(nx, ny, flip));
   }
@@ -395,11 +429,20 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
             for (final i in order) _monster(mons[i], i, box, bobUp),
-            Positioned(
-              right: 8,
-              top: 8,
-              child: Column(
-                key: widget.iconsKey,
+            // 오른쪽 아이콘 줄: 오른쪽으로 밀면 화면 밖으로 숨고, 손잡이(◀)를 누르거나 왼쪽으로 밀면 다시 나온다.
+            AnimatedPositioned(
+              duration: const Duration(milliseconds: 250),
+              curve: Curves.easeOut,
+              right: _iconsHidden ? -_iconColumnW : _iconRight,
+              top: _iconTop,
+              child: GestureDetector(
+                onHorizontalDragStart: (_) => _iconSwipe = 0,
+                onHorizontalDragUpdate: (d) => _iconSwipe += d.delta.dx,
+                onHorizontalDragEnd: (d) {
+                  if (_iconSwipe > 24 || d.primaryVelocity! > 300) _setIconsHidden(true);
+                },
+                child: Column(
+                key: _iconsKey,
                 children: [
                   _IconSpot(
                     label: '상점',
@@ -443,6 +486,35 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
                 ],
+              ),
+              ),
+            ),
+            // 숨겼을 때 오른쪽 끝에 남는 손잡이
+            AnimatedPositioned(
+              duration: const Duration(milliseconds: 250),
+              curve: Curves.easeOut,
+              right: _iconsHidden ? 0 : -_handleW,
+              top: _iconTop + 40,
+              child: Semantics(
+                button: true,
+                label: '아이콘 보이기',
+                excludeSemantics: true,
+                child: GestureDetector(
+                  onTap: () => _setIconsHidden(false),
+                  onHorizontalDragEnd: (d) {
+                    if (d.primaryVelocity! < 0) _setIconsHidden(false);
+                  },
+                  child: Container(
+                    width: _handleW,
+                    height: _handleH,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: AppColors.nightDeep.withValues(alpha: 0.85),
+                      border: Border.all(color: AppColors.nightLine2, width: 2),
+                    ),
+                    child: const Text('◀', style: TextStyle(fontSize: 11, color: AppColors.text)),
+                  ),
+                ),
               ),
             ),
             Positioned(

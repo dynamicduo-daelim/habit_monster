@@ -161,4 +161,32 @@ void main() {
     expect(find.byKey(const ValueKey('hearts_m1_1')), findsNothing); // 두 번째엔 하트 없음
     await tester.pump(const Duration(seconds: 4)); // 쉬는 시간 · 토스트가 끝나게
   });
+
+  testWidgets('홈: 아이콘 줄을 오른쪽으로 밀면 숨고, 손잡이를 누르면 다시 나온다', (tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final state = GameState.sample(gold: 1240, balls: 1);
+    await tester.pumpWidget(GameScope(notifier: state, child: const MaterialApp(home: MainShell())));
+    await tester.pump();
+
+    final shop = find.text('상점'); // 아이콘 이름표
+    final shown = tester.getCenter(shop).dx;
+    final g = await tester.startGesture(tester.getCenter(shop));
+    for (var k = 0; k < 5; k++) {
+      await g.moveBy(const Offset(16, 0)); // 손가락처럼 여러 번 나눠 민다
+      await tester.pump();
+    }
+    await g.up();
+    await tester.pump(); // 숨기기 시작
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(tester.getTopLeft(shop).dx, greaterThanOrEqualTo(390)); // 화면 밖으로
+    expect(find.bySemanticsLabel('아이콘 보이기'), findsOneWidget);
+
+    await tester.tap(find.bySemanticsLabel('아이콘 보이기'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(tester.getCenter(shop).dx, shown);
+    await tester.pump(const Duration(seconds: 4));
+  });
 }
