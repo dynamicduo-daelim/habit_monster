@@ -21,3 +21,4 @@ build/
 **/ios/.symlinks/
 **/ios/Flutter/Generated.xcconfig
 **/ios/Runner/GeneratedPluginRegistrant.*
+android/.kotlin/
