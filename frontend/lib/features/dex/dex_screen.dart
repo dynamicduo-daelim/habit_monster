@@ -13,6 +13,7 @@ import '../../data/catalog.dart';
 import '../../data/models.dart';
 import '../../data/pixel_icons.dart';
 import '../home/home_parts.dart' show CheckerPainter;
+import '../shell/game_action.dart';
 import '../shell/main_shell.dart';
 
 /// 몬스터 도감: 위 상세 카드 + 카테고리 탭 6개 + No.001~036 목록.
@@ -114,8 +115,9 @@ class _DexScreenState extends State<DexScreen> {
         if (_picking)
           Positioned.fill(
             child: _CategoryPicker(
-              onPick: (c) {
-                if (!s.openCategory(c.id)) return;
+              onPick: (c) async {
+                final ok = await runGameAction(context, (r) => r.openCategory(c.id));
+                if (ok != true || !context.mounted) return;
                 setState(() {
                   _picking = false;
                   _cat = c.id;

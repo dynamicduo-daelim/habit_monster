@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:habit_monster/core/state/game_state.dart';
+import 'package:habit_monster/core/state/local_game_repository.dart';
 import 'package:habit_monster/data/models.dart';
 import 'package:habit_monster/features/onboarding/onboarding_controller.dart';
 import 'package:habit_monster/features/onboarding/onboarding_flow.dart';
+import 'game_harness.dart';
 
 void main() {
   group('OnboardingController', () {
@@ -94,14 +96,14 @@ void main() {
       expect(toasts.last, '목표를 적어주세요');
     });
 
-    test('완료하면 첫 파트너가 필드에 들어온다', () {
+    test('완료하면 첫 파트너가 필드에 들어온다', () async {
       final s = GameState.sample(gold: 1240, balls: 1);
       c.toggleCategory('sl');
       c.pickStarter(0);
       c.confirmCategories();
       c.draftName.text = '7시간 자기';
       c.addHabit();
-      c.commit(s);
+      await c.commit(LocalGameRepository(s));
       expect(s.pickedCategories, ['sl']);
       expect(s.habits.single.name, '7시간 자기');
       expect(s.goals, isEmpty);
@@ -118,7 +120,7 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     final state = GameState.sample(gold: 1240, balls: 1);
-    await tester.pumpWidget(GameScope(notifier: state, child: const MaterialApp(home: OnboardingFlow())));
+    await tester.pumpWidget(withGame(state, const MaterialApp(home: OnboardingFlow())));
 
     expect(find.text('STEP 1 / 3 · 모험의 길 고르기'), findsOneWidget);
     await tester.tap(find.text('운동'));

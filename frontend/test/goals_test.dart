@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:habit_monster/core/state/game_state.dart';
 import 'package:habit_monster/data/models.dart';
 import 'package:habit_monster/features/shell/main_shell.dart';
+import 'game_harness.dart';
 
 void main() {
   group('GameState 목표', () {
@@ -45,7 +46,7 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     final s = GameState.sample(gold: 1240, balls: 1);
-    await tester.pumpWidget(GameScope(notifier: s, child: const MaterialApp(home: MainShell())));
+    await tester.pumpWidget(withGame(s, const MaterialApp(home: MainShell())));
     await tester.tap(find.text('목표'));
     await tester.pump();
 

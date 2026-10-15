@@ -8,6 +8,7 @@ import '../../core/widgets/pixel_widgets.dart';
 import '../../data/catalog.dart';
 import '../../data/models.dart';
 import '../../data/pixel_icons.dart';
+import '../shell/game_action.dart';
 import '../shell/main_shell.dart';
 import 'home_parts.dart';
 
@@ -195,7 +196,7 @@ class _BagOverlayState extends State<BagOverlay> {
 
   static const _headStyle = TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: AppColors.woodDeep);
 
-  void _move(GameState s, OwnedMonster m) {
+  Future<void> _move(GameState s, OwnedMonster m) async {
     final shell = MainShell.of(context);
     final toField = !m.inField;
     if (toField && s.fieldMonsters.length >= Economy.fieldCapacity) {
@@ -206,7 +207,8 @@ class _BagOverlayState extends State<BagOverlay> {
       shell.toast('필드에 1마리는 남겨둬요');
       return;
     }
-    s.moveMonster(m, toField: toField);
+    final ok = await runGameAction(context, (r) => r.moveMonster(m, toField: toField));
+    if (ok != true || !mounted) return;
     widget.onMonstersChanged();
     shell.toast(toField ? '필드로 꺼냈어요' : '가방에 넣었어요');
   }

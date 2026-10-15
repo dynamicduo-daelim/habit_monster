@@ -1,7 +1,10 @@
 import 'package:flutter/foundation.dart';
 
+import '../../core/api/api_exception.dart';
 import '../../core/constants/economy.dart';
+import '../../core/state/game_repository.dart';
 import '../../core/state/game_state.dart';
+import '../../core/state/local_game_repository.dart';
 import '../../core/utils/format.dart';
 import '../../data/catalog.dart';
 import '../../data/models.dart';
@@ -32,9 +35,15 @@ class ChatMessage {
 /// 답은 확정 전까지 여기에만 임시로 두었다가 마지막에 한 번에 확정한다 (하루 1번, DB Q-4).
 /// 말은 [ChatBrain]이, 규칙 계산(상위 3개 반영 · 골드 · 레벨)은 [GameState]가 한다.
 class ChatController extends ChangeNotifier {
-  ChatController({required this.state, this.brain = const ScriptedChatBrain()});
+  /// [repository]를 안 주면 앱 안에서 계산한다 (테스트 · 시연).
+  ChatController({required this.state, GameRepository? repository, this.brain = const ScriptedChatBrain()})
+      : repository = repository ?? LocalGameRepository(state);
 
+  /// 읽기 (오늘 기록 · 남은 탐색 · 볼 개수 …).
   final GameState state;
+
+  /// 바꾸기 (체크인 제출 · 탐색 · 포획). 서버를 붙이면 여기가 서버를 부른다.
+  final GameRepository repository;
   final ChatBrain brain;
 
   final List<ChatMessage> messages = [];
@@ -175,14 +184,14 @@ class ChatController extends ChangeNotifier {
   Future<void> _confirm() async {
     if (_rechecking) {
       _rechecking = false;
-      final again = state.resubmitCheckin(_answers);
+      final again = await _call(() => repository.resubmitCheckin(_answers));
       _answers.clear();
       if (again != null) messages.add(ChatMessage.bot(await _think(brain.recheckDone(again))));
       step = ChatStep.done;
       _notify();
       return;
     }
-    final r = state.confirmCheckin(_answers);
+    final r = await _call(() => repository.confirmCheckin(_answers));
     _answers.clear();
     if (r == null) {
       step = ChatStep.done;
@@ -205,8 +214,8 @@ class ChatController extends ChangeNotifier {
 
   // ---------- 탐색 ----------
   /// 탐색 1회: 몬스터가 나타난다 (아직 안 잡음).
-  void explore() {
-    final r = state.explore();
+  Future<void> explore() async {
+    final r = await _call(repository.explore);
     if (r == null) return;
     encounter = r;
     lastCatch = null;
@@ -221,7 +230,7 @@ class ChatController extends ChangeNotifier {
   /// 잡았으면 대화창에도 남긴다 (놓치면 남기지 않음).
   Future<CatchResult?> throwBall() async {
     if (!canThrow) return null;
-    final r = state.throwBall(encounter!.species!);
+    final r = await _call(() => repository.throwBall(encounter!.species!));
     if (r == null) return null;
     lastCatch = r;
     hiddenMonsterUid = r.monster?.uid;
@@ -239,6 +248,17 @@ class ChatController extends ChangeNotifier {
   void leaveExplore() {
     step = ChatStep.done;
     _notify();
+  }
+
+  /// 서버 오류면 그 문구를 몬스터 말풍선으로 보여주고 null (예: 날짜가 바뀌었어요 · 서버에 연결할 수 없어요).
+  Future<T?> _call<T>(Future<T?> Function() action) async {
+    try {
+      return await action();
+    } on ApiException catch (e) {
+      messages.add(ChatMessage.bot(e.message));
+      _notify();
+      return null;
+    }
   }
 
   @override

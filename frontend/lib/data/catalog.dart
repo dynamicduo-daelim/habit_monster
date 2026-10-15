@@ -108,6 +108,25 @@ class Catalog {
   static const ShopItem seongsilBall =
       ShopItem(id: 'ball', name: '성실볼', short: '성실볼', price: 50, exp: 0, asset: AppAssets.seongsilBall);
 
+  // ---------- 서버 코드 ↔ 앱 id (결정 D2) ----------
+  // 카테고리(ex · st …) · 몬스터 종(wolf · spark …)은 앱 id가 DB 코드와 같다 (seed.sql).
+  // 측정 항목은 카테고리 안 순서(measureIndex)가 DB `measure_type.sort_order − 1`과 같다.
+  // 상점 아이템만 이름이 달라서 여기서 잇는다.
+
+  /// DB `shop.shop_item.code` → 앱 아이템 id.
+  static const Map<String, String> itemIdByServerCode = {'POTION_S': 's', 'POTION_M': 'm', 'POTION_L': 'l', 'BALL': 'ball'};
+
+  /// 서버에 보낼 아이템 코드 (예: 하급 물약 → POTION_S).
+  static String serverCodeOf(ShopItem item) =>
+      itemIdByServerCode.entries.firstWhere((e) => e.value == item.id).key;
+
+  /// 서버 아이템 코드 → 앱 아이템. 모르는 코드면 null.
+  static ShopItem? itemByServerCode(String code) {
+    final id = itemIdByServerCode[code];
+    if (id == null) return null;
+    return id == seongsilBall.id ? seongsilBall : items.where((i) => i.id == id).firstOrNull;
+  }
+
   /// 습관 기간과 끝까지 지켰을 때의 보상 배수.
   // DB v1.4: 7일/30일/100일 (period_code D7/D30/D100, 배수는 config.period_multiplier)
   static const List<(String, double)> periods = [('7일', 1.2), ('30일', 1.5), ('100일', 2.0)];

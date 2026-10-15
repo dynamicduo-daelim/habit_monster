@@ -8,6 +8,7 @@ import 'package:habit_monster/data/catalog.dart';
 import 'package:habit_monster/data/models.dart';
 import 'package:habit_monster/data/results.dart';
 import 'package:habit_monster/features/shell/main_shell.dart';
+import 'game_harness.dart';
 
 /// 정해진 값을 돌려주는 Random (탐색 결과 고정용).
 class FixedRandom implements Random {
@@ -185,7 +186,7 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     final s = GameState.sample(gold: 1240, balls: 1, random: FixedRandom(double_: 0.5, int_: 2));
-    await tester.pumpWidget(GameScope(notifier: s, child: const MaterialApp(home: MainShell())));
+    await tester.pumpWidget(withGame(s, const MaterialApp(home: MainShell())));
     await tester.tap(find.text('챗봇'));
     await tester.pump();
     await tester.pump();

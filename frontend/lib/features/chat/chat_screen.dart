@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import '../../core/audio/bgm.dart';
 import '../../core/constants/app_assets.dart';
+import '../../core/state/game_repository.dart';
 import '../../core/state/game_state.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/format.dart';
@@ -12,6 +13,7 @@ import '../../core/widgets/pixel_widgets.dart';
 import '../../data/catalog.dart';
 import '../home/home_parts.dart' show DashedBorderPainter;
 import '../home/purchase_popups.dart' show QuantityPopup;
+import '../shell/game_action.dart';
 import '../shell/main_shell.dart';
 import 'chat_controller.dart';
 import 'explore_view.dart';
@@ -55,7 +57,8 @@ class _ChatScreenState extends State<ChatScreen> {
     super.didChangeDependencies();
     if (_c != null) return;
     final s = GameScope.read(context);
-    _c = (widget.controllerBuilder ?? (st) => ChatController(state: st))(s)..addListener(_onChange);
+    final repo = GameRepositoryScope.of(context);
+    _c = (widget.controllerBuilder ?? (st) => ChatController(state: st, repository: repo))(s)..addListener(_onChange);
     _partnerUid = s.chatPartnerUid;
     _habitSig = _sigOf(s);
     _c!.start();
@@ -175,8 +178,9 @@ class _ChatScreenState extends State<ChatScreen> {
   void _openBallShop() => setState(() => _buyingBall = true);
 
   /// 그 자리에서 성실볼을 산다. 산 볼은 바로 성실볼 버튼으로 쓸 수 있다.
-  void _buyBalls(GameState s, int n) {
-    if (!s.buy(Catalog.seongsilBall, count: n)) return;
+  Future<void> _buyBalls(GameState s, int n) async {
+    final ok = await runGameAction(context, (r) => r.buy(Catalog.seongsilBall, count: n));
+    if (ok != true || !mounted) return;
     setState(() => _buyingBall = false);
     MainShell.of(context).toast('성실볼 $n개를 샀어요 · 던질 수 있어요!');
   }

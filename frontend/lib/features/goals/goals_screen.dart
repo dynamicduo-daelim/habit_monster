@@ -8,6 +8,7 @@ import '../../core/widgets/pixel_widgets.dart';
 import '../../data/models.dart';
 import '../../data/pixel_icons.dart';
 import '../home/home_parts.dart' show CoinIcon, DashedBorderPainter;
+import '../shell/game_action.dart';
 import '../shell/main_shell.dart';
 
 /// 목표 체크리스트: 주간(3칸 · +40G) · 월간(1칸 · +150G).
@@ -62,7 +63,7 @@ class _GoalsScreenState extends State<GoalsScreen> {
         _editing = null;
       });
 
-  void _save(GameState s) {
+  Future<void> _save(GameState s) async {
     final shell = MainShell.of(context);
     final t = _title.text.trim();
     if (t.isEmpty) {
@@ -70,18 +71,26 @@ class _GoalsScreenState extends State<GoalsScreen> {
       return;
     }
     final d = _detail.text.trim();
-    if (_editing != null) {
-      s.updateGoal(_editing!, t, d);
-      shell.toast('목표를 고쳤어요');
-    } else {
-      s.addGoal(_draftTier!, t, d);
-    }
+    final editing = _editing;
+    final tier = _draftTier!;
+    final ok = await runGameAction(context, (r) async {
+      if (editing != null) {
+        await r.updateGoal(editing, t, d);
+      } else {
+        await r.addGoal(tier, t, d);
+      }
+      return true;
+    });
+    if (ok != true || !mounted) return;
+    if (editing != null) shell.toast('목표를 고쳤어요');
     _closeDraft();
   }
 
-  void _delete(GameState s) {
+  Future<void> _delete(GameState s) async {
     final shell = MainShell.of(context);
-    if (!s.deleteGoal(_editing!)) {
+    final ok = await runGameAction(context, (r) => r.deleteGoal(_editing!));
+    if (ok == null || !mounted) return;
+    if (!ok) {
       shell.toast('완료한 목표는 지울 수 없어요');
       return;
     }
@@ -90,9 +99,11 @@ class _GoalsScreenState extends State<GoalsScreen> {
   }
 
   /// 달성 체크. 완료한 목표는 되돌릴 수 없다 (DB Q-5).
-  void _toggle(GameState s, Goal g) {
+  Future<void> _toggle(GameState s, Goal g) async {
     final shell = MainShell.of(context);
-    if (!s.toggleGoal(g)) {
+    final ok = await runGameAction(context, (r) => r.completeGoal(g));
+    if (ok == null || !mounted) return;
+    if (!ok) {
       shell.toast('완료한 목표는 되돌릴 수 없어요');
       return;
     }
@@ -170,9 +181,9 @@ class _GoalsScreenState extends State<GoalsScreen> {
         Semantics(
           button: true,
           child: GestureDetector(
-            onTap: () {
-              s.unlockExtraWeeklySlot();
-              MainShell.of(context).toast('결제 화면 자리 · 슬롯 +1');
+            onTap: () async {
+              await runGameAction(context, (r) => r.unlockExtraWeeklySlot());
+              if (mounted) MainShell.of(context).toast('결제 화면 자리 · 슬롯 +1');
             },
             child: Container(
               constraints: const BoxConstraints(minHeight: 44),

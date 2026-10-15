@@ -22,6 +22,8 @@
   · chat(대본형 습관 체크 + 탐색, 대사는 `ChatBrain`) · 통계는 준비 중
   · tutorial(온보딩 직후 홈을 짚어 주는 `TutorialOverlay`, 설정에서 다시 보기) · home의 출석부(`attendance_popup.dart`)
 - `core/widgets/help_button.dart` 낯선 말 옆 ? 버튼 `HelpButton` + 설명 창 `showInfoPopup` (시안에 없는 추가 기능)
+- **상태를 바꿀 땐 `GameRepository`**(`core/state/game_repository.dart`)로: 화면에서는 `runGameAction(context, (repo) => repo.buy(…))`.
+  `GameState`의 규칙 메서드를 화면에서 직접 부르지 않는다 (서버 모드에서 서버를 거치지 않게 됨). 게임 API 통신은 `core/api/ApiClient`
 - 서버·AI 연동 지점: `backend/README.md`의 "프론트 연동 지점" · "AI 챗봇 연결"
 
 ## 구현 순서

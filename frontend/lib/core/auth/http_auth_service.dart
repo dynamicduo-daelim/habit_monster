@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 
+import '../api/api_client.dart';
 import 'auth_service.dart';
 import 'social_login.dart';
 
@@ -46,7 +47,7 @@ class MemoryTokenStore implements TokenStore {
 /// 오류 응답 `{code, message}`는 그대로 [AuthException]이 되어 화면에 message가 뜬다.
 ///
 /// 로그인 응답에는 토큰과 온보딩 여부만 오므로, 계정 정보(이메일 · 가입 방법)는 로그인 직후 `GET /me`로 받는다.
-class HttpAuthService implements AuthService {
+class HttpAuthService implements AuthService, TokenSource {
   HttpAuthService({
     required String baseUrl,
     required this.social,
@@ -140,8 +141,13 @@ class HttpAuthService implements AuthService {
     await store.writeRefresh(json['refreshToken'] as String);
   }
 
-  /// 재발급을 한 번만 진행하고, 동시에 부른 쪽은 같은 결과를 기다린다.
-  Future<void> _refreshOnce() => _refreshing ??= () async {
+  /// 게임 API([ApiClient])도 이 토큰을 쓴다.
+  @override
+  String? get accessToken => _accessToken;
+
+  /// 재발급을 한 번만 진행하고, 동시에 부른 쪽은 같은 결과를 기다린다 (로그인 · 게임 API가 같이 쓴다).
+  @override
+  Future<void> refreshOnce() => _refreshing ??= () async {
         try {
           final refresh = await store.readRefresh();
           if (refresh == null) throw _relogin;
@@ -158,7 +164,7 @@ class HttpAuthService implements AuthService {
       return await _send(method, path, body, access: _accessToken);
     } on AuthException catch (e) {
       if (e.code != 'TOKEN_EXPIRED') rethrow;
-      await _refreshOnce();
+      await refreshOnce();
       return _send(method, path, body, access: _accessToken);
     }
   }

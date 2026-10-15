@@ -12,6 +12,7 @@ import '../../core/widgets/pixel_widgets.dart';
 import '../../data/catalog.dart';
 import '../../data/models.dart';
 import '../../data/pixel_icons.dart';
+import '../shell/game_action.dart';
 import '../shell/main_shell.dart';
 import 'home_parts.dart';
 
@@ -154,7 +155,7 @@ class _MonsterOverlayState extends State<MonsterOverlay> {
     });
   }
 
-  void _play() {
+  Future<void> _play() async {
     setState(() {
       _petMode = false;
       _feedOpen = false;
@@ -166,7 +167,8 @@ class _MonsterOverlayState extends State<MonsterOverlay> {
       _showEmote('note');
     });
     final before = tierOf(m.affection);
-    final gain = _s.play(m);
+    final gain = await runGameAction(context, (r) => r.play(m));
+    if (gain == null || !mounted) return;
     if (gain > 0) {
       setState(() => _line = '공이다! 신난다~ ${_randomLine()}');
       _later(500, () => _floatText('호감도 +$gain', AppColors.tierHigh));
@@ -218,9 +220,10 @@ class _MonsterOverlayState extends State<MonsterOverlay> {
     if (prog >= 100) _finishPet(stage);
   }
 
-  void _finishPet(Size stage) {
+  Future<void> _finishPet(Size stage) async {
     final before = tierOf(m.affection);
-    final gain = _s.pet(m);
+    final gain = await runGameAction(context, (r) => r.pet(m));
+    if (gain == null || !mounted) return;
     final pops = [for (var i = 0; i < 3; i++) _Pop(stage.width / 2 - 34 + i * 24)];
     setState(() {
       _petMode = false;
@@ -251,7 +254,7 @@ class _MonsterOverlayState extends State<MonsterOverlay> {
     }
   }
 
-  void _feed(ShopItem item) {
+  Future<void> _feed(ShopItem item) async {
     final s = _s;
     if ((s.inventory[item.id] ?? 0) <= 0) return;
     if (m.level >= Economy.finalEvolutionLevel) {
@@ -259,7 +262,8 @@ class _MonsterOverlayState extends State<MonsterOverlay> {
       return;
     }
     final before = m.level;
-    s.feed(m, item);
+    final ups = await runGameAction(context, (r) => r.feed(m, item));
+    if (ups == null || ups < 0 || !mounted) return;
     setState(() => _line = '냠냠! 맛있다!');
     _hop(1);
     _showEmote('heart');
@@ -275,21 +279,24 @@ class _MonsterOverlayState extends State<MonsterOverlay> {
     }
   }
 
-  void _toBag() {
+  Future<void> _toBag() async {
     final s = _s;
     if (s.fieldMonsters.length <= 1) {
       _shell.toast('필드에 1마리는 남겨둬요');
       return;
     }
-    s.moveMonster(m, toField: false);
+    final ok = await runGameAction(context, (r) => r.moveMonster(m, toField: false));
+    if (ok != true || !mounted) return;
     _shell.toast('가방에 넣었어요');
     widget.onClose();
   }
 
-  void _makePartner() {
-    final s = _s;
-    s.chatPartnerUid = m.uid;
-    s.touch();
+  Future<void> _makePartner() async {
+    final ok = await runGameAction(context, (r) async {
+      await r.setPartner(m);
+      return true;
+    });
+    if (ok != true || !mounted) return;
     _shell.toast('${withWa(sp.name)} 대화해요');
   }
 

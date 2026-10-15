@@ -2,11 +2,14 @@ import 'package:flutter/material.dart';
 
 import 'core/audio/bgm.dart';
 import 'core/auth/auth_service.dart';
+import 'core/state/game_repository.dart';
 import 'core/state/game_state.dart';
+import 'core/state/local_game_repository.dart';
 import 'core/theme/app_theme.dart';
 import 'features/auth/auth_gate.dart';
 
-/// 앱 루트. 로그인 상태(AuthScope) · 게임 상태(GameScope) · 배경음악(BgmScope)을 하위 위젯에 내려준다.
+/// 앱 루트. 로그인 상태(AuthScope) · 게임 상태(GameScope, 읽기) · 게임 동작(GameRepositoryScope, 바꾸기) ·
+/// 배경음악(BgmScope)을 하위 위젯에 내려준다.
 class HabitMonsterApp extends StatefulWidget {
   const HabitMonsterApp({super.key, this.authService, this.bgm});
 
@@ -22,6 +25,9 @@ class HabitMonsterApp extends StatefulWidget {
 
 class _HabitMonsterAppState extends State<HabitMonsterApp> {
   GameState _state = GameState.sample();
+
+  /// 화면이 게임 상태를 바꿀 때 쓰는 쪽. 지금은 앱 안에서 계산하고, 서버 API가 생기면 HttpGameRepository로 바꾼다.
+  late GameRepository _repository = LocalGameRepository(_state);
   late final Bgm _bgm = widget.bgm ?? AudioBgm();
   late final AuthController _auth = AuthController(
     widget.authService ?? FakeAuthService(),
@@ -37,7 +43,10 @@ class _HabitMonsterAppState extends State<HabitMonsterApp> {
   /// 로그아웃하면 게임 상태를 새로 (다른 계정에 이전 계정 데이터가 보이지 않게).
   void _resetGame() {
     final old = _state;
-    setState(() => _state = GameState.sample());
+    setState(() {
+      _state = GameState.sample();
+      _repository = LocalGameRepository(_state);
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) => old.dispose());
   }
 
@@ -55,17 +64,20 @@ class _HabitMonsterAppState extends State<HabitMonsterApp> {
       notifier: _auth,
       child: GameScope(
         notifier: _state,
-        child: BgmScope(
-          notifier: _bgm,
-          // 웹은 사용자가 화면을 누르기 전엔 소리를 막으므로, 첫 터치 때 배경음악을 다시 시도한다.
-          child: Listener(
-            behavior: HitTestBehavior.translucent,
-            onPointerDown: (_) => _bgm.unlock(),
-            child: MaterialApp(
-              title: '루틴몬',
-              debugShowCheckedModeBanner: false,
-              theme: AppTheme.build(),
-              home: const AuthGate(),
+        child: GameRepositoryScope(
+          repository: _repository,
+          child: BgmScope(
+            notifier: _bgm,
+            // 웹은 사용자가 화면을 누르기 전엔 소리를 막으므로, 첫 터치 때 배경음악을 다시 시도한다.
+            child: Listener(
+              behavior: HitTestBehavior.translucent,
+              onPointerDown: (_) => _bgm.unlock(),
+              child: MaterialApp(
+                title: '루틴몬',
+                debugShowCheckedModeBanner: false,
+                theme: AppTheme.build(),
+                home: const AuthGate(),
+              ),
             ),
           ),
         ),

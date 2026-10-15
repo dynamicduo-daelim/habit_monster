@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:habit_monster/core/state/game_state.dart';
 import 'package:habit_monster/core/utils/format.dart';
 import 'package:habit_monster/features/shell/main_shell.dart';
+import 'game_harness.dart';
 
 void main() {
   group('GameState 교감 · 성실도', () {
@@ -48,7 +49,7 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     final state = GameState.sample(gold: 1240, balls: 1);
-    await tester.pumpWidget(GameScope(notifier: state, child: const MaterialApp(home: MainShell())));
+    await tester.pumpWidget(withGame(state, const MaterialApp(home: MainShell())));
     await tester.pump();
 
     // 슬라이드 시트

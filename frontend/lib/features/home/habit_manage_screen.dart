@@ -12,6 +12,7 @@ import '../../core/widgets/popup_card.dart';
 import '../../data/catalog.dart';
 import '../../data/models.dart';
 import '../onboarding/onboarding_controller.dart';
+import '../shell/game_action.dart';
 import 'home_parts.dart';
 
 /// 홈의 "습관" 아이콘 → 내 습관 목록(그만두기) ↔ 새 습관 추가(무엇을 → 얼마나 → 언제까지).
@@ -43,20 +44,25 @@ class _HabitManageScreenState extends State<HabitManageScreen> {
   }
 
   /// 폼이 등록한 습관을 게임 상태로 옮기고 목록으로 돌아간다.
-  void _onForm() {
+  Future<void> _onForm() async {
     if (_c.habits.isNotEmpty) {
-      final s = GameScope.read(context);
-      for (final h in _c.habits) {
-        s.addHabit(
-          name: h.name,
-          categoryId: h.categoryId,
-          measureIndex: h.measureIndex,
-          target: h.target,
-          periodIndex: h.periodIndex,
-        );
-      }
+      final drafts = [..._c.habits];
       _c.habits.clear();
       _adding = false;
+      for (final h in drafts) {
+        await runGameAction(
+          context,
+          (r) => r.addHabit(
+            name: h.name,
+            categoryId: h.categoryId,
+            measureIndex: h.measureIndex,
+            target: h.target,
+            periodIndex: h.periodIndex,
+          ),
+          onError: _toast,
+        );
+        if (!mounted) return;
+      }
     }
     if (mounted) setState(() {});
   }
@@ -99,7 +105,9 @@ class _HabitManageScreenState extends State<HabitManageScreen> {
       barrierColor: AppColors.black.withValues(alpha: 0),
       pageBuilder: (ctx, _, __) => _RemoveConfirm(habit: h),
     );
-    if (ok == true && s.removeHabit(h)) _toast('${h.name} 습관을 그만뒀어요');
+    if (ok != true || !mounted) return;
+    final removed = await runGameAction(context, (r) => r.removeHabit(h), onError: _toast);
+    if (removed == true) _toast('${h.name} 습관을 그만뒀어요');
   }
 
   @override

@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:habit_monster/core/state/game_state.dart';
 import 'package:habit_monster/features/shell/main_shell.dart';
+import 'game_harness.dart';
 
 /// 홈의 "습관" 아이콘: 습관 추가 · 그만두기.
 void main() {
@@ -59,7 +60,7 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     final s = GameState.sample();
-    await tester.pumpWidget(GameScope(notifier: s, child: const MaterialApp(home: MainShell())));
+    await tester.pumpWidget(withGame(s, const MaterialApp(home: MainShell())));
     await tester.pump();
 
     await tester.tap(find.bySemanticsLabel('습관 관리'));
@@ -119,7 +120,7 @@ void main() {
     final s = GameState.sample();
     s.addHabit(name: '스쿼트', categoryId: 'ex', measureIndex: 1, target: 30, periodIndex: 0);
     s.addHabit(name: '홈트', categoryId: 'ex', measureIndex: 0, target: 20, periodIndex: 0);
-    await tester.pumpWidget(GameScope(notifier: s, child: const MaterialApp(home: MainShell())));
+    await tester.pumpWidget(withGame(s, const MaterialApp(home: MainShell())));
     await tester.pump();
     await tester.tap(find.bySemanticsLabel('습관 관리'));
     await tester.pump();

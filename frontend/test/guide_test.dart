@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:habit_monster/core/state/game_state.dart';
 import 'package:habit_monster/features/home/attendance_popup.dart';
 import 'package:habit_monster/features/shell/main_shell.dart';
+import 'game_harness.dart';
 
 /// 튜토리얼 · 도움말(?) · 출석부 · 골드 얻는 법.
 void main() {
@@ -12,7 +13,7 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     final state = GameState.sample(); // 연속 11일, 오늘은 아직 체크 전
-    await tester.pumpWidget(GameScope(notifier: state, child: MaterialApp(home: MainShell(showTutorial: tutorial))));
+    await tester.pumpWidget(withGame(state, MaterialApp(home: MainShell(showTutorial: tutorial))));
     await tester.pump();
     return state;
   }
@@ -118,9 +119,9 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     final state = GameState.sample();
-    await tester.pumpWidget(GameScope(
-      notifier: state,
-      child: MaterialApp(home: AttendancePopup(onGoChat: () {}, today: DateTime(2026, 10, 15))),
+    await tester.pumpWidget(withGame(
+      state,
+      MaterialApp(home: AttendancePopup(onGoChat: () {}, today: DateTime(2026, 10, 15))),
     ));
     expect(find.text('2026년 10월'), findsOneWidget);
     expect(find.text('31'), findsOneWidget);

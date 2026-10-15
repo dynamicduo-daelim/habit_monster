@@ -3,7 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/widgets.dart';
 
 import '../../core/constants/economy.dart';
-import '../../core/state/game_state.dart';
+import '../../core/state/game_repository.dart';
 import '../../data/catalog.dart';
 import '../../data/models.dart';
 
@@ -223,9 +223,9 @@ class OnboardingController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// 홈으로 들어간다 (건너뛰기도 같은 동작).
-  void commit(GameState state) {
-    state.completeOnboarding(
+  /// 홈으로 들어간다 (건너뛰기도 같은 동작). 서버를 붙이면 `POST /onboarding` 일괄 제출.
+  Future<void> commit(GameRepository repo) {
+    return repo.completeOnboarding(
       picked: picked,
       habits: habits,
       goals: [...goals[GoalTier.weekly]!, ...goals[GoalTier.monthly]!],

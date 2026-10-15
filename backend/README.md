@@ -81,19 +81,31 @@
 하루 제한(습관 3개 반영, 탐색 3회, 쓰다듬기·놀아주기 1회)은 서버 날짜 기준으로 초기화해요.
 수치는 `docs/economy-v1.md`와 `frontend/lib/core/constants/economy.dart`를 같이 맞춰요.
 
-## 프론트 연동 지점 (지금은 로컬 계산)
+## 프론트 연동 지점 (2단계, 10-15)
 
-서버를 붙일 때 화면 코드는 손대지 않고 아래만 바꾸면 되게 나눠 뒀어요.
+화면은 게임 상태를 **바꿀 때** `GameRepository`(`frontend/lib/core/state/game_repository.dart`)만 부른다. 읽기는 지금처럼 `GameState`.
 
-| 지금 (Flutter, 로컬) | 바꿀 곳 | 돌려주는 모양 |
+```
+화면 ──▶ runGameAction(context, (repo) => repo.buy(item))      ← 실패하면 토스트
+            └▶ GameRepository
+                 ├ LocalGameRepository ──▶ GameState 규칙      (지금 · 서버 없이)
+                 └ HttpGameRepository  ──▶ ApiClient ──▶ 서버   (3단계부터 API마다)
+```
+
+| `GameRepository` 메서드 | 서버 API (명세 v5) | 돌려주는 모양 |
 | --- | --- | --- |
-| `GameState.confirmCheckin(answers)` · `resubmitCheckin(answers)` | `POST /checkins` 호출 (첫 확정 / 다시 제출) → 응답을 `DailyCheckinResult`로 | `lib/data/results.dart` |
-| `GameState.explore()` | `POST /explore` 호출 → `EncounterResult` | 〃 |
-| `GameState.throwBall(species)` | `POST /explore/throw` 호출 → `CatchResult` | 〃 |
-| `GameState.pet / play / feed / buy(item, count:) / toggleGoal / openCategory …` | 각 API 호출 후 응답으로 상태 갱신 | |
+| `completeOnboarding` | `POST /onboarding` | — |
+| `confirmCheckin` · `resubmitCheckin` | `POST` · `PUT /checkins/today` | `DailyCheckinResult` (`lib/data/results.dart`) |
+| `explore` · `throwBall` | `POST /explores` · `/explores/{id}/capture` | `EncounterResult` · `CatchResult` |
+| `buy` | `POST /shop/purchases` (코드는 `Catalog.serverCodeOf`) | 성공 여부 |
+| `pet` · `play` · `feed` · `moveMonster` · `setPartner` | `/monsters/{id}/affection` · `feed` · `location` · `PUT /me/partner` | |
+| `openCategory` | `POST /categories/{code}/unlock` | |
+| `addHabit` · `removeHabit` | `POST /habits` · `/habits/{id}/stop` | |
+| `addGoal` · `updateGoal` · `deleteGoal` · `completeGoal` | `/goals` | |
 
-- 서버 호출로 바꾸면 이 메서드들은 `Future`가 돼요. 호출하는 곳은 `ChatController`(`lib/features/chat/`)와 각 화면의 버튼 콜백뿐이에요.
-- 탐색의 랜덤은 지금 `GameState(random: …)`로 주입해요 (테스트용). 서버에선 서버가 뽑아요.
+- `ApiClient`(`lib/core/api/`)가 공통 규칙을 맡는다: Bearer 토큰, `Idempotency-Key`(다시 보낼 땐 같은 키), `TOKEN_EXPIRED`면 재발급 1번(로그인과 공유),
+  연결 끊김 · `REQUEST_IN_PROGRESS`면 같은 키로 재시도, `BUSINESS_DATE_CHANGED`면 화면 새로 불러오기 알림.
+- 탐색의 랜덤은 로컬 모드에서만 `GameState(random: …)`로 주입한다 (테스트용). 서버 모드에선 서버가 뽑는다.
 
 ## AI 챗봇 연결
 

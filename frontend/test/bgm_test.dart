@@ -5,6 +5,7 @@ import 'package:habit_monster/core/audio/bgm.dart';
 import 'package:habit_monster/core/state/game_state.dart';
 import 'package:habit_monster/features/onboarding/onboarding_screen.dart';
 import 'package:habit_monster/features/shell/main_shell.dart';
+import 'game_harness.dart';
 
 void main() {
   void view(WidgetTester tester) {
@@ -16,9 +17,9 @@ void main() {
   testWidgets('온보딩은 인트로 곡', (tester) async {
     view(tester);
     final bgm = SilentBgm();
-    await tester.pumpWidget(GameScope(
-      notifier: GameState.sample(gold: 1240, balls: 1),
-      child: BgmScope(notifier: bgm, child: const MaterialApp(home: OnboardingScreen())),
+    await tester.pumpWidget(withGame(
+      GameState.sample(gold: 1240, balls: 1),
+      BgmScope(notifier: bgm, child: const MaterialApp(home: OnboardingScreen())),
     ));
     await tester.pump();
     expect(bgm.lastRequested, BgmTrack.intro);
@@ -29,9 +30,9 @@ void main() {
     view(tester);
     final bgm = SilentBgm();
     final s = GameState.sample(gold: 1240, balls: 1);
-    await tester.pumpWidget(GameScope(
-      notifier: s,
-      child: BgmScope(notifier: bgm, child: const MaterialApp(home: MainShell())),
+    await tester.pumpWidget(withGame(
+      s,
+      BgmScope(notifier: bgm, child: const MaterialApp(home: MainShell())),
     ));
     await tester.pump();
     expect(bgm.lastRequested, BgmTrack.home);

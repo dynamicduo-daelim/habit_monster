@@ -14,6 +14,7 @@ import '../../core/widgets/pixel_widgets.dart';
 import '../../data/catalog.dart';
 import '../../data/models.dart';
 import '../../data/pixel_icons.dart';
+import '../shell/game_action.dart';
 import '../shell/main_shell.dart';
 import 'attendance_popup.dart';
 import 'bag_overlay.dart';
@@ -212,9 +213,10 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   // ---------- 상점 구매 ----------
-  void _buy(ShopItem item, int count) {
+  Future<void> _buy(ShopItem item, int count) async {
     final s = GameScope.read(context);
-    if (!s.buy(item, count: count)) return;
+    final ok = await runGameAction(context, (r) => r.buy(item, count: count));
+    if (ok != true || !mounted) return;
     setState(() {
       _qtyItem = null;
       _shopLine = ShopOverlay.reactionFor(item.id);
