@@ -138,11 +138,15 @@ class _HomeScreenState extends State<HomeScreen> {
     final grassPx = h - imgH + imgH * AppAssets.homeFieldGrassTop; // 아래 맞춤 (bottomCenter)
     const labelH = 24.0; // 그림자 + 이름표
     const columnW = 100.0; // 그림 · 이름표가 차지하는 폭 (대략)
-    const sideGap = 20.0; // 말풍선이 화면 밖으로 덜 잘리게 양옆에 남기는 틈
-    final minY = max(4.0, grassPx - sp.fieldHeight + 6) / h * 100; // 키 큰 화면은 숲 아래, 짧은 화면은 필드 맨 위
+    const sideGap = 20.0; // 말풍선이 화면 밖으로 덜 잘리게 왼쪽에 남기는 틈
+    // 버튼을 가리지 않게: 위는 "나의 필드" 바 아래, 오른쪽은 상점 · 가방 · 출석 · 습관 아이콘 줄 왼쪽까지.
+    const fieldBarBottom = 12.0 + 28 + 6; // 바 위치(top 12) + 바 높이 + 틈
+    const iconColumnW = 8.0 + 64 + 6; // 아이콘 줄(right 8, 폭 64) + 틈
+    final minY = max(fieldBarBottom, grassPx - sp.fieldHeight + 6) / h * 100;
     final maxY = (h - HabitSheet.closedHeight - sp.fieldHeight - labelH) / h * 100;
     final minX = sideGap / w * 100;
-    return (minX: minX, maxX: max(minX, (w - columnW - sideGap) / w * 100), minY: minY, maxY: max(minY, maxY));
+    final maxX = (w - iconColumnW - columnW) / w * 100;
+    return (minX: minX, maxX: max(minX, maxX), minY: minY, maxY: max(minY, maxY));
   }
 
   void _step() {
