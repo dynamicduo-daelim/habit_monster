@@ -123,22 +123,41 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   // ---------- 필드 ----------
-  /// 몬스터가 다닐 수 있는 영역 (본문 크기 대비 %). 걸어 다니기와 끌어 옮기기가 같은 영역을 쓴다.
-  static const _minX = 3.0, _maxX = 66.0, _minY = 44.0, _maxY = 64.0;
+  /// 마지막으로 그린 필드 크기 (걷기 타이머가 영역을 계산할 때 쓴다).
+  BoxConstraints? _fieldBox;
 
   _FieldPos _initialPos(int i) => _FieldPos(4.0 + i * 16, 52.0 + (i % 2) * 10, false);
 
+  /// 몬스터가 다닐 수 있는 영역 = 잔디 전체 (본문 크기 대비 %, 몬스터 왼쪽 위 기준). 걷기와 끌기가 같은 영역을 쓴다.
+  /// 위: 발(그림 아래 끝)이 숲 바로 아래 잔디에 닿는 곳. 아래: 이름표가 접힌 시트 위에 보이는 곳.
+  /// 오른쪽: 이름표가 화면 밖으로 잘리지 않는 곳. 화면 크기마다 배경이 다르게 잘려서 px로 계산한다.
+  ({double minX, double maxX, double minY, double maxY}) _area(BoxConstraints box, MonsterSpecies sp) {
+    final w = box.maxWidth, h = box.maxHeight;
+    final scale = max(w / AppAssets.homeFieldW, h / AppAssets.homeFieldH); // BoxFit.cover
+    final imgH = AppAssets.homeFieldH * scale;
+    final grassPx = h - imgH + imgH * AppAssets.homeFieldGrassTop; // 아래 맞춤 (bottomCenter)
+    const labelH = 24.0; // 그림자 + 이름표
+    const columnW = 100.0; // 그림 · 이름표가 차지하는 폭 (대략)
+    const sideGap = 20.0; // 말풍선이 화면 밖으로 덜 잘리게 양옆에 남기는 틈
+    final minY = max(4.0, grassPx - sp.fieldHeight + 6) / h * 100; // 키 큰 화면은 숲 아래, 짧은 화면은 필드 맨 위
+    final maxY = (h - HabitSheet.closedHeight - sp.fieldHeight - labelH) / h * 100;
+    final minX = sideGap / w * 100;
+    return (minX: minX, maxX: max(minX, (w - columnW - sideGap) / w * 100), minY: minY, maxY: max(minY, maxY));
+  }
+
   void _step() {
-    if (!mounted || !_idle) return;
+    final box = _fieldBox;
+    if (!mounted || !_idle || box == null) return;
     final mons = GameScope.read(context).fieldMonsters;
     setState(() {
       for (var i = 0; i < mons.length; i++) {
         final m = mons[i];
         if (m.uid == _dragUid || _rest.containsKey(m.uid)) continue; // 끄는 중 · 옮긴 자리에서 쉬는 중
         final c = _pos[m.uid] ?? _initialPos(i);
-        final nx = (c.x + (_rand.nextDouble() * 34 - 17)).clamp(_minX, _maxX);
-        final ny = (c.y + (_rand.nextDouble() * 14 - 7)).clamp(_minY, _maxY);
         final sp = Catalog.speciesById(m.speciesId);
+        final a = _area(box, sp);
+        final nx = (c.x + (_rand.nextDouble() * 34 - 17)).clamp(a.minX, a.maxX);
+        final ny = (c.y + (_rand.nextDouble() * 14 - 7)).clamp(a.minY, a.maxY);
         _pos[m.uid] = _FieldPos(nx, ny, sp.facesLeft && nx > c.x);
       }
     });
@@ -158,14 +177,27 @@ class _HomeScreenState extends State<HomeScreen> {
   void _dragMove(OwnedMonster m, DragUpdateDetails d, BoxConstraints box) {
     if (_dragUid != m.uid) return;
     final c = _pos[m.uid]!;
-    final nx = (c.x + d.delta.dx / box.maxWidth * 100).clamp(_minX, _maxX);
-    final ny = (c.y + d.delta.dy / box.maxHeight * 100).clamp(_minY, _maxY);
     final sp = Catalog.speciesById(m.speciesId);
+    final a = _area(box, sp);
+    final nx = (c.x + d.delta.dx / box.maxWidth * 100).clamp(a.minX, a.maxX);
+    final ny = (c.y + d.delta.dy / box.maxHeight * 100).clamp(a.minY, a.maxY);
     final flip = d.delta.dx == 0 ? c.flip : sp.facesLeft && d.delta.dx > 0;
     setState(() => _pos[m.uid] = _FieldPos(nx, ny, flip));
   }
 
-  /// 내려놓기: 그 자리에서 잠깐 쉬다가 다시 돌아다닌다. 오늘 처음이면 호감도 +1.
+  /// 내려놓은 몬스터의 한마디 (호감도 단계별).
+  static const _dropLines = {
+    AffectionTier.low: ['…내려 줘.', '어디로 데려가는 거야?', '(두리번두리번)'],
+    AffectionTier.mid: ['여기도 괜찮네!', '우와, 높다!', '새 자리 좋아!'],
+    AffectionTier.high: ['한 번 더! 한 번 더!', '네가 옮겨 주니까 좋아!', '여기서 기다릴게!'],
+  };
+
+  /// 하트가 뿅뿅 튀어나오는 몬스터 → 몇 번째 하트인지 (애니메이션을 새로 시작하는 키).
+  final Map<String, int> _hearts = {};
+  final Map<String, Timer> _heartClear = {};
+
+  /// 내려놓기: 한마디 하고, 그 자리에서 잠깐 쉬다가 다시 돌아다닌다.
+  /// 오늘 처음이면 호감도 +1과 함께 하트가 뿅뿅 (단계가 오르면 토스트도).
   void _dragEnd(OwnedMonster m) {
     if (_dragUid != m.uid) return;
     setState(() => _dragUid = null);
@@ -173,12 +205,19 @@ class _HomeScreenState extends State<HomeScreen> {
     final s = GameScope.read(context);
     final before = tierOf(m.affection);
     final gain = s.drag(m);
-    if (gain == 0) return;
-    final name = Catalog.speciesById(m.speciesId).name;
     final after = tierOf(m.affection);
-    MainShell.of(context).toast(after != before
-        ? '${withWa(name)} ${tierName(after)} 사이가 됐어요!'
-        : '$name${josaIGa(name)} 새 자리가 마음에 드나 봐요 ♥+$gain');
+    final lines = _dropLines[after]!;
+    _showTalk({m.uid: lines[_rand.nextInt(lines.length)]}, const Duration(milliseconds: 2400));
+    if (gain == 0) return;
+    _heartClear.remove(m.uid)?.cancel();
+    setState(() => _hearts[m.uid] = (_hearts[m.uid] ?? 0) + 1);
+    _heartClear[m.uid] = Timer(const Duration(milliseconds: 1200), () {
+      _heartClear.remove(m.uid);
+      if (mounted) setState(() => _hearts.remove(m.uid));
+    });
+    if (after != before) {
+      MainShell.of(context).toast('${withWa(Catalog.speciesById(m.speciesId).name)} ${tierName(after)} 사이가 됐어요!');
+    }
   }
 
   // ---------- 말풍선 ----------
@@ -284,7 +323,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   void dispose() {
-    for (final t in [_wander, _firstWander, _bob, _chatter, _talkClear, ..._rest.values]) {
+    for (final t in [_wander, _firstWander, _bob, _chatter, _talkClear, ..._heartClear.values, ..._rest.values]) {
       t?.cancel();
     }
     super.dispose();
@@ -308,7 +347,6 @@ class _HomeScreenState extends State<HomeScreen> {
     final sel = s.monsterByUid(_selUid);
     final bobUp = _tick.isOdd;
 
-    // 아래쪽(y가 큰) 몬스터가 앞에 오도록
     // 아래쪽(앞)에 있는 몬스터를 나중에 그린다. 끌고 있는 몬스터는 맨 위.
     int depth(int i) => mons[i].uid == _dragUid ? 1000 : 0;
     final order = [for (var i = 0; i < mons.length; i++) i]
@@ -319,6 +357,7 @@ class _HomeScreenState extends State<HomeScreen> {
       });
 
     return LayoutBuilder(builder: (context, box) {
+      _fieldBox = box;
       return ClipRect(
         child: Stack(
           children: [
@@ -537,7 +576,49 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
             ),
+          if (_hearts[m.uid] case final n?)
+            // 머리 근처에서 하트 세 개가 뿅뿅 올라가며 사라진다
+            Positioned(
+              top: 6,
+              child: IgnorePointer(child: _HeartBurst(key: ValueKey('hearts_${m.uid}_$n'))),
+            ),
         ],
+      ),
+    );
+  }
+}
+
+/// 호감도가 오를 때 하트 세 개가 엇갈려 튀어 오르며 사라진다 (약 1초).
+class _HeartBurst extends StatelessWidget {
+  const _HeartBurst({super.key});
+
+  static const _spots = [(-22.0, 0.0), (0.0, 0.15), (22.0, 0.3)]; // (가로 위치, 늦게 시작하는 정도)
+
+  @override
+  Widget build(BuildContext context) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: const Duration(milliseconds: 1000),
+      builder: (context, t, _) => SizedBox(
+        width: 70,
+        height: 20,
+        child: Stack(
+          clipBehavior: Clip.none,
+          alignment: Alignment.center,
+          children: [
+            for (final (dx, delay) in _spots)
+              Builder(builder: (_) {
+                final k = ((t - delay) / (1 - delay)).clamp(0.0, 1.0);
+                return Transform.translate(
+                  offset: Offset(dx, -34 * Curves.easeOut.transform(k)),
+                  child: Opacity(
+                    opacity: k == 0 ? 0 : (1 - k * k),
+                    child: const PixelIcon(layers: [PixelLayer(PixelIcons.heart, AppColors.tierHigh)], size: 14),
+                  ),
+                );
+              }),
+          ],
+        ),
       ),
     );
   }

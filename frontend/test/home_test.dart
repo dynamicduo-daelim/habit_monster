@@ -147,13 +147,18 @@ void main() {
     final after = tester.getTopLeft(label);
     expect(after.dx, greaterThan(before.dx + 20));
     expect(state.monsterByUid('m1')!.affection, 5);
-    expect(find.text('불씨 원숭이가 새 자리가 마음에 드나 봐요 ♥+1'), findsOneWidget);
+    expect(find.byKey(const ValueKey('hearts_m1_1')), findsOneWidget); // 하트 뿅뿅
+    expect(
+        find.byWidgetPredicate((w) => w is Text && const ['여기도 괜찮네!', '우와, 높다!', '새 자리 좋아!'].contains(w.data)),
+        findsOneWidget); // 놓으면 한마디 (친해진 사이 대사)
     expect(find.text('상점 주인 마루'), findsNothing); // 끌기는 창을 열지 않는다
 
     // 두 번째부터는 옮기기만
     await tester.drag(find.bySemanticsLabel('불씨 원숭이 정보 보기'), const Offset(-60, 0));
     await tester.pump();
     expect(state.monsterByUid('m1')!.affection, 5);
+    await tester.pump(const Duration(milliseconds: 1300));
+    expect(find.byKey(const ValueKey('hearts_m1_1')), findsNothing); // 두 번째엔 하트 없음
     await tester.pump(const Duration(seconds: 4)); // 쉬는 시간 · 토스트가 끝나게
   });
 }

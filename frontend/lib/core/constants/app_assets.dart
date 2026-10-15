@@ -63,4 +63,8 @@ class AppAssets {
 
   // 배경
   static const String homeField = '$_bg/home_field.png';
+  /// 홈 필드 배경 크기(px)와 잔디가 시작하는 높이(그림 높이 대비, 숲 아래 끝). 몬스터가 다닐 영역 계산에 쓴다.
+  static const double homeFieldW = 780;
+  static const double homeFieldH = 1400;
+  static const double homeFieldGrassTop = 0.32;
 }
