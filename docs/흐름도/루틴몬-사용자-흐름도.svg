@@ -84,10 +84,10 @@
 <text x="105" y="761.0" font-size="40" font-weight="800" fill="#FFFFFF" text-anchor="middle" dominant-baseline="central">3</text>
 <text x="105" y="803.0" font-size="19" font-weight="800" fill="#FFFFFF" text-anchor="middle" dominant-baseline="central">매일</text>
 <text x="105" y="831.0" font-size="12.5" font-weight="600" fill="#FFFFFFDD" text-anchor="middle" dominant-baseline="central">하는 일</text>
-<rect x="214.0" y="640.0" width="200" height="70" rx="14" fill="#00000018"/>
-<rect x="210.0" y="635.0" width="200" height="70" rx="14" fill="#FFFFFF" stroke="#2B2440" stroke-width="2.5"/>
+<rect x="209.0" y="640.0" width="210" height="70" rx="14" fill="#00000018"/>
+<rect x="205.0" y="635.0" width="210" height="70" rx="14" fill="#FFFFFF" stroke="#2B2440" stroke-width="2.5"/>
 <text x="310" y="659.0" font-size="17" font-weight="700" fill="#2B2440" text-anchor="middle" dominant-baseline="central">홈</text>
-<text x="310" y="684.0" font-size="12.5" font-weight="500" fill="#6B6385" text-anchor="middle" dominant-baseline="central">몬스터가 사는 필드</text>
+<text x="310" y="684.0" font-size="12.5" font-weight="500" fill="#6B6385" text-anchor="middle" dominant-baseline="central">들어오면 출석 · 몬스터 필드</text>
 <rect x="474.0" y="640.0" width="200" height="70" rx="14" fill="#00000018"/>
 <rect x="470.0" y="635.0" width="200" height="70" rx="14" fill="#FFFFFF" stroke="#2B2440" stroke-width="2.5"/>
 <text x="570" y="659.0" font-size="17" font-weight="700" fill="#2B2440" text-anchor="middle" dominant-baseline="central">챗봇에게 답하기</text>
@@ -96,24 +96,24 @@
 <rect x="730.0" y="635.0" width="220" height="70" rx="14" fill="#FFFFFF" stroke="#2B2440" stroke-width="2.5"/>
 <text x="840" y="659.0" font-size="17" font-weight="700" fill="#2B2440" text-anchor="middle" dominant-baseline="central">확정</text>
 <text x="840" y="684.0" font-size="12.5" font-weight="500" fill="#6B6385" text-anchor="middle" dominant-baseline="central">성실도 계산 · 높은 3개만</text>
-<path d="M410,670 L468,670" fill="none" stroke="#2B2440" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#ah)"/>
+<path d="M415,670 L468,670" fill="none" stroke="#2B2440" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#ah)"/>
 <path d="M670,670 L728,670" fill="none" stroke="#2B2440" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#ah)"/>
-<rect x="1059.0" y="565.0" width="250" height="60" rx="14" fill="#00000018"/>
-<rect x="1055.0" y="560.0" width="250" height="60" rx="14" fill="#FFE2A8" stroke="#2B2440" stroke-width="2.5"/>
+<rect x="1044.0" y="565.0" width="280" height="60" rx="14" fill="#00000018"/>
+<rect x="1040.0" y="560.0" width="280" height="60" rx="14" fill="#FFE2A8" stroke="#2B2440" stroke-width="2.5"/>
 <text x="1180" y="579.0" font-size="17" font-weight="700" fill="#2B2440" text-anchor="middle" dominant-baseline="central">골드 받기</text>
 <text x="1180" y="604.0" font-size="12.5" font-weight="500" fill="#6B6385" text-anchor="middle" dominant-baseline="central">성실도 1점 = 1G</text>
-<rect x="1059.0" y="645.0" width="250" height="60" rx="14" fill="#00000018"/>
-<rect x="1055.0" y="640.0" width="250" height="60" rx="14" fill="#FFE2A8" stroke="#2B2440" stroke-width="2.5"/>
+<rect x="1044.0" y="645.0" width="280" height="60" rx="14" fill="#00000018"/>
+<rect x="1040.0" y="640.0" width="280" height="60" rx="14" fill="#FFE2A8" stroke="#2B2440" stroke-width="2.5"/>
 <text x="1180" y="659.0" font-size="17" font-weight="700" fill="#2B2440" text-anchor="middle" dominant-baseline="central">카테고리 경험치</text>
-<text x="1180" y="684.0" font-size="12.5" font-weight="500" fill="#6B6385" text-anchor="middle" dominant-baseline="central">레벨업하면 +20G · 새 몬스터 출현</text>
-<rect x="1059.0" y="725.0" width="250" height="60" rx="14" fill="#00000018"/>
-<rect x="1055.0" y="720.0" width="250" height="60" rx="14" fill="#FFE2A8" stroke="#2B2440" stroke-width="2.5"/>
+<text x="1180" y="684.0" font-size="12.5" font-weight="500" fill="#6B6385" text-anchor="middle" dominant-baseline="central">레벨업 +20G · 새 몬스터 출현 (최대 Lv.20)</text>
+<rect x="1044.0" y="725.0" width="280" height="60" rx="14" fill="#00000018"/>
+<rect x="1040.0" y="720.0" width="280" height="60" rx="14" fill="#FFE2A8" stroke="#2B2440" stroke-width="2.5"/>
 <text x="1180" y="739.0" font-size="17" font-weight="700" fill="#2B2440" text-anchor="middle" dominant-baseline="central">탐색 3회 생김</text>
-<text x="1180" y="764.0" font-size="12.5" font-weight="500" fill="#6B6385" text-anchor="middle" dominant-baseline="central">체크한 날에만</text>
-<path d="M950,670 L1000,670 L1000,590 L1053,590" fill="none" stroke="#2B2440" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#ah)"/>
-<path d="M950,670 L1053,670" fill="none" stroke="#2B2440" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#ah)"/>
-<path d="M950,670 L1000,670 L1000,750 L1053,750" fill="none" stroke="#2B2440" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#ah)"/>
-<path d="M1305,750 L1440,750 L1440,1070 L310,1070 L310,1163" fill="none" stroke="#2B2440" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#ah)"/>
+<text x="1180" y="764.0" font-size="12.5" font-weight="500" fill="#6B6385" text-anchor="middle" dominant-baseline="central">체크한 날 · 전부 못 했어면 1회</text>
+<path d="M950,670 L1000,670 L1000,590 L1038,590" fill="none" stroke="#2B2440" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#ah)"/>
+<path d="M950,670 L1038,670" fill="none" stroke="#2B2440" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#ah)"/>
+<path d="M950,670 L1000,670 L1000,750 L1038,750" fill="none" stroke="#2B2440" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#ah)"/>
+<path d="M1320,750 L1440,750 L1440,1070 L310,1070 L310,1163" fill="none" stroke="#2B2440" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#ah)"/>
 <rect x="474.0" y="820.0" width="200" height="70" rx="14" fill="#00000018"/>
 <rect x="470.0" y="815.0" width="200" height="70" rx="14" fill="#FFFFFF" stroke="#2B2440" stroke-width="2.5"/>
 <text x="570" y="839.0" font-size="17" font-weight="700" fill="#2B2440" text-anchor="middle" dominant-baseline="central">목표 체크</text>
@@ -137,60 +137,74 @@
 <g transform="translate(0,250)">
 <text x="105" y="966.0" font-size="40" font-weight="800" fill="#FFFFFF" text-anchor="middle" dominant-baseline="central">4</text>
 <text x="105" y="1008.0" font-size="19" font-weight="800" fill="#FFFFFF" text-anchor="middle" dominant-baseline="central">탐색</text>
-<text x="105" y="1036.0" font-size="12.5" font-weight="600" fill="#FFFFFFDD" text-anchor="middle" dominant-baseline="central">몬스터 잡기</text>
-<rect x="214.0" y="920.0" width="200" height="70" rx="14" fill="#00000018"/>
-<rect x="210.0" y="915.0" width="200" height="70" rx="14" fill="#FFFFFF" stroke="#2B2440" stroke-width="2.5"/>
-<text x="310" y="950.0" font-size="17" font-weight="700" fill="#2B2440" text-anchor="middle" dominant-baseline="central">탐색 1회</text>
-<polygon points="574,903.0 679.0,955 574,1007.0 469.0,955" fill="#00000018"/>
-<polygon points="570,898.0 675.0,950 570,1002.0 465.0,950" fill="#FFF1B8" stroke="#2B2440" stroke-width="2.5" stroke-linejoin="round"/>
-<text x="570" y="940.1" font-size="15" font-weight="700" fill="#2B2440" text-anchor="middle" dominant-baseline="central">몬스터가</text>
-<text x="570" y="959.9" font-size="15" font-weight="700" fill="#2B2440" text-anchor="middle" dominant-baseline="central">나타났나?</text>
-<polygon points="854,903.0 959.0,955 854,1007.0 749.0,955" fill="#00000018"/>
-<polygon points="850,898.0 955.0,950 850,1002.0 745.0,950" fill="#FFF1B8" stroke="#2B2440" stroke-width="2.5" stroke-linejoin="round"/>
-<text x="850" y="940.1" font-size="15" font-weight="700" fill="#2B2440" text-anchor="middle" dominant-baseline="central">성실볼을</text>
-<text x="850" y="959.9" font-size="15" font-weight="700" fill="#2B2440" text-anchor="middle" dominant-baseline="central">던질까?</text>
-<polygon points="1134,903.0 1229.0,955 1134,1007.0 1039.0,955" fill="#00000018"/>
-<polygon points="1130,898.0 1225.0,950 1130,1002.0 1035.0,950" fill="#FFF1B8" stroke="#2B2440" stroke-width="2.5" stroke-linejoin="round"/>
-<text x="1130" y="950.0" font-size="15" font-weight="700" fill="#2B2440" text-anchor="middle" dominant-baseline="central">잡혔나?</text>
-<path d="M410,950 L462,950" fill="none" stroke="#2B2440" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#ah)"/>
-<path d="M675,950 L743,950" fill="none" stroke="#2B2440" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#ah)"/>
-<rect x="661.5" y="920" width="95.0" height="24" rx="12" fill="#FFFFFF" stroke="#2B2440" stroke-width="1.5"/>
-<text x="709" y="932.5" font-size="12.5" font-weight="700" fill="#2B2440" text-anchor="middle" dominant-baseline="central">등장 60%</text>
-<path d="M955,950 L1033,950" fill="none" stroke="#2B2440" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#ah)"/>
-<rect x="966.75" y="920" width="54.5" height="24" rx="12" fill="#FFFFFF" stroke="#2B2440" stroke-width="1.5"/>
-<text x="994" y="932.5" font-size="12.5" font-weight="700" fill="#2B2440" text-anchor="middle" dominant-baseline="central">던지기</text>
-<text x="1130" y="1022.0" font-size="12.5" font-weight="600" fill="#6B6385" text-anchor="middle" dominant-baseline="central">흔함 80% · 보통 60% · 희귀 40%</text>
-<rect x="1284.0" y="856.0" width="240" height="58" rx="14" fill="#00000018"/>
-<rect x="1280.0" y="851.0" width="240" height="58" rx="14" fill="#FFE2A8" stroke="#2B2440" stroke-width="2.5"/>
-<text x="1400" y="869.0" font-size="17" font-weight="700" fill="#2B2440" text-anchor="middle" dominant-baseline="central">새 몬스터!</text>
-<text x="1400" y="894.0" font-size="12.5" font-weight="500" fill="#6B6385" text-anchor="middle" dominant-baseline="central">필드 · 가방으로, 도감 등록</text>
-<rect x="1284.0" y="926.0" width="240" height="58" rx="14" fill="#00000018"/>
-<rect x="1280.0" y="921.0" width="240" height="58" rx="14" fill="#FFE2A8" stroke="#2B2440" stroke-width="2.5"/>
-<text x="1400" y="939.0" font-size="17" font-weight="700" fill="#2B2440" text-anchor="middle" dominant-baseline="central">이미 가진 종</text>
-<text x="1400" y="964.0" font-size="12.5" font-weight="500" fill="#6B6385" text-anchor="middle" dominant-baseline="central">몬스터 대신 골드 +15</text>
-<rect x="1284.0" y="996.0" width="240" height="58" rx="14" fill="#00000018"/>
-<rect x="1280.0" y="991.0" width="240" height="58" rx="14" fill="#FFFFFF" stroke="#2B2440" stroke-width="2.5"/>
-<text x="1400" y="1009.0" font-size="17" font-weight="700" fill="#2B2440" text-anchor="middle" dominant-baseline="central">도망</text>
-<text x="1400" y="1034.0" font-size="12.5" font-weight="500" fill="#6B6385" text-anchor="middle" dominant-baseline="central">성실볼만 사용</text>
-<path d="M1225,950 L1250,950 L1250,880 L1278,880" fill="none" stroke="#2B2440" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#ah)"/>
-<path d="M1225,950 L1278,950" fill="none" stroke="#2B2440" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#ah)"/>
-<path d="M1225,950 L1250,950 L1250,1020 L1278,1020" fill="none" stroke="#2B2440" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#ah)"/>
-<rect x="489.0" y="1070.0" width="170" height="50" rx="14" fill="#00000018"/>
-<rect x="485.0" y="1065.0" width="170" height="50" rx="14" fill="#FFFFFF" stroke="#2B2440" stroke-width="2.5"/>
-<text x="570" y="1090.0" font-size="17" font-weight="700" fill="#2B2440" text-anchor="middle" dominant-baseline="central">아무도 없음</text>
-<rect x="769.0" y="1068.0" width="170" height="54" rx="14" fill="#00000018"/>
-<rect x="765.0" y="1063.0" width="170" height="54" rx="14" fill="#FFFFFF" stroke="#2B2440" stroke-width="2.5"/>
-<text x="850" y="1079.0" font-size="17" font-weight="700" fill="#2B2440" text-anchor="middle" dominant-baseline="central">넘기기</text>
-<text x="850" y="1104.0" font-size="12.5" font-weight="500" fill="#6B6385" text-anchor="middle" dominant-baseline="central">보상 없음</text>
-<path d="M570,1002 L570,1063" fill="none" stroke="#2B2440" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#ah)"/>
-<rect x="542.75" y="1018" width="54.5" height="24" rx="12" fill="#FFFFFF" stroke="#2B2440" stroke-width="1.5"/>
-<text x="570" y="1030.5" font-size="12.5" font-weight="700" fill="#2B2440" text-anchor="middle" dominant-baseline="central">40%</text>
-<path d="M850,1002 L850,1061" fill="none" stroke="#2B2440" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#ah)"/>
-<rect x="816.0" y="1018" width="68.0" height="24" rx="12" fill="#FFFFFF" stroke="#2B2440" stroke-width="1.5"/>
-<text x="850" y="1030.5" font-size="12.5" font-weight="700" fill="#2B2440" text-anchor="middle" dominant-baseline="central">안 던짐</text>
-<path d="M850,1117 L850,1140 L570,1140" fill="none" stroke="#2B2440" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" stroke-dasharray="7 6"/>
-<path d="M570,1115 L570,1140 L310,1140 L310,988" fill="none" stroke="#2B2440" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#ah)" stroke-dasharray="7 6"/>
-<text x="428" y="1124.0" font-size="12.5" font-weight="600" fill="#6B6385" text-anchor="middle" dominant-baseline="central">횟수가 남았으면 다시 탐색</text>
+<text x="105" y="1036.0" font-size="12.5" font-weight="600" fill="#FFFFFFDD" text-anchor="middle" dominant-baseline="central">몬스터 만나기</text>
+<rect x="229.0" y="920.0" width="150" height="70" rx="14" fill="#00000018"/>
+<rect x="225.0" y="915.0" width="150" height="70" rx="14" fill="#FFFFFF" stroke="#2B2440" stroke-width="2.5"/>
+<text x="300" y="950.0" font-size="17" font-weight="700" fill="#2B2440" text-anchor="middle" dominant-baseline="central">탐색 1회</text>
+<polygon points="499,905.0 589.0,955 499,1005.0 409.0,955" fill="#00000018"/>
+<polygon points="495,900.0 585.0,950 495,1000.0 405.0,950" fill="#FFF1B8" stroke="#2B2440" stroke-width="2.5" stroke-linejoin="round"/>
+<text x="495" y="940.1" font-size="15" font-weight="700" fill="#2B2440" text-anchor="middle" dominant-baseline="central">몬스터가</text>
+<text x="495" y="959.9" font-size="15" font-weight="700" fill="#2B2440" text-anchor="middle" dominant-baseline="central">나타났나?</text>
+<rect x="619.0" y="924.0" width="150" height="62" rx="14" fill="#00000018"/>
+<rect x="615.0" y="919.0" width="150" height="62" rx="14" fill="#FFE2A8" stroke="#2B2440" stroke-width="2.5"/>
+<text x="690" y="939.0" font-size="17" font-weight="700" fill="#2B2440" text-anchor="middle" dominant-baseline="central">도감 등록</text>
+<text x="690" y="964.0" font-size="12.5" font-weight="500" fill="#6B6385" text-anchor="middle" dominant-baseline="central">만나기만 해도</text>
+<polygon points="889,905.0 974.0,955 889,1005.0 804.0,955" fill="#00000018"/>
+<polygon points="885,900.0 970.0,950 885,1000.0 800.0,950" fill="#FFF1B8" stroke="#2B2440" stroke-width="2.5" stroke-linejoin="round"/>
+<text x="885" y="940.1" font-size="15" font-weight="700" fill="#2B2440" text-anchor="middle" dominant-baseline="central">이미 가진</text>
+<text x="885" y="959.9" font-size="15" font-weight="700" fill="#2B2440" text-anchor="middle" dominant-baseline="central">종인가?</text>
+<polygon points="1089,905.0 1174.0,955 1089,1005.0 1004.0,955" fill="#00000018"/>
+<polygon points="1085,900.0 1170.0,950 1085,1000.0 1000.0,950" fill="#FFF1B8" stroke="#2B2440" stroke-width="2.5" stroke-linejoin="round"/>
+<text x="1085" y="940.1" font-size="15" font-weight="700" fill="#2B2440" text-anchor="middle" dominant-baseline="central">성실볼을</text>
+<text x="1085" y="959.9" font-size="15" font-weight="700" fill="#2B2440" text-anchor="middle" dominant-baseline="central">던질까?</text>
+<polygon points="1284,910.0 1359.0,955 1284,1000.0 1209.0,955" fill="#00000018"/>
+<polygon points="1280,905.0 1355.0,950 1280,995.0 1205.0,950" fill="#FFF1B8" stroke="#2B2440" stroke-width="2.5" stroke-linejoin="round"/>
+<text x="1280" y="950.0" font-size="15" font-weight="700" fill="#2B2440" text-anchor="middle" dominant-baseline="central">잡혔나?</text>
+<path d="M375,950 L403,950" fill="none" stroke="#2B2440" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#ah)"/>
+<path d="M585,950 L613,950" fill="none" stroke="#2B2440" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#ah)"/>
+<rect x="571.75" y="920" width="54.5" height="24" rx="12" fill="#FFFFFF" stroke="#2B2440" stroke-width="1.5"/>
+<text x="599" y="932.5" font-size="12.5" font-weight="700" fill="#2B2440" text-anchor="middle" dominant-baseline="central">65%</text>
+<path d="M765,950 L798,950" fill="none" stroke="#2B2440" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#ah)"/>
+<path d="M970,950 L998,950" fill="none" stroke="#2B2440" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#ah)"/>
+<rect x="956.75" y="920" width="54.5" height="24" rx="12" fill="#FFFFFF" stroke="#2B2440" stroke-width="1.5"/>
+<text x="984" y="932.5" font-size="12.5" font-weight="700" fill="#2B2440" text-anchor="middle" dominant-baseline="central">아니오</text>
+<path d="M1170,950 L1203,950" fill="none" stroke="#2B2440" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#ah)"/>
+<rect x="1159.75" y="920" width="54.5" height="24" rx="12" fill="#FFFFFF" stroke="#2B2440" stroke-width="1.5"/>
+<text x="1187" y="932.5" font-size="12.5" font-weight="700" fill="#2B2440" text-anchor="middle" dominant-baseline="central">던지기</text>
+<text x="1250" y="1030.0" font-size="12" font-weight="600" fill="#6B6385" text-anchor="middle" dominant-baseline="central">잡힐 확률: 흔함 80 · 보통 60 · 희귀 40%</text>
+<rect x="1381.0" y="866.0" width="170" height="58" rx="14" fill="#00000018"/>
+<rect x="1377.0" y="861.0" width="170" height="58" rx="14" fill="#FFE2A8" stroke="#2B2440" stroke-width="2.5"/>
+<text x="1462" y="879.0" font-size="17" font-weight="700" fill="#2B2440" text-anchor="middle" dominant-baseline="central">새 몬스터!</text>
+<text x="1462" y="904.0" font-size="12.5" font-weight="500" fill="#6B6385" text-anchor="middle" dominant-baseline="central">필드 · 가방으로</text>
+<rect x="1381.0" y="986.0" width="170" height="58" rx="14" fill="#00000018"/>
+<rect x="1377.0" y="981.0" width="170" height="58" rx="14" fill="#FFFFFF" stroke="#2B2440" stroke-width="2.5"/>
+<text x="1462" y="999.0" font-size="17" font-weight="700" fill="#2B2440" text-anchor="middle" dominant-baseline="central">도망</text>
+<text x="1462" y="1024.0" font-size="12.5" font-weight="500" fill="#6B6385" text-anchor="middle" dominant-baseline="central">볼만 쓰고 끝</text>
+<path d="M1355,950 L1365,950 L1365,890 L1375,890" fill="none" stroke="#2B2440" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#ah)"/>
+<path d="M1355,950 L1365,950 L1365,1010 L1375,1010" fill="none" stroke="#2B2440" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#ah)"/>
+<rect x="419.0" y="1068.0" width="160" height="54" rx="14" fill="#00000018"/>
+<rect x="415.0" y="1063.0" width="160" height="54" rx="14" fill="#FFFFFF" stroke="#2B2440" stroke-width="2.5"/>
+<text x="495" y="1079.0" font-size="17" font-weight="700" fill="#2B2440" text-anchor="middle" dominant-baseline="central">아무도 없음</text>
+<text x="495" y="1104.0" font-size="12.5" font-weight="500" fill="#6B6385" text-anchor="middle" dominant-baseline="central">35%</text>
+<rect x="809.0" y="1068.0" width="160" height="54" rx="14" fill="#00000018"/>
+<rect x="805.0" y="1063.0" width="160" height="54" rx="14" fill="#FFE2A8" stroke="#2B2440" stroke-width="2.5"/>
+<text x="885" y="1079.0" font-size="17" font-weight="700" fill="#2B2440" text-anchor="middle" dominant-baseline="central">골드 +15</text>
+<text x="885" y="1104.0" font-size="12.5" font-weight="500" fill="#6B6385" text-anchor="middle" dominant-baseline="central">볼 없이 바로</text>
+<rect x="1009.0" y="1068.0" width="160" height="54" rx="14" fill="#00000018"/>
+<rect x="1005.0" y="1063.0" width="160" height="54" rx="14" fill="#FFFFFF" stroke="#2B2440" stroke-width="2.5"/>
+<text x="1085" y="1079.0" font-size="17" font-weight="700" fill="#2B2440" text-anchor="middle" dominant-baseline="central">넘기기</text>
+<text x="1085" y="1104.0" font-size="12.5" font-weight="500" fill="#6B6385" text-anchor="middle" dominant-baseline="central">보상 없음</text>
+<path d="M495,1000 L495,1061" fill="none" stroke="#2B2440" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#ah)"/>
+<path d="M885,1000 L885,1061" fill="none" stroke="#2B2440" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#ah)"/>
+<rect x="871.25" y="1018" width="27.5" height="24" rx="12" fill="#FFFFFF" stroke="#2B2440" stroke-width="1.5"/>
+<text x="885" y="1030.5" font-size="12.5" font-weight="700" fill="#2B2440" text-anchor="middle" dominant-baseline="central">예</text>
+<path d="M1085,1000 L1085,1061" fill="none" stroke="#2B2440" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#ah)"/>
+<rect x="1051.0" y="1018" width="68.0" height="24" rx="12" fill="#FFFFFF" stroke="#2B2440" stroke-width="1.5"/>
+<text x="1085" y="1030.5" font-size="12.5" font-weight="700" fill="#2B2440" text-anchor="middle" dominant-baseline="central">안 던짐</text>
+<path d="M1085,1117 L1085,1140 L495,1140" fill="none" stroke="#2B2440" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" stroke-dasharray="7 6"/>
+<path d="M885,1117 L885,1140" fill="none" stroke="#2B2440" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" stroke-dasharray="7 6"/>
+<path d="M495,1117 L495,1140 L300,1140 L300,975" fill="none" stroke="#2B2440" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#ah)" stroke-dasharray="7 6"/>
+<text x="385" y="1124.0" font-size="12.5" font-weight="600" fill="#6B6385" text-anchor="middle" dominant-baseline="central">횟수가 남으면 다시</text>
 <text x="105" y="1286.0" font-size="40" font-weight="800" fill="#FFFFFF" text-anchor="middle" dominant-baseline="central">5</text>
 <text x="105" y="1328.0" font-size="19" font-weight="800" fill="#FFFFFF" text-anchor="middle" dominant-baseline="central">키우기</text>
 <text x="105" y="1356.0" font-size="12.5" font-weight="600" fill="#FFFFFFDD" text-anchor="middle" dominant-baseline="central">언제든</text>
@@ -213,20 +227,20 @@
 <path d="M410,1272 L473,1272" fill="none" stroke="#2B2440" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#ah)"/>
 <path d="M725,1272 L798,1272" fill="none" stroke="#2B2440" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#ah)"/>
 <path d="M1000,1272 L1098,1272" fill="none" stroke="#2B2440" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#ah)"/>
-<rect x="214.0" y="1342.0" width="200" height="70" rx="14" fill="#00000018"/>
-<rect x="210.0" y="1337.0" width="200" height="70" rx="14" fill="#FFFFFF" stroke="#2B2440" stroke-width="2.5"/>
+<rect x="199.0" y="1342.0" width="230" height="70" rx="14" fill="#00000018"/>
+<rect x="195.0" y="1337.0" width="230" height="70" rx="14" fill="#FFFFFF" stroke="#2B2440" stroke-width="2.5"/>
 <text x="310" y="1361.0" font-size="17" font-weight="700" fill="#2B2440" text-anchor="middle" dominant-baseline="central">교감</text>
-<text x="310" y="1386.0" font-size="12.5" font-weight="500" fill="#6B6385" text-anchor="middle" dominant-baseline="central">쓰다듬기 · 놀아주기</text>
+<text x="310" y="1386.0" font-size="12.5" font-weight="500" fill="#6B6385" text-anchor="middle" dominant-baseline="central">쓰다듬기 · 놀아주기 · 끌어 옮기기</text>
 <rect x="464.0" y="1342.0" width="200" height="70" rx="14" fill="#00000018"/>
 <rect x="460.0" y="1337.0" width="200" height="70" rx="14" fill="#FFE2A8" stroke="#2B2440" stroke-width="2.5"/>
 <text x="560" y="1361.0" font-size="17" font-weight="700" fill="#2B2440" text-anchor="middle" dominant-baseline="central">호감도 ↑</text>
 <text x="560" y="1386.0" font-size="12.5" font-weight="500" fill="#6B6385" text-anchor="middle" dominant-baseline="central">친해지면 대사가 바뀜</text>
-<path d="M410,1372 L458,1372" fill="none" stroke="#2B2440" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#ah)"/>
-<rect x="799.0" y="1342.0" width="210" height="70" rx="14" fill="#00000018"/>
-<rect x="795.0" y="1337.0" width="210" height="70" rx="14" fill="#FFE2A8" stroke="#2B2440" stroke-width="2.5"/>
-<text x="900" y="1361.0" font-size="17" font-weight="700" fill="#2B2440" text-anchor="middle" dominant-baseline="central">도감 5·10·15종</text>
+<path d="M425,1372 L458,1372" fill="none" stroke="#2B2440" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#ah)"/>
+<rect x="789.0" y="1342.0" width="230" height="70" rx="14" fill="#00000018"/>
+<rect x="785.0" y="1337.0" width="230" height="70" rx="14" fill="#FFE2A8" stroke="#2B2440" stroke-width="2.5"/>
+<text x="900" y="1361.0" font-size="17" font-weight="700" fill="#2B2440" text-anchor="middle" dominant-baseline="central">가진 몬스터 5·10·15마리</text>
 <text x="900" y="1386.0" font-size="12.5" font-weight="500" fill="#6B6385" text-anchor="middle" dominant-baseline="central">새 카테고리 칸 +1</text>
-<text x="722" y="1372.0" font-size="13" font-weight="600" fill="#6B6385" text-anchor="middle" dominant-baseline="central">몬스터를 모으면</text>
-<text x="800" y="1472.0" font-size="12.5" font-weight="500" fill="#6B6385" text-anchor="middle" dominant-baseline="central">수치는 2026-10-10 기준 (docs/economy-v1.md)</text>
+<text x="722" y="1372.0" font-size="13" font-weight="600" fill="#6B6385" text-anchor="middle" dominant-baseline="central">잡아서 모으면</text>
+<text x="800" y="1472.0" font-size="12.5" font-weight="500" fill="#6B6385" text-anchor="middle" dominant-baseline="central">수치는 2026-10-15 기준 (docs/economy-v1.md · API 명세 v5)</text>
 </g>
 </svg>
