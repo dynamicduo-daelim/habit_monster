@@ -214,7 +214,7 @@ class _ChatScreenState extends State<ChatScreen> {
                             border: Border.all(
                                 color: m.uid == s.chatPartnerUid ? AppColors.gold : AppColors.nightLine, width: 3),
                           ),
-                          child: PixelImage(Catalog.speciesById(m.speciesId).asset),
+                          child: PixelImage(Catalog.speciesById(m.speciesId).assetAt(m.level)),
                         ),
                       ),
                     ),
@@ -231,7 +231,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Widget _messages(ChatController c) {
     final p = c.partner;
-    final avatar = p == null ? AppAssets.seongsilBall : Catalog.speciesById(p.speciesId).asset;
+    final avatar = p == null ? AppAssets.seongsilBall : Catalog.speciesById(p.speciesId).assetAt(p.level);
     // reverse: 최신 메시지가 항상 아래에 붙어 있다 (메시지 높이가 달라도 스크롤 위치를 계산할 필요 없음).
     return ListView(
       controller: _scroll,

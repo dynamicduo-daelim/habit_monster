@@ -65,7 +65,7 @@ class _ExploreViewState extends State<ExploreView> {
   void _reset() {
     _timer?.cancel();
     _shownFor = _c.encounter;
-    _phase = _e.found ? _Phase.appear : _Phase.done;
+    _phase = _e.catchable ? _Phase.appear : _Phase.done; // 가진 종은 볼 없이 골드만 받고 끝
   }
 
   /// 볼 던지기: 볼이 없으면 사러 가고, 있으면 1개 쓰고 흔들흔들 → 결과 팝업.
@@ -109,13 +109,15 @@ class _ExploreViewState extends State<ExploreView> {
     final r = _c.lastCatch;
     switch (_phase) {
       case _Phase.appear:
-        return '야생의 ${sp!.name}${josaIGa(sp.name)} 나타났다! 성실볼을 던져볼까?'
-            '${_e.alreadyOwned ? ' (이미 있는 친구 · 잡으면 ${Economy.duplicateMonsterGold}G)' : ''}';
+        return '야생의 ${sp!.name}${josaIGa(sp.name)} 나타났다! 성실볼을 던져볼까?';
       case _Phase.throwing:
         return '성실볼을 던졌다! 과연…';
       case _Phase.popup:
       case _Phase.done:
         if (r == null) {
+          if (sp != null && _e.alreadyOwned) {
+            return '이미 친구인 ${sp.name}${josaIGa(sp.name)} 놀러 왔어요! 볼 없이 ${_e.gold}G를 받았어요.';
+          }
           return _e.emptyPool
               ? '이번엔 아무도 없었어요… 오늘 체크인한 길에서 만날 수 있는 몬스터가 없나 봐요.'
               : '이번엔 아무도 없었어요… 덤불만 흔들렸네요. 다시 탐색해 볼까요?';
@@ -124,8 +126,6 @@ class _ExploreViewState extends State<ExploreView> {
         switch (r.kind) {
           case CatchKind.escaped:
             return '$n${josaIGa(n)} 도망갔어요… 다시 탐색해 볼까요?';
-          case CatchKind.duplicate:
-            return '$n${josaEulReul(n)} 또 잡았어요! 이미 있는 친구라 ${r.gold}G로 바꿨어요.';
           case CatchKind.newMonster:
             return '새로운 몬스터 $n(${r.species.rarity})${josaEulReul(n)} 잡았어요! '
                 '${r.toField ? '필드에 나왔어요.' : '필드가 꽉 차서 가방에 넣었어요.'}';
@@ -143,7 +143,7 @@ class _ExploreViewState extends State<ExploreView> {
     final caught = r?.caught ?? false;
     // 등장 · 팝업 중엔 몬스터가 보이고, 던지는 중엔 볼 안에 있다. 끝나면 잡은 몬스터만 남는다.
     final showMonster =
-        sp != null && (_phase == _Phase.appear || _phase == _Phase.popup || (_phase == _Phase.done && caught));
+        sp != null && (_phase == _Phase.appear || _phase == _Phase.popup || (_phase == _Phase.done && (caught || _e.alreadyOwned)));
 
     return Stack(
       children: [
@@ -162,8 +162,8 @@ class _ExploreViewState extends State<ExploreView> {
                       Positioned(left: 10, top: 10, child: _pips(s)),
                       if (_phase == _Phase.done && r?.kind == CatchKind.newMonster)
                         Positioned(right: 10, top: 10, child: _newBadge()),
-                      if (_phase == _Phase.done && r?.kind == CatchKind.duplicate)
-                        Positioned(right: 10, top: 10, child: _goldBadge(r!.gold)),
+                      if (_phase == _Phase.done && _e.alreadyOwned)
+                        Positioned(right: 10, top: 10, child: _goldBadge(_e.gold)),
                       Positioned(
                         left: 0,
                         right: 0,
@@ -416,8 +416,6 @@ class _CatchPopup extends StatelessWidget {
     switch (r.kind) {
       case CatchKind.newMonster:
         message = '새 친구가 됐어요! ${r.toField ? '필드에 나왔어요.' : '필드가 꽉 차서 가방에 넣었어요.'}';
-      case CatchKind.duplicate:
-        message = '이미 있는 친구라 ${r.gold}G로 바꿨어요.';
       case CatchKind.escaped:
         message = '${sp.name}${josaIGa(sp.name)} 성실볼에서 빠져나와 도망갔어요…\n성실함이 쌓일수록 더 잘 잡혀요.';
     }
@@ -472,20 +470,6 @@ class _CatchPopup extends StatelessWidget {
         Text(message,
             textAlign: TextAlign.center,
             style: const TextStyle(fontSize: 11, height: 1.7, color: AppColors.brownMuted)),
-        if (r.kind == CatchKind.duplicate)
-          Container(
-            color: AppColors.brownText,
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const CoinIcon(size: 14),
-                const SizedBox(width: 5),
-                Text('+${r.gold}',
-                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.butter)),
-              ],
-            ),
-          ),
         Padding(
           padding: const EdgeInsets.only(top: 4),
           child: PixelButton(label: '확인', onPressed: onClose, height: 44, depth: 4, fontSize: 12),

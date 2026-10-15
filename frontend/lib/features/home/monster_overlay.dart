@@ -490,7 +490,7 @@ class _MonsterOverlayState extends State<MonsterOverlay> {
                               scaleX: _squish ? 1.08 : 1,
                               scaleY: _squish ? 0.9 : 1,
                               alignment: Alignment.bottomCenter,
-                              child: PixelImage(sp.asset, height: 124),
+                              child: PixelImage(sp.assetAt(m.level), height: 124),
                             ),
                           ),
                           if (_emote != null)

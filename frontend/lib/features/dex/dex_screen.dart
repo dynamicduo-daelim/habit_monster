@@ -15,7 +15,7 @@ import '../../data/pixel_icons.dart';
 import '../home/home_parts.dart' show CheckerPainter;
 import '../shell/main_shell.dart';
 
-/// 몬스터 도감: 위 상세 카드 + 카테고리 탭 6개 + No.001~036 목록.
+/// 몬스터 도감: 위 상세 카드 + 카테고리 탭 6개 + No.001~042 목록 (카테고리마다 7칸).
 /// 배경은 고른 카테고리 색의 파스텔 줄무늬.
 class DexScreen extends StatefulWidget {
   const DexScreen({super.key, this.active = true});
@@ -29,18 +29,21 @@ class DexScreen extends StatefulWidget {
 
 /// 도감 한 칸. 종이 없으면 아직 공개 안 된 빈 자리.
 class _Slot {
-  const _Slot(this.no, this.species, this.owned, this.open, this.unlock);
+  const _Slot(this.no, this.species, this.owned, this.open, this.unlock, {this.seen = false});
   final String no;
   final MonsterSpecies? species;
   final OwnedMonster? owned;
   final bool open; // 지금 탐색에서 만날 수 있음
   final int unlock;
+  final bool seen; // 도감에 등록됨 (탐색에서 만났거나 잡은 적 있음)
+
+  /// 모습 · 이름 · 설명을 보여 줄 수 있는 칸: 지금 가졌거나 도감에 등록됨.
+  bool get known => owned != null || seen;
 }
 
 class _DexScreenState extends State<DexScreen> {
-  /// 카테고리마다 6칸. 빈 칸의 출현 레벨 (시안의 FILL_UNLOCK).
-  static const _slotsPerCategory = 6;
-  static const _fillUnlock = [2, 4, 5, 6, 8, 10];
+  /// 카테고리마다 7칸 (API 명세 v4: 카테고리 7종 기준). 종이 모자란 칸은 "준비 중".
+  static const _slotsPerCategory = 7;
 
   String _cat = 'ex';
   int _sel = 0;
@@ -84,9 +87,10 @@ class _DexScreenState extends State<DexScreen> {
     return [
       for (var i = 0; i < _slotsPerCategory; i++)
         if (i < list.length)
-          _Slot(_no(catIdx, i), list[i], owned[list[i].id], active && list[i].unlockLevel <= lv, list[i].unlockLevel)
+          _Slot(_no(catIdx, i), list[i], owned[list[i].id], active && list[i].unlockLevel <= lv, list[i].unlockLevel,
+              seen: s.discoveredSpecies.contains(list[i].id))
         else
-          _Slot(_no(catIdx, i), null, null, false, _fillUnlock[i]),
+          _Slot(_no(catIdx, i), null, null, false, 0),
     ];
   }
 
@@ -98,8 +102,8 @@ class _DexScreenState extends State<DexScreen> {
     final cat = Catalog.category(_cat);
     final owned = _ownedBySpecies(s);
     final slots = _slots(s, _cat, owned);
-    final found = slots.where((x) => x.owned != null).length;
-    final totalFound = Catalog.species.where((x) => owned.containsKey(x.id)).length;
+    final found = slots.where((x) => x.known).length;
+    final totalFound = Catalog.species.where((x) => owned.containsKey(x.id) || s.discoveredSpecies.contains(x.id)).length;
     final total = Catalog.categories.length * _slotsPerCategory;
     final active = s.pickedCategories.contains(_cat);
 
@@ -196,7 +200,7 @@ class _DexScreenState extends State<DexScreen> {
             ),
             const SizedBox(height: 9),
             const Text(
-              '카테고리 레벨이 오르면 새로운 몬스터가 탐색에 나타나요 · 이미 가진 몬스터를 또 만나면 골드로 바뀌어요',
+              '카테고리 레벨이 오르면 새로운 몬스터가 탐색에 나타나요 · 이미 가진 몬스터가 또 나오면 바로 골드를 받아요',
               style: TextStyle(fontSize: 9.5, height: 1.8, color: AppColors.dexFootnote),
             ),
           ],
@@ -205,9 +209,9 @@ class _DexScreenState extends State<DexScreen> {
     );
   }
 
-  /// 카테고리 슬롯: 도감 5 · 10 · 15마리마다 +1칸.
+  /// 카테고리 슬롯: 가진 종 5 · 10 · 15마리마다 +1칸 (본 종은 세지 않음, API 명세 v5).
   Widget _slotCard(GameState s, Color shade) {
-    final found = s.discoveredCount;
+    final found = s.caughtCount;
     const steps = Economy.categorySlotSteps;
     final next = steps.where((n) => found < n).firstOrNull;
     final prev = [0, ...steps].where((n) => n <= found).last;
@@ -228,7 +232,7 @@ class _DexScreenState extends State<DexScreen> {
                 child: Text('카테고리 슬롯 ${s.pickedCategories.length}/${s.categorySlotCount}',
                     style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.brownText)),
               ),
-              Text(next != null ? '도감 $found/$next 발견하면 +1' : '모든 슬롯 해금!',
+              Text(next != null ? '몬스터 $found/$next마리 모으면 +1' : '모든 슬롯 해금!',
                   style: const TextStyle(fontSize: 10, color: AppColors.brownMuted)),
             ],
           ),
@@ -342,7 +346,9 @@ class _DexScreenState extends State<DexScreen> {
 
   Widget _tab(GameState s, HabitCategory c, Map<String, OwnedMonster> owned, Color shade) {
     final cur = c.id == _cat;
-    final found = Catalog.species.where((x) => x.categoryId == c.id && owned.containsKey(x.id)).length;
+    final found = Catalog.species
+        .where((x) => x.categoryId == c.id && (owned.containsKey(x.id) || s.discoveredSpecies.contains(x.id)))
+        .length;
     return PressCard(
       onTap: () => setState(() {
         _cat = c.id;
@@ -388,7 +394,7 @@ class _StripePainter extends CustomPainter {
   bool shouldRepaint(covariant _StripePainter old) => old.color != color;
 }
 
-/// 몬스터 그림. 가진 몬스터는 그대로, 못 만난 몬스터는 검은 실루엣.
+/// 몬스터 그림. 도감에 등록된 몬스터는 그대로, 못 만난 몬스터는 검은 실루엣.
 class _MonsterArt extends StatelessWidget {
   const _MonsterArt({required this.species, required this.owned, required this.maxSize, required this.dimOpacity});
   final MonsterSpecies species;
@@ -426,22 +432,28 @@ class _DetailCard extends StatelessWidget {
     if (own != null) {
       state = '보유 중 · Lv.${own.level} · ${own.stage}';
       stateColor = AppColors.fieldGreen;
+    } else if (slot.seen) {
+      state = slot.open ? '만난 적 있음 · 다시 만나면 잡아 보세요!' : '만난 적 있음 · 아직 못 잡았어요';
+      stateColor = slot.open ? AppColors.red : AppColors.brownMuted;
     } else if (slot.open) {
       state = '지금 탐색하면 만날 수 있어요!';
       stateColor = AppColors.red;
+    } else if (sp == null) {
+      state = '준비 중';
+      stateColor = AppColors.brownMuted;
     } else {
       state = '카테고리 Lv.${slot.unlock}에서 출현';
       stateColor = AppColors.brownMuted;
     }
     final String desc;
-    if (own != null) {
+    if (slot.known) {
       desc = sp!.description;
     } else if (sp != null) {
       desc = '그림자만 어렴풋이 보인다. ${cat.name} 습관을 꾸준히 하면 모습을 드러낼 것 같다.';
     } else {
-      desc = '아직 아무것도 알려지지 않은 몬스터. 카테고리 레벨을 올려보자.';
+      desc = '아직 준비 중인 자리예요. 새 몬스터가 들어오면 여기에 나타나요.';
     }
-    final stars = own != null ? sp!.stars : 0;
+    final stars = slot.known ? sp!.stars : 0;
 
     return Container(
       decoration: BoxDecoration(
@@ -471,7 +483,7 @@ class _DetailCard extends StatelessWidget {
                         if (sp != null)
                           Transform.translate(
                             offset: Offset(0, bobUp ? -4 : 0),
-                            child: _MonsterArt(species: sp, owned: own != null, maxSize: 104, dimOpacity: 0.35),
+                            child: _MonsterArt(species: sp, owned: slot.known, maxSize: 104, dimOpacity: 0.35),
                           )
                         else
                           const Text('?',
@@ -490,7 +502,7 @@ class _DetailCard extends StatelessWidget {
                     children: [
                       Text('No.${slot.no}', style: const TextStyle(fontSize: 11, color: AppColors.brownMuted)),
                       const SizedBox(height: 6),
-                      Text(own != null ? sp!.name : '??????',
+                      Text(slot.known ? sp!.name : '??????',
                           style:
                               const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.brownText)),
                       const SizedBox(height: 6),
@@ -525,7 +537,7 @@ class _DetailCard extends StatelessWidget {
                               ),
                             ),
                           const SizedBox(width: 2),
-                          Text(own != null ? sp!.rarity : '???',
+                          Text(slot.known ? sp!.rarity : '???',
                               style: const TextStyle(fontSize: 10, color: AppColors.brownMuted)),
                         ],
                       ),
@@ -581,11 +593,17 @@ class _SlotRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final sp = slot.species;
     final own = slot.owned;
-    final sub = own != null ? 'Lv.${own.level}' : (slot.open ? '출현 중' : 'Lv.${slot.unlock} 출현');
+    final sub = own != null
+        ? 'Lv.${own.level}'
+        : slot.seen
+            ? '못 잡음'
+            : sp == null
+                ? '준비 중'
+                : (slot.open ? '출현 중' : 'Lv.${slot.unlock} 출현');
     return Semantics(
       button: true,
       selected: selected,
-      label: 'No.${slot.no} ${own != null ? sp!.name : '미발견'}',
+      label: 'No.${slot.no} ${slot.known ? sp!.name : '미발견'}',
       excludeSemantics: true,
       onTap: onTap,
       child: GestureDetector(
@@ -617,18 +635,18 @@ class _SlotRow extends StatelessWidget {
                 height: 34,
                 child: Center(
                   child: sp != null
-                      ? _MonsterArt(species: sp, owned: own != null, maxSize: 34, dimOpacity: 0.3)
+                      ? _MonsterArt(species: sp, owned: slot.known, maxSize: 34, dimOpacity: 0.3)
                       : const Text('?',
                           style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.dexSlotQ)),
                 ),
               ),
               const SizedBox(width: 9),
               Expanded(
-                child: Text(own != null ? sp!.name : '??????',
+                child: Text(slot.known ? sp!.name : '??????',
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
-                      color: own != null ? AppColors.brownText : AppColors.dexUnknown,
+                      color: slot.known ? AppColors.brownText : AppColors.dexUnknown,
                     )),
               ),
               const SizedBox(width: 9),
@@ -654,7 +672,7 @@ class _CategoryPicker extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final s = GameScope.of(context);
-    final found = s.discoveredCount;
+    final found = s.caughtCount;
     final grown = s.categorySlotCount > Economy.baseCategorySlots;
     final rest = Catalog.categories.where((c) => !s.pickedCategories.contains(c.id)).toList();
     return Stack(
@@ -680,7 +698,7 @@ class _CategoryPicker extends StatelessWidget {
                     const SizedBox(height: 4),
                     Text(
                       grown
-                          ? '도감을 $found마리 채워서 슬롯이 ${s.categorySlotCount}칸이 됐어요. 새로 걸을 길을 골라주세요.'
+                          ? '몬스터를 $found마리 모아서 슬롯이 ${s.categorySlotCount}칸이 됐어요. 새로 걸을 길을 골라주세요.'
                           : '아직 비어 있는 카테고리 슬롯이 있어요. 걸을 길을 골라주세요.',
                       textAlign: TextAlign.center,
                       style: const TextStyle(fontSize: 11.5, height: 1.8, color: AppColors.brownText),

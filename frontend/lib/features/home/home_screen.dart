@@ -8,6 +8,7 @@ import '../../core/constants/app_assets.dart';
 import '../../core/constants/economy.dart';
 import '../../core/state/game_state.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/utils/format.dart';
 import '../../core/widgets/help_button.dart';
 import '../../core/widgets/pixel_icon.dart';
 import '../../core/widgets/pixel_widgets.dart';
@@ -72,6 +73,12 @@ class _HomeScreenState extends State<HomeScreen> {
   Timer? _talkClear;
   int _tick = 0;
 
+  /// 끌고 있는 몬스터 (한 번에 한 마리).
+  String? _dragUid;
+
+  /// 옮긴 자리에서 쉬는 중인 몬스터 → 다시 돌아다니게 할 타이머.
+  final Map<String, Timer> _rest = {};
+
   HomeOverlayKind _overlay = HomeOverlayKind.none;
   String? _selUid;
   bool _monFeedOpen = false;
@@ -116,6 +123,9 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   // ---------- 필드 ----------
+  /// 몬스터가 다닐 수 있는 영역 (본문 크기 대비 %). 걸어 다니기와 끌어 옮기기가 같은 영역을 쓴다.
+  static const _minX = 3.0, _maxX = 66.0, _minY = 44.0, _maxY = 64.0;
+
   _FieldPos _initialPos(int i) => _FieldPos(4.0 + i * 16, 52.0 + (i % 2) * 10, false);
 
   void _step() {
@@ -124,13 +134,51 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() {
       for (var i = 0; i < mons.length; i++) {
         final m = mons[i];
+        if (m.uid == _dragUid || _rest.containsKey(m.uid)) continue; // 끄는 중 · 옮긴 자리에서 쉬는 중
         final c = _pos[m.uid] ?? _initialPos(i);
-        final nx = (c.x + (_rand.nextDouble() * 34 - 17)).clamp(3.0, 66.0);
-        final ny = (c.y + (_rand.nextDouble() * 14 - 7)).clamp(44.0, 64.0);
+        final nx = (c.x + (_rand.nextDouble() * 34 - 17)).clamp(_minX, _maxX);
+        final ny = (c.y + (_rand.nextDouble() * 14 - 7)).clamp(_minY, _maxY);
         final sp = Catalog.speciesById(m.speciesId);
         _pos[m.uid] = _FieldPos(nx, ny, sp.facesLeft && nx > c.x);
       }
     });
+  }
+
+  // ---------- 끌어 옮기기 ----------
+  void _dragStart(OwnedMonster m, int i) {
+    if (!_idle || _dragUid != null) return;
+    _rest.remove(m.uid)?.cancel();
+    setState(() {
+      _dragUid = m.uid;
+      _pos[m.uid] ??= _initialPos(i);
+      _talk = Map.of(_talk)..remove(m.uid);
+    });
+  }
+
+  void _dragMove(OwnedMonster m, DragUpdateDetails d, BoxConstraints box) {
+    if (_dragUid != m.uid) return;
+    final c = _pos[m.uid]!;
+    final nx = (c.x + d.delta.dx / box.maxWidth * 100).clamp(_minX, _maxX);
+    final ny = (c.y + d.delta.dy / box.maxHeight * 100).clamp(_minY, _maxY);
+    final sp = Catalog.speciesById(m.speciesId);
+    final flip = d.delta.dx == 0 ? c.flip : sp.facesLeft && d.delta.dx > 0;
+    setState(() => _pos[m.uid] = _FieldPos(nx, ny, flip));
+  }
+
+  /// 내려놓기: 그 자리에서 잠깐 쉬다가 다시 돌아다닌다. 오늘 처음이면 호감도 +1.
+  void _dragEnd(OwnedMonster m) {
+    if (_dragUid != m.uid) return;
+    setState(() => _dragUid = null);
+    _rest[m.uid] = Timer(Economy.dragRest, () => _rest.remove(m.uid));
+    final s = GameScope.read(context);
+    final before = tierOf(m.affection);
+    final gain = s.drag(m);
+    if (gain == 0) return;
+    final name = Catalog.speciesById(m.speciesId).name;
+    final after = tierOf(m.affection);
+    MainShell.of(context).toast(after != before
+        ? '${withWa(name)} ${tierName(after)} 사이가 됐어요!'
+        : '$name${josaIGa(name)} 새 자리가 마음에 드나 봐요 ♥+$gain');
   }
 
   // ---------- 말풍선 ----------
@@ -158,7 +206,7 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
     final n = f.length > 2 && _rand.nextDouble() < 0.3 ? 2 : 1;
-    final picks = [...f]..shuffle(_rand);
+    final picks = f.where((m) => m.uid != _dragUid).toList()..shuffle(_rand); // 끄는 중엔 말하지 않는다
     _showTalk({for (final m in picks.take(n)) m.uid: _randomLine(m)}, const Duration(milliseconds: 3400));
   }
 
@@ -236,7 +284,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   void dispose() {
-    for (final t in [_wander, _firstWander, _bob, _chatter, _talkClear]) {
+    for (final t in [_wander, _firstWander, _bob, _chatter, _talkClear, ..._rest.values]) {
       t?.cancel();
     }
     super.dispose();
@@ -261,8 +309,14 @@ class _HomeScreenState extends State<HomeScreen> {
     final bobUp = _tick.isOdd;
 
     // 아래쪽(y가 큰) 몬스터가 앞에 오도록
+    // 아래쪽(앞)에 있는 몬스터를 나중에 그린다. 끌고 있는 몬스터는 맨 위.
+    int depth(int i) => mons[i].uid == _dragUid ? 1000 : 0;
     final order = [for (var i = 0; i < mons.length; i++) i]
-      ..sort((a, b) => (_pos[mons[a].uid] ?? _initialPos(a)).y.compareTo((_pos[mons[b].uid] ?? _initialPos(b)).y));
+      ..sort((a, b) {
+        final d = depth(a).compareTo(depth(b));
+        if (d != 0) return d;
+        return (_pos[mons[a].uid] ?? _initialPos(a)).y.compareTo((_pos[mons[b].uid] ?? _initialPos(b)).y);
+      });
 
     return LayoutBuilder(builder: (context, box) {
       return ClipRect(
@@ -290,6 +344,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     const HelpButton(title: '나의 필드', items: [
                       ('필드가 뭐예요?', '함께 지내는 몬스터가 돌아다니는 곳이에요. 최대 ${Economy.fieldCapacity}마리까지 꺼내 둘 수 있어요.'),
                       ('몬스터와 놀기', '몬스터를 누르면 쓰다듬기 · 간식 주기 · 놀아주기 · 말 걸기를 할 수 있어요. 친해질수록 호감도(♥)가 올라요.'),
+                      ('옮기기', '몬스터를 누른 채 끌면 원하는 자리로 옮길 수 있어요. 몬스터마다 하루 1번 호감도 ♥+${Economy.dragAffectionGain}.'),
                       ('넣고 꺼내기', '가방을 열면 몬스터를 필드로 꺼내거나 가방에 넣을 수 있어요.'),
                     ]),
                   ],
@@ -328,7 +383,6 @@ class _HomeScreenState extends State<HomeScreen> {
                     icon: PixelIcons.fieldCalendar,
                     labelColor: AppColors.text,
                     bob: bobUp ? -4 : 0,
-                    badge: !s.checkedInToday, // 오늘 아직 출석 전
                     onTap: () => showAttendancePopup(
                       context,
                       onGoChat: () => MainShell.of(context).goTab(MainShell.chatTab),
@@ -414,12 +468,15 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _monster(OwnedMonster m, int i, BoxConstraints box, bool bobUp) {
     final sp = Catalog.speciesById(m.speciesId);
     final p = _pos[m.uid] ?? _initialPos(i);
-    final bob = ((bobUp ? 1 : 0) + i).isOdd ? -3.0 : 0.0;
+    final dragging = _dragUid == m.uid;
+    // 끄는 중엔 통통 대신 살짝 들려 있다 (그림자는 발밑에 남는다).
+    final bob = dragging ? -10.0 : (((bobUp ? 1 : 0) + i).isOdd ? -3.0 : 0.0);
     final talk = _talk[m.uid];
     final tier = tierOf(m.affection);
     return AnimatedPositioned(
       key: ValueKey(m.uid),
-      duration: const Duration(milliseconds: 2400),
+      // 끄는 중엔 손가락을 바로 따라오고, 걸을 때는 천천히 움직인다.
+      duration: dragging ? Duration.zero : const Duration(milliseconds: 2400),
       curve: Curves.linear,
       left: p.x / 100 * box.maxWidth,
       top: p.y / 100 * box.maxHeight,
@@ -435,6 +492,11 @@ class _HomeScreenState extends State<HomeScreen> {
                 label: '${sp.name} 정보 보기',
                 child: GestureDetector(
                   onTap: () => _openMonster(m),
+                  // 누른 채 움직이면 끌어 옮기기 (짧게 누르면 위의 onTap)
+                  onPanStart: (_) => _dragStart(m, i),
+                  onPanUpdate: (d) => _dragMove(m, d, box),
+                  onPanEnd: (_) => _dragEnd(m),
+                  onPanCancel: () => _dragEnd(m),
                   child: Column(
                     children: [
                       Transform.translate(
@@ -442,7 +504,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         child: Transform(
                           alignment: Alignment.center,
                           transform: Matrix4.diagonal3Values(p.flip ? -1 : 1, 1, 1),
-                          child: PixelImage(sp.asset, height: sp.fieldHeight),
+                          child: PixelImage(sp.assetAt(m.level), height: sp.fieldHeight),
                         ),
                       ),
                       Transform.translate(

@@ -51,11 +51,19 @@ class GameState extends ChangeNotifier {
   /// 오늘 체크인을 확정했는지. 확정 뒤에도 기록은 고칠 수 있지만([resubmitCheckin]) 보상은 첫 확정 그대로 (DB v1.5).
   bool checkedInToday = false;
 
+  /// 오늘 출석했는지 = 오늘 앱(홈)에 들어왔는지. 습관 체크인과는 별개다 (2026-10-10, 결정 D-15).
+  bool attendedToday = false;
+
   /// 오늘 체크인한 카테고리 = 오늘 탐색 풀 (DB Q-15 `explore_quota_category`).
   final Set<String> exploreCategoriesToday = {};
 
-  /// 한 번이라도 잡은 종 (DB `monster.dex_entry`). 몬스터를 내보내도 줄지 않는다.
+  /// 도감에 등록된 종 (`SEEN` + `OWNED`): 탐색에서 한 번이라도 만났거나 가진 종. 몬스터를 내보내도 줄지 않는다.
+  /// 잡지 않고 만나기만 해도 들어간다 (2026-10-15, D-17 · API 명세 v5).
   final Set<String> discoveredSpecies = {};
+
+  /// 한 번이라도 가진(잡았거나 스타터로 받은) 종 (DB 도감 기록의 "처음 잡은 시각"이 있는 종 = `OWNED`).
+  /// 카테고리 칸 진행(`dexCount`)은 이 수만 센다 (API 명세 v5). [discoveredSpecies]에도 항상 들어 있다.
+  final Set<String> caughtSpecies = {};
 
   /// 디자인 시안과 같은 샘플 데이터 (DAY 12).
   factory GameState.sample({
@@ -72,9 +80,9 @@ class GameState extends ChangeNotifier {
       pickedCategories: ['ex', 'st', 'fd'],
       categoryPoints: {'ex': 64, 'st': 38, 'fd': 21, 'md': 0, 'sl': 0, 'mn': 0},
       monsters: [
-        OwnedMonster(uid: 'm1', speciesId: 'wolf', level: 7, exp: 60, affection: 4),
-        OwnedMonster(uid: 'm2', speciesId: 'spark', level: 4, exp: 90, affection: 8),
-        OwnedMonster(uid: 'm3', speciesId: 'sprout', level: 2, exp: 30, affection: 2),
+        OwnedMonster(uid: 'm1', speciesId: 'monkey', level: 7, exp: 60, affection: 4),
+        OwnedMonster(uid: 'm2', speciesId: 'mouse', level: 4, exp: 90, affection: 8),
+        OwnedMonster(uid: 'm3', speciesId: 'turtle', level: 2, exp: 30, affection: 2),
       ],
       habits: [
         Habit(id: 'h1', name: '아침 러닝', categoryId: 'ex', measureIndex: 0, target: 30, periodIndex: 1),
@@ -89,6 +97,7 @@ class GameState extends ChangeNotifier {
     );
     s.chatPartnerUid = 'm2';
     s.discoveredSpecies.addAll(s.monsters.map((m) => m.speciesId));
+    s.caughtSpecies.addAll(s.monsters.map((m) => m.speciesId));
     return s;
   }
 
@@ -115,12 +124,15 @@ class GameState extends ChangeNotifier {
   }
 
   // ---------- 카테고리 슬롯 ----------
-  /// 도감에서 발견한(가진 적 있는) 종 수.
+  /// 도감에 등록된(본) 종 수 (`seenCount`, 가진 종 포함).
   int get discoveredCount => discoveredSpecies.length;
 
-  /// 열 수 있는 카테고리 칸 수: 기본 3, 도감 5 · 10 · 15마리마다 +1 (카테고리 수를 넘지 않음).
+  /// 가진 적 있는 종 수 (`dexCount`). 카테고리 칸은 이 수로 연다.
+  int get caughtCount => caughtSpecies.length;
+
+  /// 열 수 있는 카테고리 칸 수: 기본 3, 가진 종 5 · 10 · 15마리마다 +1 (카테고리 수를 넘지 않음).
   int get categorySlotCount =>
-      Economy.categorySlots(discoveredCount).clamp(0, Catalog.categories.length);
+      Economy.categorySlots(caughtCount).clamp(0, Catalog.categories.length);
 
   bool get canOpenCategory => pickedCategories.length < categorySlotCount;
 
@@ -148,6 +160,7 @@ class GameState extends ChangeNotifier {
     );
     monsters.add(m);
     discoveredSpecies.add(speciesId);
+    caughtSpecies.add(speciesId);
     return m;
   }
 
@@ -190,15 +203,23 @@ class GameState extends ChangeNotifier {
   int get todayScore => countedToday.fold(0, (a, id) => a + (rewardedScores[id] ?? 0));
   int get checkedCount => activeHabits.where((h) => todayRecords.containsKey(h.id)).length;
 
-  /// 상단 바의 연속 출석 (오늘 체크인을 확정하면 +1).
-  int get currentStreak => streakDays + (checkedInToday ? 1 : 0);
+  /// 상단 바 · 출석부의 연속 출석 (오늘 앱에 들어왔으면 +1).
+  int get currentStreak => streakDays + (attendedToday ? 1 : 0);
 
-  /// [day]에 출석(습관 체크인)했는지. 아직 날짜별 기록이 없어서 지금 이어지는 연속 출석 구간만 안다.
+  /// 오늘 출석 처리 (홈에 들어올 때 부른다). 이미 했으면 false — 하루 1번만 센다.
+  bool attend() {
+    if (attendedToday) return false;
+    attendedToday = true;
+    notifyListeners();
+    return true;
+  }
+
+  /// [day]에 출석(앱 접속)했는지. 아직 날짜별 기록이 없어서 지금 이어지는 연속 출석 구간만 안다.
   bool attendedOn(DateTime day, {DateTime? today}) {
     final t = today ?? DateTime.now();
     final ago = DateTime.utc(t.year, t.month, t.day).difference(DateTime.utc(day.year, day.month, day.day)).inDays;
     if (ago < 0) return false;
-    return ago == 0 ? checkedInToday : ago <= streakDays;
+    return ago == 0 ? attendedToday : ago <= streakDays;
   }
 
   /// 이 습관이 오늘 반영됐는지 (확정 후에만 의미 있음).
@@ -248,13 +269,15 @@ class GameState extends ChangeNotifier {
       ..clear()
       ..addAll(order.map((h) => h.categoryId));
     checkedInToday = true;
-    encountersLeft = Economy.encountersPerDay;
+    // 전부 "못 했어"(값 0)로 제출한 날도 탐색은 1번 (API 명세 v4)
+    final allMissed = scored.every((e) => e.$2 == 0);
+    encountersLeft = allMissed ? Economy.encountersAllMissedDay : Economy.encountersPerDay;
     notifyListeners();
     return DailyCheckinResult(
       scores: [for (final (h, v, sc) in scored) HabitScore(habit: h, value: v, score: sc, counted: counted.contains(h.id))],
       goldEarned: gold,
       levelUps: levelUps,
-      exploreCount: Economy.encountersPerDay,
+      exploreCount: encountersLeft,
     );
   }
 
@@ -286,8 +309,9 @@ class GameState extends ChangeNotifier {
           sp.unlockLevel <= categoryLevel(sp.categoryId).level)
       .toList();
 
-  /// 탐색 1회: 고른 길의 몬스터 중 하나를 만난다 (아직 잡은 건 아님). 남은 횟수가 없으면 null.
-  /// [Economy.exploreMissRate] 확률로 아무도 안 나온다 (횟수는 쓴다).
+  /// 탐색 1회 (API 명세 v4 `POST /explores`). 남은 횟수가 없으면 null.
+  /// [Economy.exploreMissRate] 확률로 꽝 (횟수는 쓴다). 나온 종은 잡지 않아도 도감에 등록된다.
+  /// 가진 종이 나오면 볼 없이 바로 [Economy.duplicateMonsterGold]골드, 안 가진 종이면 볼을 던질 수 있다.
   EncounterResult? explore() {
     if (encountersLeft <= 0) return null;
     encountersLeft -= 1;
@@ -296,28 +320,30 @@ class GameState extends ChangeNotifier {
     if (pool.isEmpty) return const EncounterResult(emptyPool: true);
     if (_rand.nextDouble() < Economy.exploreMissRate) return const EncounterResult();
     final sp = pool[_rand.nextInt(pool.length)];
-    return EncounterResult(species: sp, alreadyOwned: monsters.any((m) => m.speciesId == sp.id));
+    discoveredSpecies.add(sp.id); // 만나기만 해도 도감에 등록 (잡는 건 별개)
+    final owned = monsters.any((m) => m.speciesId == sp.id);
+    if (owned) gold += Economy.duplicateMonsterGold;
+    notifyListeners();
+    return EncounterResult(species: sp, alreadyOwned: owned, gold: owned ? Economy.duplicateMonsterGold : 0);
   }
 
   /// 성실볼을 던졌을 때 [sp]가 잡힐 확률 (희귀할수록 낮다).
   double captureRateOf(MonsterSpecies sp) => Economy.captureRate[sp.stars] ?? Economy.captureRate.values.last;
 
-  /// 만난 몬스터에게 성실볼 1개를 던진다. 볼이 없으면 null.
-  /// [captureRateOf] 확률로 잡히고(아니면 도망), 잡았는데 이미 가진 종이면 골드로 바뀐다.
+  /// 만난 (안 가진) 몬스터에게 성실볼 1개를 던진다. 볼이 없거나 이미 가진 종이면 null.
+  /// [captureRateOf] 확률로 잡히고, 아니면 도망간다.
   CatchResult? throwBall(MonsterSpecies sp) {
-    if (balls <= 0) return null;
+    if (balls <= 0 || monsters.any((m) => m.speciesId == sp.id)) return null;
     balls -= 1;
     final CatchResult result;
     if (_rand.nextDouble() >= captureRateOf(sp)) {
       result = CatchResult(kind: CatchKind.escaped, species: sp);
-    } else if (monsters.any((m) => m.speciesId == sp.id)) {
-      gold += Economy.duplicateMonsterGold;
-      result = CatchResult(kind: CatchKind.duplicate, species: sp, gold: Economy.duplicateMonsterGold);
     } else {
       final toField = fieldMonsters.length < Economy.fieldCapacity;
       final m = OwnedMonster(uid: 'n${monsters.length}_${sp.id}', speciesId: sp.id, inField: toField);
       monsters.add(m);
       discoveredSpecies.add(sp.id);
+      caughtSpecies.add(sp.id);
       result = CatchResult(kind: CatchKind.newMonster, species: sp, monster: m, toField: toField);
     }
     notifyListeners();
@@ -343,6 +369,15 @@ class GameState extends ChangeNotifier {
     m.playedToday = true;
     notifyListeners();
     return Economy.playAffectionGain;
+  }
+
+  /// 홈 필드에서 끌어 옮기기. 오늘 처음이고 호감도가 꽉 차지 않았으면 +1 (몬스터마다 하루 1번).
+  int drag(OwnedMonster m) {
+    if (m.draggedToday || m.affection >= Economy.maxAffection) return 0;
+    m.affection += Economy.dragAffectionGain;
+    m.draggedToday = true;
+    notifyListeners();
+    return Economy.dragAffectionGain;
   }
 
   bool moveMonster(OwnedMonster m, {required bool toField}) {
@@ -470,6 +505,9 @@ class GameState extends ChangeNotifier {
     // 고르지 않은 길의 몬스터는 데리고 시작하지 않는다.
     monsters.removeWhere((m) => !pickedCategories.contains(Catalog.speciesById(m.speciesId).categoryId));
     discoveredSpecies
+      ..clear()
+      ..addAll(monsters.map((m) => m.speciesId));
+    caughtSpecies
       ..clear()
       ..addAll(monsters.map((m) => m.speciesId));
 

@@ -11,7 +11,7 @@ void main() {
     tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
-    final state = GameState.sample(); // 연속 11일, 오늘은 아직 체크 전
+    final state = GameState.sample(); // 어제까지 연속 11일, 오늘은 아직 체크 전
     await tester.pumpWidget(GameScope(notifier: state, child: MaterialApp(home: MainShell(showTutorial: tutorial))));
     await tester.pump();
     return state;
@@ -23,7 +23,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 400));
   }
 
-  test('출석: 이어지는 연속 출석 구간과 오늘 체크인만 출석으로 본다', () {
+  test('출석: 앱에 들어오면 출석 (습관 체크와는 별개, 하루 1번)', () {
     final s = GameState.sample();
     final today = DateTime(2026, 10, 15);
     expect(s.attendedOn(today, today: today), isFalse);
@@ -31,7 +31,11 @@ void main() {
     expect(s.attendedOn(DateTime(2026, 10, 4), today: today), isTrue); // 11일 전까지
     expect(s.attendedOn(DateTime(2026, 10, 3), today: today), isFalse);
     expect(s.attendedOn(DateTime(2026, 10, 16), today: today), isFalse); // 내일
-    s.confirmCheckin({'h1': 30});
+    s.confirmCheckin({'h1': 30}); // 체크인만으로는 출석이 아니다
+    expect(s.attendedOn(today, today: today), isFalse);
+    expect(s.currentStreak, 11);
+    expect(s.attend(), isTrue);
+    expect(s.attend(), isFalse); // 같은 날 두 번 세지 않는다
     expect(s.attendedOn(today, today: today), isTrue);
     expect(s.currentStreak, 12);
   });
@@ -100,17 +104,21 @@ void main() {
   testWidgets('출석부: 연속 출석과 이번 달 도장', (tester) async {
     final state = await pumpShell(tester);
     await tapAndWait(tester, find.bySemanticsLabel('출석부'));
-    expect(find.text('연속 11일'), findsOneWidget);
-    expect(find.text('오늘은 아직 출석 전이에요.'), findsOneWidget);
-    await tapAndWait(tester, find.text('습관 체크하러 가기')); // 닫고 챗봇 탭으로
-    expect(find.text('연속 11일'), findsNothing);
+    // 홈에 들어온 것만으로 오늘 출석 (체크인 전)
+    expect(state.checkedInToday, isFalse);
+    expect(find.text('연속 12일'), findsOneWidget);
+    expect(find.text('오늘 출석 완료! 내일도 만나요.'), findsOneWidget);
+    expect(find.text('DAY 12 · 연속 12일'), findsOneWidget); // 상단 바도 같은 숫자
+    await tapAndWait(tester, find.text('오늘 습관 체크하러 가기')); // 닫고 챗봇 탭으로
+    expect(find.text('연속 12일'), findsNothing);
 
     state.confirmCheckin({'h1': 30});
     await tester.pump();
     await tapAndWait(tester, find.text('홈'));
     await tapAndWait(tester, find.bySemanticsLabel('출석부'));
-    expect(find.text('연속 12일'), findsOneWidget);
-    expect(find.text('오늘 출석 완료! 내일도 만나요.'), findsOneWidget);
+    expect(find.text('연속 12일'), findsOneWidget); // 체크인해도 더 오르지 않는다
+    expect(find.text('오늘 습관 체크하러 가기'), findsNothing);
+    expect(find.text('확인'), findsOneWidget);
   });
 
   testWidgets('출석부 달력: 1일의 요일에 맞춰 칸을 채운다', (tester) async {

@@ -81,7 +81,7 @@ void main() {
       expect(s.gold, gold);
       expect(s.categoryPoints['ex'], exPoints);
       expect(s.encountersLeft, 1); // 탐색 횟수도 다시 생기지 않는다
-      expect(s.currentStreak, 12);
+      expect(s.currentStreak, 11); // 연속 출석은 접속 기준이라 체크인으로는 안 오른다
     });
 
     test('확정하면 탐색 3회 + 오늘 체크인한 카테고리가 탐색 풀', () {
@@ -91,7 +91,7 @@ void main() {
       s.confirmCheckin({'h1': 30}); // 운동만 체크인
       expect(s.encountersLeft, 3);
       expect(s.encounterPool.map((sp) => sp.categoryId).toSet(), {'ex'});
-      expect(s.currentStreak, 12);
+      expect(s.currentStreak, 11); // 연속 출석은 접속 기준이라 체크인으로는 안 오른다
     });
 
     test('수면 시간은 목표 ± 1시간이면 20점 (RANGE)', () {
@@ -105,56 +105,59 @@ void main() {
 
   group('탐색 · 잡기 규칙', () {
     test('탐색하면 몬스터가 나타나기만 한다 (아직 안 잡음)', () {
-      final s = _checkedIn(GameState.sample(gold: 1240, balls: 1, random: FixedRandom(double_: 0.9, int_: 2))); // 풀: 늑대, 쥐, 병아리, 새싹냥
+      final s = _checkedIn(GameState.sample(gold: 1240, balls: 1, random: FixedRandom(double_: 0.9, int_: 1))); // 풀: 원숭이, 토끼, 쥐, 사슴, 거북 (원숭이 · 쥐 · 거북은 보유 중)
       final e = s.explore()!;
-      expect(e.species!.id, 'chick');
+      expect(e.species!.id, 'rabbit');
       expect(e.alreadyOwned, isFalse);
+      expect(s.discoveredSpecies, contains('rabbit')); // 잡지 않아도 만나면 도감에 등록
+      expect(s.caughtCount, 3); // 본 종은 카테고리 칸 진행에 안 센다 (API 명세 v5)
       expect(s.monsters.length, 3);
       expect(s.encountersLeft, 2);
     });
 
-    test('만날 몬스터가 없는 길만 열었으면 아무도 없음', () {
+    test('명상만 체크인하면 명상 몬스터만 나온다', () {
       final s = GameState.sample(gold: 1240, balls: 1);
       s.habits.add(Habit(id: 'h9', name: '10분 명상', categoryId: 'md', measureIndex: 0, target: 10, periodIndex: 0));
       s.pickedCategories.add('md');
-      s.confirmCheckin({'h9': 10}); // 명상만 체크인 → 명상 몬스터 없음
-      expect(s.explore()!.found, isFalse);
+      s.confirmCheckin({'h9': 10}); // 명상만 체크인
+      expect(s.encounterPool.map((sp) => sp.id), ['koala']); // 명상 Lv.1에서는 첫 파트너만 (악어는 Lv.3)
     });
 
-    test('탐색은 40% 확률로 아무도 안 나온다 (횟수는 쓴다)', () {
-      final s = _checkedIn(GameState.sample(gold: 1240, balls: 1, random: FixedRandom(double_: 0.39, int_: 2)));
+    test('탐색은 35% 확률로 아무도 안 나온다 (횟수는 쓴다)', () {
+      final s = _checkedIn(GameState.sample(gold: 1240, balls: 1, random: FixedRandom(double_: 0.34, int_: 1)));
       final e = s.explore()!;
       expect(e.found, isFalse);
       expect(e.emptyPool, isFalse); // 만날 몬스터는 있는데 이번에만 안 나옴
       expect(s.encountersLeft, 2);
-      final s2 = _checkedIn(GameState.sample(gold: 1240, balls: 1, random: FixedRandom(double_: 0.4, int_: 2)));
+      final s2 = _checkedIn(GameState.sample(gold: 1240, balls: 1, random: FixedRandom(double_: 0.35, int_: 1)));
       expect(s2.explore()!.found, isTrue);
     });
 
     test('잡힐 확률은 희귀도별 80 · 60 · 40%', () {
       final s = GameState.sample(gold: 1240, balls: 10);
-      expect(s.captureRateOf(Catalog.speciesById('spark')), 0.8); // 흔함
-      expect(s.captureRateOf(Catalog.speciesById('chick')), 0.6); // 보통
-      expect(s.captureRateOf(Catalog.speciesById('wolf')), 0.4); // 희귀
+      expect(s.captureRateOf(Catalog.speciesById('mouse')), 0.8); // 흔함
+      expect(s.captureRateOf(Catalog.speciesById('chicken')), 0.6); // 보통
+      expect(s.captureRateOf(Catalog.speciesById('peacock')), 0.4); // 희귀
       // 같은 운(0.5)이면 보통은 잡히고 희귀는 도망간다
       final lucky = GameState.sample(gold: 1240, balls: 10, random: FixedRandom(double_: 0.5));
-      expect(lucky.throwBall(Catalog.speciesById('chick'))!.caught, isTrue);
-      expect(lucky.throwBall(Catalog.speciesById('wolf'))!.caught, isFalse);
+      expect(lucky.throwBall(Catalog.speciesById('chicken'))!.caught, isTrue);
+      expect(lucky.throwBall(Catalog.speciesById('peacock'))!.caught, isFalse);
     });
 
     test('던지면 볼 1개를 쓰고 잡으면 새 몬스터', () {
-      final s = _checkedIn(GameState.sample(gold: 1240, balls: 1, random: FixedRandom(double_: 0.5, int_: 2)));
+      final s = _checkedIn(GameState.sample(gold: 1240, balls: 1, random: FixedRandom(double_: 0.5, int_: 1)));
       final e = s.explore()!;
       final r = s.throwBall(e.species!)!;
       expect(r.kind, CatchKind.newMonster);
       expect(r.toField, isTrue);
       expect(s.balls, 0);
       expect(s.monsters.length, 4);
-      expect(s.discoveredSpecies, contains('chick'));
+      expect(s.discoveredSpecies, contains('rabbit'));
+      expect(s.caughtSpecies, contains('rabbit'));
     });
 
     test('놓치면 볼만 쓰고 몬스터는 안 생긴다', () {
-      final s = _checkedIn(GameState.sample(gold: 1240, balls: 1, random: FixedRandom(double_: 0.9, int_: 2)));
+      final s = _checkedIn(GameState.sample(gold: 1240, balls: 1, random: FixedRandom(double_: 0.9, int_: 1)));
       final r = s.throwBall(s.explore()!.species!)!;
       expect(r.kind, CatchKind.escaped);
       expect(r.caught, isFalse);
@@ -162,19 +165,29 @@ void main() {
       expect(s.monsters.length, 3);
     });
 
-    test('이미 있는 몬스터를 잡으면 +15G', () {
-      final s = _checkedIn(GameState.sample(gold: 1240, balls: 1, random: FixedRandom(double_: 0.9, int_: 0, doubles: [0.9, 0.1]))); // 잿불 늑대(희귀): 등장 → 포획
+    test('이미 가진 종이 나오면 볼 없이 바로 +15G (던질 수 없다)', () {
+      final s = _checkedIn(GameState.sample(gold: 1240, balls: 1, random: FixedRandom(double_: 0.9, int_: 0, doubles: [0.9, 0.1]))); // 불씨 원숭이(보유 중) 등장
+      final before = s.gold;
       final e = s.explore()!;
       expect(e.alreadyOwned, isTrue);
-      final before = s.gold;
-      expect(s.throwBall(e.species!)!.kind, CatchKind.duplicate);
+      expect(e.catchable, isFalse);
+      expect(e.gold, 15);
       expect(s.gold, before + 15);
+      expect(s.throwBall(e.species!), isNull);
+      expect(s.balls, 1);
+    });
+
+    test('첫 제출이 전부 "못 했어"면 탐색 1회', () {
+      final s = GameState.sample(gold: 1240, balls: 1);
+      final r = s.confirmCheckin({for (final h in s.activeHabits) h.id: 0})!;
+      expect(r.exploreCount, 1);
+      expect(s.encountersLeft, 1);
     });
 
     test('볼이 없으면 못 던지고, 탐색 횟수가 없으면 탐색 못 함', () {
       final s = _checkedIn(GameState.sample(gold: 1240, balls: 1, random: FixedRandom(double_: 0.9)));
       s.balls = 0;
-      expect(s.throwBall(Catalog.speciesById('chick')), isNull);
+      expect(s.throwBall(Catalog.speciesById('chicken')), isNull);
       s.encountersLeft = 0;
       expect(s.explore(), isNull);
     });
@@ -184,7 +197,7 @@ void main() {
     tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
-    final s = GameState.sample(gold: 1240, balls: 1, random: FixedRandom(double_: 0.5, int_: 2));
+    final s = GameState.sample(gold: 1240, balls: 1, random: FixedRandom(double_: 0.5, int_: 1));
     await tester.pumpWidget(GameScope(notifier: s, child: const MaterialApp(home: MainShell())));
     await tester.tap(find.text('챗봇'));
     await tester.pump();
@@ -227,26 +240,26 @@ void main() {
 
     await tester.tap(find.text('탐색하기 (3회 남음)'));
     await tester.pump();
-    expect(find.textContaining('야생의 번쩍 병아리가 나타났다!'), findsOneWidget);
+    expect(find.textContaining('야생의 깡총 불토끼가 나타났다!'), findsOneWidget);
     expect(find.text('던지기 ×1'), findsOneWidget);
     await tester.tap(find.text('던지기 ×1'));
     await tester.pump();
     expect(find.text('성실볼을 던졌다! 과연…'), findsOneWidget);
     expect(s.balls, 0);
     // 결과 팝업을 닫기 전엔 대화 상대 줄에 안 보인다
-    expect(find.bySemanticsLabel(RegExp('^번쩍 병아리와 대화')), findsNothing);
+    expect(find.bySemanticsLabel(RegExp('^깡총 불토끼와 대화')), findsNothing);
     await tester.pump(const Duration(milliseconds: 1000));
     expect(find.text('잡았다!'), findsOneWidget);
     await tester.tap(find.text('확인'));
     await tester.pump();
     expect(find.text('NEW!'), findsOneWidget);
-    expect(find.textContaining('번쩍 병아리(보통)를 잡았어요!'), findsOneWidget);
-    expect(find.bySemanticsLabel(RegExp('^번쩍 병아리와 대화')), findsOneWidget);
+    expect(find.textContaining('깡총 불토끼(흔함)를 잡았어요!'), findsOneWidget);
+    expect(find.bySemanticsLabel(RegExp('^깡총 불토끼와 대화')), findsOneWidget);
     await tester.tap(find.text('그만'));
     await tester.pump();
     await tester.pump();
     expect(find.text('탐색하기 (2회 남음)'), findsOneWidget);
-    expect(find.textContaining('번쩍 병아리를 잡았어! 새 친구가 생겼네.'), findsOneWidget);
+    expect(find.textContaining('깡총 불토끼를 잡았어! 새 친구가 생겼네.'), findsOneWidget);
 
     // 다시 체크: 기록만 고치고 보상 · 탐색 횟수는 그대로
     final goldBefore = s.gold;

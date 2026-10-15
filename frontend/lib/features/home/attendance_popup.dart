@@ -18,7 +18,7 @@ Future<void> showAttendancePopup(BuildContext context, {required VoidCallback on
   );
 }
 
-/// 출석부: 연속 출석 일수 + 이번 달 달력. 습관을 체크한 날에 도장이 찍힌다.
+/// 출석부: 연속 출석 일수 + 이번 달 달력. 앱에 들어온 날에 도장이 찍힌다 (습관 체크와는 별개).
 class AttendancePopup extends StatelessWidget {
   const AttendancePopup({super.key, required this.onGoChat, this.today});
   final VoidCallback onGoChat;
@@ -103,9 +103,9 @@ class AttendancePopup extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 4),
-                  Text(s.checkedInToday ? '오늘 출석 완료! 내일도 만나요.' : '오늘은 아직 출석 전이에요.',
+                  Text(s.attendedToday ? '오늘 출석 완료! 내일도 만나요.' : '오늘은 아직 출석 전이에요.',
                       style: TextStyle(
-                          fontSize: 11, color: s.checkedInToday ? AppColors.fieldGreen : AppColors.brownMuted)),
+                          fontSize: 11, color: s.attendedToday ? AppColors.fieldGreen : AppColors.brownMuted)),
                   const SizedBox(height: 12),
                   Text('${now.year}년 ${now.month}월',
                       style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.brownText)),
@@ -134,7 +134,7 @@ class AttendancePopup extends StatelessWidget {
                       ),
                     ),
                   const SizedBox(height: 7),
-                  const Text('챗봇에서 오늘 습관을 체크하면 출석 도장이 찍혀요.\n하루도 빠지지 않으면 연속 출석이 이어져요.',
+                  const Text('앱에 들어오면 그날 출석 도장이 찍혀요.\n하루도 빠지지 않으면 연속 출석이 이어져요.',
                       style: TextStyle(fontSize: 10, height: 1.7, color: AppColors.brownMuted)),
                   const SizedBox(height: 10),
                   if (s.checkedInToday)
@@ -150,7 +150,7 @@ class AttendancePopup extends StatelessWidget {
                     )
                   else
                     PixelButton(
-                      label: '습관 체크하러 가기',
+                      label: '오늘 습관 체크하러 가기',
                       onPressed: () {
                         Navigator.of(context).pop();
                         onGoChat();
