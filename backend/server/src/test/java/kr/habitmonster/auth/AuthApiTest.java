@@ -48,6 +48,7 @@ class AuthApiTest {
 
 	@BeforeEach
 	void clean() {
+		jdbc.update("delete from identity.idempotency_record");
 		jdbc.update("delete from identity.refresh_token");
 		jdbc.update("delete from identity.auth_credential");
 		jdbc.update("delete from identity.users");
@@ -109,13 +110,13 @@ class AuthApiTest {
 		postJson("/auth/signup", "{\"email\":\"a@b.co\",\"password\":\"" + "x".repeat(73) + "\"}")
 			.andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("WEAK_PASSWORD"));
 		postJson("/auth/signup", "not json").andExpect(status().isBadRequest())
-			.andExpect(jsonPath("$.code").value("BAD_REQUEST"));
+			.andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
 	}
 
 	@Test
 	void 토큰_없거나_가짜면_401() throws Exception {
 		mvc.perform(get("/me")).andExpect(status().isUnauthorized())
-			.andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
+			.andExpect(jsonPath("$.code").value("INVALID_TOKEN"));
 		mvc.perform(get("/me").header("Authorization", "Bearer abc.def.ghi")).andExpect(status().isUnauthorized())
 			.andExpect(jsonPath("$.code").value("INVALID_TOKEN"));
 	}

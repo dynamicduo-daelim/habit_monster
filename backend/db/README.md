@@ -1,5 +1,8 @@
 # DB v1.5 → v1.6 (공식 설계) — 앱 · 서버에 맞추기
 
+> **로컬 DB 띄우기 (10-15)**: `backend/docker-compose.yml`이 공유 폴더의 공식 `schema.sql` → `seed.sql` → 이 폴더의 [`server_additions.sql`](server_additions.sql) 순서로 적용해요 (서버 README "PostgreSQL로 띄우기").
+> `server_additions.sql`은 서버가 추가로 쓰는 테이블(지금은 중복 방지 키 `identity.idempotency_record` 하나)이고, **DB 담당에게 넘길 제안**이에요.
+
 DB 담당이 보내 준 공식 스키마 기준 메모예요. 원본 파일은 저장소에 넣지 않고 공유 폴더(OneDrive `카카오톡 받은 파일/`)에 둬요.
 
 - 2026-10-08 작성본 **v1.5**: `habit_monster_erd.md`, `seed.sql`, `verify.sql`, `verify_later.sql` (`schema_erd/`)

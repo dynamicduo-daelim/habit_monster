@@ -98,7 +98,7 @@ public class AuthService {
 			credentials.saveAndFlush(AuthCredential.social(user, provider, id.subject(), id.email(), now));
 		}
 		catch (DataIntegrityViolationException race) { // 첫 로그인 버튼 두 번
-			throw new ApiException(ErrorCode.BAD_REQUEST, "잠시 후 다시 시도해 주세요");
+			throw new ApiException(ErrorCode.REQUEST_IN_PROGRESS);
 		}
 		return respond(user, provider, id.email());
 	}

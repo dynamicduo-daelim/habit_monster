@@ -98,7 +98,8 @@ class HttpAuthService implements AuthService {
     try {
       await _send('PATCH', '/me/onboarding', body, access: _accessToken ?? session.accessToken);
     } on AuthException catch (e) {
-      if (e.code != 'INVALID_TOKEN') rethrow;
+      // 서버 0단계부터 만료는 TOKEN_EXPIRED (예전 서버는 INVALID_TOKEN)
+      if (e.code != 'TOKEN_EXPIRED' && e.code != 'INVALID_TOKEN') rethrow;
       // access 토큰이 만료됐으면 한 번 갱신하고 다시
       final refresh = await store.readRefresh();
       if (refresh == null) rethrow;

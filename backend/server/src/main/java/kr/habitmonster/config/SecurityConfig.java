@@ -1,33 +1,31 @@
 package kr.habitmonster.config;
 
-import java.nio.charset.StandardCharsets;
-
-import jakarta.servlet.http.HttpServletResponse;
-
 import kr.habitmonster.common.ErrorCode;
+import kr.habitmonster.common.ErrorResponses;
+import kr.habitmonster.identity.UserRepository;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.http.MediaType;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.core.AuthenticationException;
+import org.springframework.security.oauth2.jwt.JwtValidationException;
+import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
 
-/** {@code /auth/**}만 열고, 나머지는 {@code Authorization: Bearer <accessToken>} 필요. 세션 · CSRF 없음 (앱 전용 API). */
+/**
+ * {@code /auth/**}만 열고, 나머지는 {@code Authorization: Bearer <accessToken>} 필요. 세션 · CSRF 없음 (앱 전용 API).
+ * 요청 검사 순서 (API 명세 v4): ① 토큰 → ② 사용자 상태 · 온보딩({@link UserGateFilter}) → ③ 중복 방지 키(IdempotencyFilter) → 컨트롤러.
+ */
 @Configuration
 public class SecurityConfig {
 
 	@Bean
-	SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-		AuthenticationEntryPoint unauthorized = (req, res, e) -> {
-			ErrorCode code = req.getHeader("Authorization") == null ? ErrorCode.UNAUTHORIZED : ErrorCode.INVALID_TOKEN;
-			res.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-			res.setContentType(MediaType.APPLICATION_JSON_VALUE);
-			res.setCharacterEncoding(StandardCharsets.UTF_8.name());
-			res.getWriter().write("{\"code\":\"" + code.name() + "\",\"message\":\"" + code.message + "\"}");
-		};
+	SecurityFilterChain securityFilterChain(HttpSecurity http, UserRepository users) throws Exception {
+		AuthenticationEntryPoint unauthorized = (req, res, e) ->
+			ErrorResponses.write(res, isExpired(e) ? ErrorCode.TOKEN_EXPIRED : ErrorCode.INVALID_TOKEN);
 		return http
 			.csrf(c -> c.disable())
 			.httpBasic(b -> b.disable())
@@ -38,6 +36,17 @@ public class SecurityConfig {
 				.anyRequest().authenticated())
 			.oauth2ResourceServer(o -> o.jwt(Customizer.withDefaults()).authenticationEntryPoint(unauthorized))
 			.exceptionHandling(e -> e.authenticationEntryPoint(unauthorized))
+			.addFilterAfter(new UserGateFilter(users), BearerTokenAuthenticationFilter.class)
 			.build();
+	}
+
+	/** 검증 실패 원인 중에 {@link JwtConfig#EXPIRED_ERROR}가 있으면 만료. */
+	private static boolean isExpired(AuthenticationException e) {
+		for (Throwable t = e; t != null; t = t.getCause()) {
+			if (t instanceof JwtValidationException v) {
+				return v.getErrors().stream().anyMatch(err -> JwtConfig.EXPIRED_ERROR.equals(err.getErrorCode()));
+			}
+		}
+		return false;
 	}
 }
