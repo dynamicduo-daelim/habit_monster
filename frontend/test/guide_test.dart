@@ -42,7 +42,7 @@ void main() {
 
   testWidgets('튜토리얼: 끝까지 넘기면 닫히고, 설정에서 다시 볼 수 있다', (tester) async {
     await pumpShell(tester, tutorial: true);
-    expect(find.text('루틴몬에 온 걸 환영해요!'), findsOneWidget);
+    expect(find.text('모아루틴에 온 걸 환영해요!'), findsOneWidget);
     expect(find.text('1 / 8'), findsOneWidget);
 
     for (final title in ['나의 필드', '오늘의 성실도', '챗봇에서 습관 체크', '골드와 성실볼', '상점 · 가방 · 출석 · 습관', '목표와 도감']) {
@@ -58,9 +58,9 @@ void main() {
     // 설정 → 다시 보기 → 건너뛰기
     await tapAndWait(tester, find.bySemanticsLabel('설정'));
     await tapAndWait(tester, find.text('다시 보기'));
-    expect(find.text('루틴몬에 온 걸 환영해요!'), findsOneWidget);
+    expect(find.text('모아루틴에 온 걸 환영해요!'), findsOneWidget);
     await tapAndWait(tester, find.text('건너뛰기'));
-    expect(find.text('루틴몬에 온 걸 환영해요!'), findsNothing);
+    expect(find.text('모아루틴에 온 걸 환영해요!'), findsNothing);
   });
 
   testWidgets('아래 탭 순서: 홈 · 챗봇 · 목표 · 도감 · 통계', (tester) async {
@@ -73,7 +73,7 @@ void main() {
 
   testWidgets('튜토리얼 없이 들어오면 바로 홈', (tester) async {
     await pumpShell(tester);
-    expect(find.text('루틴몬에 온 걸 환영해요!'), findsNothing);
+    expect(find.text('모아루틴에 온 걸 환영해요!'), findsNothing);
   });
 
   testWidgets('골드 칩을 누르면 골드 얻는 법', (tester) async {

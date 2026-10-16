@@ -62,7 +62,7 @@ class _HabitMonsterAppState extends State<HabitMonsterApp> {
             behavior: HitTestBehavior.translucent,
             onPointerDown: (_) => _bgm.unlock(),
             child: MaterialApp(
-              title: '루틴몬',
+              title: '모아루틴',
               debugShowCheckedModeBanner: false,
               theme: AppTheme.build(),
               home: const AuthGate(),

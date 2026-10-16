@@ -99,8 +99,8 @@ class MainShellState extends State<MainShell> {
 
   List<TutorialStep> get _tutorialSteps => [
         const TutorialStep(
-          title: '루틴몬에 온 걸 환영해요!',
-          body: '습관을 지키면 몬스터와 함께 자라는 곳이에요. 화면을 하나씩 알려 드릴게요.',
+          title: '모아루틴에 온 걸 환영해요!',
+          body: '습관을 지키면 루틴몬이 함께 자라는 곳이에요. 루틴몬은 여기 사는 동물 친구들이에요. 화면을 하나씩 알려 드릴게요.',
         ),
         TutorialStep(
           targets: _monsterKeys,

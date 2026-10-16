@@ -83,7 +83,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               child: const PixelImage(AppAssets.logo, fit: BoxFit.cover),
                             ),
                             const SizedBox(height: 22),
-                            const Text('루틴몬',
+                            const Text('모아루틴',
                                 style: TextStyle(
                                   fontSize: 30,
                                   fontWeight: FontWeight.w700,
@@ -92,7 +92,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                   shadows: [Shadow(color: AppColors.nightLine2, offset: Offset(3, 3))],
                                 )),
                             const SizedBox(height: 8),
-                            const Text('습관을 지키면 몬스터가 자라요',
+                            const Text('습관을 지키면 루틴몬이 자라요',
                                 style: TextStyle(fontSize: 12.5, color: AppColors.purpleSoft)),
                           ],
                         ),
