@@ -10,7 +10,9 @@
 | 대화를 시작할 때 | `docs/프로젝트-이해.md` (전체 그림) · `docs/작업-기록.md`의 맨 위 일지 (지난번에 어디까지 했나) |
 | 규칙 · 수치를 건드릴 때 | `docs/결정-기록.md` (이미 정한 것) · `docs/economy-v1.md` (수치 근거) |
 | 앱 코드를 고칠 때 | `frontend/CLAUDE.md` (프론트 규칙 — 색 · 폰트 · 수치 · 디자인 기준) |
-| 서버 · DB를 고칠 때 | `backend/README.md` · `backend/server/README.md` · `backend/db/README.md` |
+| 서버 · DB를 고칠 때 | **`backend/CLAUDE.md`** (서버 규칙 · 이미 있는 기반 · DB 원칙) · `backend/README.md` · `backend/server/README.md` · `backend/db/README.md` |
+| API · DB 계약을 볼 때 | `docs/api/습관몬스터_API명세_v5.md` · `docs/데이터베이스/schema.sql` (v1.7) — **둘 다 사용자(윤서)가 썼다. Claude가 고치지 않고, 바꿔야 하면 제안한다** |
+| 남은 단계를 이어서 할 때 | `docs/handoff/README.md` → `00-공통.md` + 그 단계 파일 (3-0 ~ 6) |
 
 문서 전체 지도는 `docs/README.md`.
 
@@ -66,3 +68,12 @@
 ## 6. 저장소
 - 기본 저장소(`origin`)는 조직 레포 `dynamicduo-daelim/habit_monster`. 개인 레포는 `personal`.
 - 작업은 `feature/…` 브랜치에서 한다. `frontend/.metadata` · `frontend/pubspec.lock`의 도구 자동 변경은 따로 묻기 전엔 커밋하지 않는다.
+- 서버 연동 작업(3단계 ~)은 `feature/backend-game-system`. 시작할 때 `git branch --show-current`로 확인하고, 다르면 사용자에게 물은 뒤 전환한다. 같은 브랜치를 다른 작업 폴더(Orca worktree)가 쓰고 있을 수 있다 (`git worktree list`).
+- 바꾸기 전에 **만들/바꿀 파일 트리와 무엇이 어떻게 바뀌는지**를 먼저 보여주고 진행한다 (사용자 요청).
+
+## 7. 이 PC에서 겪은 함정
+- **Windows PowerShell 5.1로 한글 파일을 고치지 않는다** (`Get-Content` · `Set-Content`가 UTF-8 한글을 깨뜨림). Edit/Write 도구나 python으로.
+- python 정규식에서 `\b`는 한글을 글자로 본다 (`D-19로`의 19 뒤가 경계가 아님) → 숫자 경계는 `(?!\d)`.
+- Git Bash에서 `docker exec … /tmp/x` 같은 경로가 Windows 경로로 바뀐다 → `MSYS_NO_PATHCONV=1`.
+- Docker Desktop은 `C:\Desktop\…`을 빈 폴더로 본다 (공유 범위 밖). D: 드라이브나 `C:\Users` 아래만 연결된다.
+- 포트 5432 · 5433은 다른 프로젝트 DB가 쓴다 → 이 프로젝트 DB는 5434. 남의 프로세스는 끄지 않는다.
