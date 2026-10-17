@@ -14,7 +14,7 @@
 **중복 요청 방지 키(`api.idempotency_record`)** · 카테고리 최대 레벨 20 · 꽝 0.35 · 탐색 가중치.
 
 **서버 반영 (10-15)**
-- 중복 방지 키를 공식 `api.idempotency_record`로 옮기고, 우리 쪽 제안이던 `server_additions.sql`(`identity.idempotency_record`)은 지웠어요 (D-19).
+- 중복 방지 키를 공식 `api.idempotency_record`로 옮기고, 우리 쪽 제안이던 `server_additions.sql`(`identity.idempotency_record`)은 지웠어요 (D-27).
 - 로그인: `users.email` 사용, `auth_credential.email` 제거 (1단계 인증).
 
 **DB에 더할 것 (다음 판에서 결정 — DB · API 명세는 윤서 작성)**

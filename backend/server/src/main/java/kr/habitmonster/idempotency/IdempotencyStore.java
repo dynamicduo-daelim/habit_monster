@@ -24,7 +24,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  * {@code api.idempotency_record}(DB v1.7 공식 테이블) 읽기 · 쓰기. 잠금(FOR UPDATE NOWAIT)을 써야 해서 JPA 대신 SQL로 둔다.
  *
  * <p>공식 테이블은 처리 중(IN_PROGRESS)에 {@code locked_until}(처리 기한)을 요구한다. 우리는 "처리 중"의 진짜 판단을
- * 행 잠금으로 하고(D-17), 기한은 제약을 지키고 운영자가 볼 수 있게 채워 둔다.
+ * 행 잠금으로 하고(D-25), 기한은 제약을 지키고 운영자가 볼 수 있게 채워 둔다.
  */
 @Component
 class IdempotencyStore {
