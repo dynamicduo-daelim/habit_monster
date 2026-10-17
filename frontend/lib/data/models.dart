@@ -63,6 +63,7 @@ class MonsterSpecies {
     required this.lines,
     this.facesLeft = false,
     this.fieldHeight = 72,
+    this.evolvedAsset,
   });
   final String id;
   final String categoryId;
@@ -74,9 +75,14 @@ class MonsterSpecies {
   final Map<AffectionTier, List<String>> lines; // 호감도 단계별 대사
   final bool facesLeft; // 걷는 방향에 따라 좌우 반전할 때 사용
   final double fieldHeight; // 홈 필드에서 그리는 높이(px)
+  final String? evolvedAsset; // 1차 진화부터 쓰는 그림. 없으면 기본 그림 그대로
 
   /// 희귀도 별 개수 (흔함 1 · 보통 2 · 희귀 3).
   int get stars => const {'흔함': 1, '보통': 2, '희귀': 3}[rarity] ?? 1;
+
+  /// 이 레벨일 때 보여 줄 그림: 1차 진화 레벨부터 진화 그림 (있으면).
+  String assetAt(int level) =>
+      evolvedAsset != null && level >= Economy.firstEvolutionLevel ? evolvedAsset! : asset;
 }
 
 /// 플레이어가 가진 몬스터 한 마리.
@@ -90,6 +96,7 @@ class OwnedMonster {
     this.inField = true,
     this.pettedToday = false,
     this.playedToday = false,
+    this.draggedToday = false,
   });
   final String uid;
   final String speciesId;
@@ -99,6 +106,7 @@ class OwnedMonster {
   bool inField;
   bool pettedToday;
   bool playedToday;
+  bool draggedToday; // 오늘 홈 필드에서 끌어 옮겨 호감도를 받았는지
 
   String get stage {
     if (level >= Economy.finalEvolutionLevel) return '최종형';
@@ -178,22 +186,25 @@ class Goal {
   }
 }
 
-/// 카테고리 레벨 곡선: 레벨 N → N+1 에 10×N 성실도.
+/// 카테고리 레벨 곡선: 레벨 N → N+1 에 10×N 성실도. 최대 [Economy.categoryMaxLevel].
 class CategoryLevel {
   const CategoryLevel(this.level, this.current, this.needed);
   final int level;
   final int current;
-  final int needed;
+  final int needed; // 최대 레벨이면 0 (API의 expToNextLevel = null)
+
+  bool get isMax => level >= Economy.categoryMaxLevel;
 
   factory CategoryLevel.fromPoints(int points) {
     var lv = 1;
     var need = 10;
     var cur = points;
-    while (cur >= need) {
+    while (cur >= need && lv < Economy.categoryMaxLevel) {
       cur -= need;
       lv += 1;
       need = 10 * lv;
     }
+    if (lv >= Economy.categoryMaxLevel) return CategoryLevel(lv, 0, 0);
     return CategoryLevel(lv, cur, need);
   }
 }

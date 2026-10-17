@@ -381,7 +381,7 @@ class _MonsterCard extends StatelessWidget {
             decoration: BoxDecoration(border: Border.all(color: AppColors.inkBrown, width: 3)),
             child: CustomPaint(
               painter: const CheckerPainter(AppColors.grassCardDark, AppColors.grassCard),
-              child: Padding(padding: const EdgeInsets.all(3), child: PixelImage(sp.asset)),
+              child: Padding(padding: const EdgeInsets.all(3), child: PixelImage(sp.assetAt(m.level))),
             ),
           ),
           const SizedBox(width: 10),

@@ -20,6 +20,7 @@ import '../goals/goals_screen.dart';
 import '../home/home_screen.dart';
 import '../stats/stats_screen.dart';
 import '../tutorial/tutorial_overlay.dart';
+import 'game_action.dart';
 
 /// 상단 바(날짜 · 탐색 · 골드 · 성실볼) + 본문 + 하단 탭 5개.
 ///
@@ -143,13 +144,17 @@ class MainShellState extends State<MainShell> {
   /// 튜토리얼 카드에 세울 안내 캐릭터: 대화 상대 몬스터 (없으면 필드 첫 몬스터).
   Widget? _tutorialGuide(GameState s) {
     final m = s.monsterByUid(s.chatPartnerUid) ?? s.fieldMonsters.firstOrNull;
-    return m == null ? null : PixelImage(Catalog.speciesById(m.speciesId).asset, height: 44);
+    return m == null ? null : PixelImage(Catalog.speciesById(m.speciesId).assetAt(m.level), height: 44);
   }
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _syncMusic());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _syncMusic();
+      // 홈에 들어온 것이 곧 오늘 출석 (하루 1번, 습관 체크와는 별개)
+      if (mounted) runGameAction(context, (r) => r.attend());
+    });
   }
 
   /// 본문 위쪽 가운데에 1.8초 동안 알림을 띄운다. [coin]이면 금화 아이콘을 붙인다.
@@ -359,7 +364,7 @@ class _TopBar extends StatelessWidget {
                         '목표 달성',
                         '주간 목표를 달성하면 ${Economy.weeklyGoalGold}골드, 월간 목표를 달성하면 ${Economy.monthlyGoalGold}골드를 받아요.'
                       ),
-                      ('이미 있는 몬스터', '이미 도감에 있는 몬스터를 또 만나면 ${Economy.duplicateMonsterGold}골드를 받아요.'),
+                      ('이미 있는 몬스터', '이미 가진 몬스터가 또 나오면 볼을 던지지 않고 바로 ${Economy.duplicateMonsterGold}골드를 받아요.'),
                     ]),
                   ),
                   const SizedBox(width: 8),

@@ -119,7 +119,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
-                          for (final a in const [AppAssets.wolf, AppAssets.spark, AppAssets.sprout, AppAssets.moon])
+                          for (final a in const [AppAssets.monkey, AppAssets.mouse, AppAssets.turtle, AppAssets.squirrel])
                             Opacity(
                               opacity: 0.55,
                               child: ColorFiltered(

@@ -1,0 +1,1 @@
+cute kawaii pixel art Octopus character, front view , 32x32 low-res sprite, chunky pixels, chibi round body, tiny dot eyes with pink blush cheeks, soft warm brown outline (no black outline), soft grey color, flat minimal shading, simple and soft, full body, white background, pixel-perfect, no anti-aliasing, a metal type

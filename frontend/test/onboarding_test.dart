@@ -107,11 +107,11 @@ void main() {
       expect(s.pickedCategories, ['sl']);
       expect(s.habits.single.name, '7시간 자기');
       expect(s.goals, isEmpty);
-      final moon = s.monsters.firstWhere((m) => m.speciesId == 'moon');
-      expect(moon.level, 1);
-      expect(moon.affection, 3);
-      expect(moon.inField, isTrue);
-      expect(s.chatPartnerUid, moon.uid);
+      final squirrel = s.monsters.firstWhere((m) => m.speciesId == 'squirrel');
+      expect(squirrel.level, 1);
+      expect(squirrel.affection, 3);
+      expect(squirrel.inField, isTrue);
+      expect(s.chatPartnerUid, squirrel.uid);
     });
   });
 

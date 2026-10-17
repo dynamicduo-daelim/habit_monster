@@ -41,7 +41,12 @@ class SilentBgm extends Bgm {
 }
 
 /// 실제 재생 (audioplayers).
-class AudioBgm extends Bgm {
+/// 앱이 화면에서 벗어나면(홈 버튼 · 다른 앱 · 브라우저 탭 숨김) 멈추고, 돌아오면 이어서 튼다.
+class AudioBgm extends Bgm with WidgetsBindingObserver {
+  AudioBgm() {
+    WidgetsBinding.instance.addObserver(this);
+  }
+
   static const double _volume = 0.45;
   static const int _fadeSteps = 8;
   static const Duration _fadeStep = Duration(milliseconds: 40); // 페이드 약 0.3초
@@ -51,7 +56,40 @@ class AudioBgm extends Bgm {
   BgmTrack? _playing;
   bool _on = true;
   bool _busy = false;
+  bool _away = false; // 앱이 화면에 안 보이는 중
   double _vol = 0;
+
+  /// 앱 상태(라이프사이클)가 바뀔 때 Flutter가 부른다.
+  /// 안 보이면(hidden · paused · detached) 일시정지, 다시 보이면(resumed) 이어서 재생.
+  /// inactive(알림창을 내리거나 창이 포커스만 잃은 상태)는 아직 보이므로 그대로 둔다.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    switch (state) {
+      case AppLifecycleState.resumed:
+        _setAway(false);
+      case AppLifecycleState.hidden:
+      case AppLifecycleState.paused:
+      case AppLifecycleState.detached:
+        _setAway(true);
+      case AppLifecycleState.inactive:
+        break;
+    }
+  }
+
+  void _setAway(bool away) {
+    if (_away == away) return;
+    _away = away;
+    if (away) {
+      _player.pause();
+    } else {
+      if (_playing != null) {
+        _player.resume();
+        final same = (_on ? _want : null) == _playing;
+        if (same && !_busy && _vol < _volume) _fadeTo(_volume); // 키우던 중에 나갔으면 마저 키운다
+      }
+      _sync(); // 나가 있는 동안 곡 요청이 바뀌었으면 맞춘다 (같은 곡이면 아무것도 안 함)
+    }
+  }
 
   @override
   bool get enabled => _on;
@@ -79,7 +117,7 @@ class AudioBgm extends Bgm {
     if (_busy) return;
     _busy = true;
     try {
-      while (true) {
+      while (!_away) {
         final target = _on ? _want : null;
         if (target == _playing) break;
         if (_playing != null) {
@@ -91,6 +129,10 @@ class AudioBgm extends Bgm {
           await _player.setReleaseMode(ReleaseMode.loop);
           await _player.play(AssetSource('audio/bgm/${target.name}.mp3'), volume: 0);
           _playing = target;
+          if (_away) {
+            await _player.pause(); // 재생을 시작하는 사이에 앱을 벗어났으면
+            break;
+          }
           await _fadeTo(_volume);
         }
       }
@@ -113,6 +155,7 @@ class AudioBgm extends Bgm {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _player.dispose();
     super.dispose();
   }

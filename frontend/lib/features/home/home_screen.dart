@@ -8,6 +8,7 @@ import '../../core/constants/app_assets.dart';
 import '../../core/constants/economy.dart';
 import '../../core/state/game_state.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/utils/format.dart';
 import '../../core/widgets/help_button.dart';
 import '../../core/widgets/pixel_icon.dart';
 import '../../core/widgets/pixel_widgets.dart';
@@ -73,6 +74,12 @@ class _HomeScreenState extends State<HomeScreen> {
   Timer? _talkClear;
   int _tick = 0;
 
+  /// 끌고 있는 몬스터 (한 번에 한 마리).
+  String? _dragUid;
+
+  /// 옮긴 자리에서 쉬는 중인 몬스터 → 다시 돌아다니게 할 타이머.
+  final Map<String, Timer> _rest = {};
+
   HomeOverlayKind _overlay = HomeOverlayKind.none;
   String? _selUid;
   bool _monFeedOpen = false;
@@ -104,6 +111,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void didUpdateWidget(HomeScreen old) {
     super.didUpdateWidget(old);
     if (widget.tutorial && !old.tutorial) {
+      _iconsHidden = false; // 튜토리얼이 아이콘을 가리킨다
       _overlay = HomeOverlayKind.none;
       _qtyItem = null;
       _purchase = null;
@@ -117,21 +125,138 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   // ---------- 필드 ----------
+  /// 마지막으로 그린 필드 크기 (걷기 타이머가 영역을 계산할 때 쓴다).
+  BoxConstraints? _fieldBox;
+
+  // ---------- 오른쪽 아이콘 줄 (숨기기) ----------
+  static const _iconRight = 8.0, _iconTop = 8.0, _iconColumnW = 64.0;
+  static const _handleW = 22.0, _handleH = 56.0;
+
+  /// 아이콘 줄을 오른쪽으로 밀어 숨겼는지.
+  bool _iconsHidden = false;
+  double _iconSwipe = 0;
+
+  /// 아이콘 줄의 높이를 재는 키 (튜토리얼이 키를 주면 그것을 쓴다).
+  final _ownIconsKey = GlobalKey();
+  GlobalKey get _iconsKey => widget.iconsKey ?? _ownIconsKey;
+
+  void _setIconsHidden(bool hidden) {
+    if (_iconsHidden != hidden) setState(() => _iconsHidden = hidden);
+  }
+
+  /// 몬스터가 가리면 안 되는 오른쪽 위 버튼 영역 (필드 안 px). 숨겼으면 손잡이만.
+  Rect _buttonsRect(double w) {
+    if (_iconsHidden) return Rect.fromLTWH(w - _handleW - 6, _iconTop + 40 - 6, _handleW + 6, _handleH + 12);
+    final colH = _iconsKey.currentContext?.size?.height ?? 300;
+    const gap = 6.0;
+    return Rect.fromLTWH(w - _iconRight - _iconColumnW - gap, 0, _iconColumnW + _iconRight + gap, _iconTop + colH + gap);
+  }
+
   _FieldPos _initialPos(int i) => _FieldPos(4.0 + i * 16, 52.0 + (i % 2) * 10, false);
 
+  /// 몬스터가 다닐 수 있는 영역 = 잔디 전체 (본문 크기 대비 %, 몬스터 왼쪽 위 기준). 걷기와 끌기가 같은 규칙을 쓴다.
+  /// 위: 발(그림 아래 끝)이 숲 바로 아래 잔디에 닿는 곳, 그리고 "나의 필드" 바 아래. 아래: 이름표가 접힌 시트 위에 보이는 곳.
+  /// 오른쪽 위 아이콘 줄([_buttonsRect])은 가리지 않는다 — 그 아래쪽 잔디는 다닐 수 있다.
+  /// 화면 크기마다 배경이 다르게 잘려서 px로 계산한다. [x] · [y]를 이 영역 안의 가장 가까운 곳으로 옮겨 돌려준다.
+  (double, double) _place(BoxConstraints box, MonsterSpecies sp, double x, double y) {
+    final w = box.maxWidth, h = box.maxHeight;
+    final scale = max(w / AppAssets.homeFieldW, h / AppAssets.homeFieldH); // BoxFit.cover
+    final imgH = AppAssets.homeFieldH * scale;
+    final grassPx = h - imgH + imgH * AppAssets.homeFieldGrassTop; // 아래 맞춤 (bottomCenter)
+    const labelH = 24.0; // 그림자 + 이름표
+    const columnW = 100.0; // 그림 · 이름표가 차지하는 폭 (대략)
+    const leftGap = 20.0, rightGap = 6.0; // 왼쪽은 말풍선이 덜 잘리게 조금 더
+    const fieldBarBottom = 12.0 + 28 + 6; // "나의 필드" 바 위치(top 12) + 높이 + 틈
+    final monH = sp.fieldHeight + labelH;
+    final minX = leftGap, maxX = max(minX, w - columnW - rightGap);
+    final minY = max(fieldBarBottom, grassPx - sp.fieldHeight + 6);
+    final maxY = max(minY, h - HabitSheet.closedHeight - monH);
+    var px = (x / 100 * w).clamp(minX, maxX), py = (y / 100 * h).clamp(minY, maxY);
+
+    // 버튼 영역과 겹치면 왼쪽으로 비키거나 아래로 내려가기 중 덜 움직이는 쪽
+    final b = _buttonsRect(w);
+    if (Rect.fromLTWH(px, py, columnW, monH).overlaps(b)) {
+      final toLeft = b.left - columnW; // 오른쪽 끝이 버튼 왼쪽에 닿게
+      final toDown = b.bottom; // 위 끝이 버튼 아래에 닿게
+      final canLeft = toLeft >= minX, canDown = toDown <= maxY;
+      if (canLeft && (!canDown || px - toLeft <= toDown - py)) {
+        px = toLeft;
+      } else if (canDown) {
+        py = toDown;
+      }
+    }
+    return (px / w * 100, py / h * 100);
+  }
+
   void _step() {
-    if (!mounted || !_idle) return;
+    final box = _fieldBox;
+    if (!mounted || !_idle || box == null) return;
     final mons = GameScope.read(context).fieldMonsters;
     setState(() {
       for (var i = 0; i < mons.length; i++) {
         final m = mons[i];
+        if (m.uid == _dragUid || _rest.containsKey(m.uid)) continue; // 끄는 중 · 옮긴 자리에서 쉬는 중
         final c = _pos[m.uid] ?? _initialPos(i);
-        final nx = (c.x + (_rand.nextDouble() * 34 - 17)).clamp(3.0, 66.0);
-        final ny = (c.y + (_rand.nextDouble() * 14 - 7)).clamp(44.0, 64.0);
         final sp = Catalog.speciesById(m.speciesId);
+        final (nx, ny) = _place(box, sp, c.x + (_rand.nextDouble() * 34 - 17), c.y + (_rand.nextDouble() * 14 - 7));
         _pos[m.uid] = _FieldPos(nx, ny, sp.facesLeft && nx > c.x);
       }
     });
+  }
+
+  // ---------- 끌어 옮기기 ----------
+  void _dragStart(OwnedMonster m, int i) {
+    if (!_idle || _dragUid != null) return;
+    _rest.remove(m.uid)?.cancel();
+    setState(() {
+      _dragUid = m.uid;
+      _pos[m.uid] ??= _initialPos(i);
+      _talk = Map.of(_talk)..remove(m.uid);
+    });
+  }
+
+  void _dragMove(OwnedMonster m, DragUpdateDetails d, BoxConstraints box) {
+    if (_dragUid != m.uid) return;
+    final c = _pos[m.uid]!;
+    final sp = Catalog.speciesById(m.speciesId);
+    final (nx, ny) = _place(box, sp, c.x + d.delta.dx / box.maxWidth * 100, c.y + d.delta.dy / box.maxHeight * 100);
+    final flip = d.delta.dx == 0 ? c.flip : sp.facesLeft && d.delta.dx > 0;
+    setState(() => _pos[m.uid] = _FieldPos(nx, ny, flip));
+  }
+
+  /// 내려놓은 몬스터의 한마디 (호감도 단계별).
+  static const _dropLines = {
+    AffectionTier.low: ['…내려 줘.', '어디로 데려가는 거야?', '(두리번두리번)'],
+    AffectionTier.mid: ['여기도 괜찮네!', '우와, 높다!', '새 자리 좋아!'],
+    AffectionTier.high: ['한 번 더! 한 번 더!', '네가 옮겨 주니까 좋아!', '여기서 기다릴게!'],
+  };
+
+  /// 하트가 뿅뿅 튀어나오는 몬스터 → 몇 번째 하트인지 (애니메이션을 새로 시작하는 키).
+  final Map<String, int> _hearts = {};
+  final Map<String, Timer> _heartClear = {};
+
+  /// 내려놓기: 한마디 하고, 그 자리에서 잠깐 쉬다가 다시 돌아다닌다.
+  /// 오늘 처음이면 호감도 +1과 함께 하트가 뿅뿅 (단계가 오르면 토스트도).
+  Future<void> _dragEnd(OwnedMonster m) async {
+    if (_dragUid != m.uid) return;
+    setState(() => _dragUid = null);
+    _rest[m.uid] = Timer(Economy.dragRest, () => _rest.remove(m.uid));
+    final before = tierOf(m.affection);
+    final gain = await runGameAction(context, (r) => r.dragMonster(m)) ?? 0;
+    if (!mounted) return;
+    final after = tierOf(m.affection);
+    final lines = _dropLines[after]!;
+    _showTalk({m.uid: lines[_rand.nextInt(lines.length)]}, const Duration(milliseconds: 2400));
+    if (gain == 0) return;
+    _heartClear.remove(m.uid)?.cancel();
+    setState(() => _hearts[m.uid] = (_hearts[m.uid] ?? 0) + 1);
+    _heartClear[m.uid] = Timer(const Duration(milliseconds: 1200), () {
+      _heartClear.remove(m.uid);
+      if (mounted) setState(() => _hearts.remove(m.uid));
+    });
+    if (after != before) {
+      MainShell.of(context).toast('${withWa(Catalog.speciesById(m.speciesId).name)} ${tierName(after)} 사이가 됐어요!');
+    }
   }
 
   // ---------- 말풍선 ----------
@@ -159,7 +284,7 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
     final n = f.length > 2 && _rand.nextDouble() < 0.3 ? 2 : 1;
-    final picks = [...f]..shuffle(_rand);
+    final picks = f.where((m) => m.uid != _dragUid).toList()..shuffle(_rand); // 끄는 중엔 말하지 않는다
     _showTalk({for (final m in picks.take(n)) m.uid: _randomLine(m)}, const Duration(milliseconds: 3400));
   }
 
@@ -238,7 +363,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   void dispose() {
-    for (final t in [_wander, _firstWander, _bob, _chatter, _talkClear]) {
+    for (final t in [_wander, _firstWander, _bob, _chatter, _talkClear, ..._heartClear.values, ..._rest.values]) {
       t?.cancel();
     }
     super.dispose();
@@ -262,11 +387,17 @@ class _HomeScreenState extends State<HomeScreen> {
     final sel = s.monsterByUid(_selUid);
     final bobUp = _tick.isOdd;
 
-    // 아래쪽(y가 큰) 몬스터가 앞에 오도록
+    // 아래쪽(앞)에 있는 몬스터를 나중에 그린다. 끌고 있는 몬스터는 맨 위.
+    int depth(int i) => mons[i].uid == _dragUid ? 1000 : 0;
     final order = [for (var i = 0; i < mons.length; i++) i]
-      ..sort((a, b) => (_pos[mons[a].uid] ?? _initialPos(a)).y.compareTo((_pos[mons[b].uid] ?? _initialPos(b)).y));
+      ..sort((a, b) {
+        final d = depth(a).compareTo(depth(b));
+        if (d != 0) return d;
+        return (_pos[mons[a].uid] ?? _initialPos(a)).y.compareTo((_pos[mons[b].uid] ?? _initialPos(b)).y);
+      });
 
     return LayoutBuilder(builder: (context, box) {
+      _fieldBox = box;
       return ClipRect(
         child: Stack(
           children: [
@@ -292,6 +423,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     const HelpButton(title: '나의 필드', items: [
                       ('필드가 뭐예요?', '함께 지내는 몬스터가 돌아다니는 곳이에요. 최대 ${Economy.fieldCapacity}마리까지 꺼내 둘 수 있어요.'),
                       ('몬스터와 놀기', '몬스터를 누르면 쓰다듬기 · 간식 주기 · 놀아주기 · 말 걸기를 할 수 있어요. 친해질수록 호감도(♥)가 올라요.'),
+                      ('옮기기', '몬스터를 누른 채 끌면 원하는 자리로 옮길 수 있어요. 몬스터마다 하루 1번 호감도 ♥+${Economy.dragAffectionGain}.'),
                       ('넣고 꺼내기', '가방을 열면 몬스터를 필드로 꺼내거나 가방에 넣을 수 있어요.'),
                     ]),
                   ],
@@ -299,11 +431,20 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
             for (final i in order) _monster(mons[i], i, box, bobUp),
-            Positioned(
-              right: 8,
-              top: 8,
-              child: Column(
-                key: widget.iconsKey,
+            // 오른쪽 아이콘 줄: 오른쪽으로 밀면 화면 밖으로 숨고, 손잡이(◀)를 누르거나 왼쪽으로 밀면 다시 나온다.
+            AnimatedPositioned(
+              duration: const Duration(milliseconds: 250),
+              curve: Curves.easeOut,
+              right: _iconsHidden ? -_iconColumnW : _iconRight,
+              top: _iconTop,
+              child: GestureDetector(
+                onHorizontalDragStart: (_) => _iconSwipe = 0,
+                onHorizontalDragUpdate: (d) => _iconSwipe += d.delta.dx,
+                onHorizontalDragEnd: (d) {
+                  if (_iconSwipe > 24 || d.primaryVelocity! > 300) _setIconsHidden(true);
+                },
+                child: Column(
+                key: _iconsKey,
                 children: [
                   _IconSpot(
                     label: '상점',
@@ -330,7 +471,6 @@ class _HomeScreenState extends State<HomeScreen> {
                     icon: PixelIcons.fieldCalendar,
                     labelColor: AppColors.text,
                     bob: bobUp ? -4 : 0,
-                    badge: !s.checkedInToday, // 오늘 아직 출석 전
                     onTap: () => showAttendancePopup(
                       context,
                       onGoChat: () => MainShell.of(context).goTab(MainShell.chatTab),
@@ -348,6 +488,35 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
                 ],
+              ),
+              ),
+            ),
+            // 숨겼을 때 오른쪽 끝에 남는 손잡이
+            AnimatedPositioned(
+              duration: const Duration(milliseconds: 250),
+              curve: Curves.easeOut,
+              right: _iconsHidden ? 0 : -_handleW,
+              top: _iconTop + 40,
+              child: Semantics(
+                button: true,
+                label: '아이콘 보이기',
+                excludeSemantics: true,
+                child: GestureDetector(
+                  onTap: () => _setIconsHidden(false),
+                  onHorizontalDragEnd: (d) {
+                    if (d.primaryVelocity! < 0) _setIconsHidden(false);
+                  },
+                  child: Container(
+                    width: _handleW,
+                    height: _handleH,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: AppColors.nightDeep.withValues(alpha: 0.85),
+                      border: Border.all(color: AppColors.nightLine2, width: 2),
+                    ),
+                    child: const Text('◀', style: TextStyle(fontSize: 11, color: AppColors.text)),
+                  ),
+                ),
               ),
             ),
             Positioned(
@@ -416,12 +585,15 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _monster(OwnedMonster m, int i, BoxConstraints box, bool bobUp) {
     final sp = Catalog.speciesById(m.speciesId);
     final p = _pos[m.uid] ?? _initialPos(i);
-    final bob = ((bobUp ? 1 : 0) + i).isOdd ? -3.0 : 0.0;
+    final dragging = _dragUid == m.uid;
+    // 끄는 중엔 통통 대신 살짝 들려 있다 (그림자는 발밑에 남는다).
+    final bob = dragging ? -10.0 : (((bobUp ? 1 : 0) + i).isOdd ? -3.0 : 0.0);
     final talk = _talk[m.uid];
     final tier = tierOf(m.affection);
     return AnimatedPositioned(
       key: ValueKey(m.uid),
-      duration: const Duration(milliseconds: 2400),
+      // 끄는 중엔 손가락을 바로 따라오고, 걸을 때는 천천히 움직인다.
+      duration: dragging ? Duration.zero : const Duration(milliseconds: 2400),
       curve: Curves.linear,
       left: p.x / 100 * box.maxWidth,
       top: p.y / 100 * box.maxHeight,
@@ -437,6 +609,11 @@ class _HomeScreenState extends State<HomeScreen> {
                 label: '${sp.name} 정보 보기',
                 child: GestureDetector(
                   onTap: () => _openMonster(m),
+                  // 누른 채 움직이면 끌어 옮기기 (짧게 누르면 위의 onTap)
+                  onPanStart: (_) => _dragStart(m, i),
+                  onPanUpdate: (d) => _dragMove(m, d, box),
+                  onPanEnd: (_) => _dragEnd(m),
+                  onPanCancel: () => _dragEnd(m),
                   child: Column(
                     children: [
                       Transform.translate(
@@ -444,7 +621,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         child: Transform(
                           alignment: Alignment.center,
                           transform: Matrix4.diagonal3Values(p.flip ? -1 : 1, 1, 1),
-                          child: PixelImage(sp.asset, height: sp.fieldHeight),
+                          child: PixelImage(sp.assetAt(m.level), height: sp.fieldHeight),
                         ),
                       ),
                       Transform.translate(
@@ -477,7 +654,49 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
             ),
+          if (_hearts[m.uid] case final n?)
+            // 머리 근처에서 하트 세 개가 뿅뿅 올라가며 사라진다
+            Positioned(
+              top: 6,
+              child: IgnorePointer(child: _HeartBurst(key: ValueKey('hearts_${m.uid}_$n'))),
+            ),
         ],
+      ),
+    );
+  }
+}
+
+/// 호감도가 오를 때 하트 세 개가 엇갈려 튀어 오르며 사라진다 (약 1초).
+class _HeartBurst extends StatelessWidget {
+  const _HeartBurst({super.key});
+
+  static const _spots = [(-22.0, 0.0), (0.0, 0.15), (22.0, 0.3)]; // (가로 위치, 늦게 시작하는 정도)
+
+  @override
+  Widget build(BuildContext context) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: const Duration(milliseconds: 1000),
+      builder: (context, t, _) => SizedBox(
+        width: 70,
+        height: 20,
+        child: Stack(
+          clipBehavior: Clip.none,
+          alignment: Alignment.center,
+          children: [
+            for (final (dx, delay) in _spots)
+              Builder(builder: (_) {
+                final k = ((t - delay) / (1 - delay)).clamp(0.0, 1.0);
+                return Transform.translate(
+                  offset: Offset(dx, -34 * Curves.easeOut.transform(k)),
+                  child: Opacity(
+                    opacity: k == 0 ? 0 : (1 - k * k),
+                    child: const PixelIcon(layers: [PixelLayer(PixelIcons.heart, AppColors.tierHigh)], size: 14),
+                  ),
+                );
+              }),
+          ],
+        ),
       ),
     );
   }

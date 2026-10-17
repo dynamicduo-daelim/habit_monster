@@ -16,6 +16,9 @@ abstract class GameRepository {
   /// 처음 · 날짜가 바뀌었을 때 오늘 데이터를 다시 불러온다 (서버: `GET /me/status` 등).
   Future<void> load();
 
+  /// 오늘 출석 (홈에 들어올 때, 하루 1번). 이미 했으면 false. 서버: `POST /me/attendance`.
+  Future<bool> attend();
+
   // ---------- 온보딩 (POST /onboarding) ----------
   Future<void> completeOnboarding({
     required List<String> picked,
@@ -51,6 +54,10 @@ abstract class GameRepository {
 
   /// 물약 먹이기. 오른 레벨 수, 못 먹이면 -1.
   Future<int> feed(OwnedMonster m, ShopItem potion);
+
+  /// 홈 필드에서 끌어 옮기기 — 몬스터마다 하루 1번 호감도 +1 (결정 D-20). 오른 호감도.
+  /// 서버: **명세 v5 · DB v1.7에 아직 없음** (affection 행동은 PET · PLAY뿐) → 명세 · DB 다음 판에서 정한다.
+  Future<int> dragMonster(OwnedMonster m);
 
   /// 필드 ↔ 가방. 칸 제한에 걸리면 false.
   Future<bool> moveMonster(OwnedMonster m, {required bool toField});

@@ -224,7 +224,7 @@ class ChatController extends ChangeNotifier {
   }
 
   /// 지금 나타난 몬스터에게 성실볼을 던질 수 있는지 (이미 던졌으면 끝).
-  bool get canThrow => encounter?.found == true && lastCatch == null;
+  bool get canThrow => encounter?.catchable == true && lastCatch == null;
 
   /// 성실볼 1개를 던진다. 볼이 없거나 던질 대상이 없으면 null.
   /// 잡았으면 대화창에도 남긴다 (놓치면 남기지 않음).

@@ -84,9 +84,6 @@ class ScriptedChatBrain implements ChatBrain {
   @override
   Future<String> catchReport(CatchResult r) {
     final name = r.species.name;
-    if (r.kind == CatchKind.duplicate) {
-      return SynchronousFuture('$name${josaEulReul(name)} 또 잡았어! 이미 있는 친구라 ${r.gold}G로 바꿨어.');
-    }
     return SynchronousFuture('$name${josaEulReul(name)} 잡았어! 새 친구가 생겼네. '
         '${r.toField ? '필드에서 기다리고 있을 거야.' : '필드가 꽉 차서 가방에 넣어뒀어.'}');
   }

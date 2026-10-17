@@ -56,7 +56,7 @@ void main() {
       await tester.tap(find.text('못 했어'));
       await tester.pump();
     }
-    await tester.tap(find.text('탐색하기 (3회 남음)'));
+    await tester.tap(find.text('탐색하기 (1회 남음)')); // 전부 "못 했어"인 날은 탐색 1회
     await tester.pump();
     await tester.pump();
     expect(bgm.lastRequested, BgmTrack.explore);

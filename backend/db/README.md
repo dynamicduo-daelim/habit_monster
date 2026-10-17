@@ -50,6 +50,13 @@ psql -v ON_ERROR_STOP=1 -f schema.sql -f seed.sql -f verify.sql
 psql -v ON_ERROR_STOP=1 -f schema.sql -f seed.sql -f backend/db/v1.6_extra_verify.sql
 ```
 
+DB 담당에게 요청할 것 (2026-10-10 추가):
+- **출석 기준이 "앱에 들어온 날"로 바뀌었어요** (결정 D-15). DB의 연속 출석(`habit.habit_user.current_streak` · `longest_streak` · `last_checkin_date`)은 체크인 기준이라, 접속 기준 연속 출석을 저장할 곳이 필요해요. `identity.users.last_active_date`는 마지막 접속일만 있어요. 날짜별 출석 기록(출석부 달력용)도 지금은 없어요.
+- **몬스터 종이 5종 → 28종으로 바뀌었어요** (2026-10-15, 결정 D-16). 시드의 종 목록(`monster.species`)을 앱 `frontend/lib/data/catalog.dart`의 `Catalog.species`에 맞춰 주세요 — 종 id · 카테고리 · 희귀도 · 출현 레벨 · 첫 파트너(카테고리마다 1종, 이제 명상 · 절약도 있음). 4종(불씨 원숭이 · 횃불 닭 · 천둥 백조 · 물방울 코알라)은 1차 진화(Lv.10)부터 그림이 바뀌어요. 그림 경로를 DB에 둘지는 함께 정해요. 아래 `v1.6_extra_verify.sql`의 X-9 이름표 "번쩍 병아리"는 옛 종 이름이에요 (species_id 3).
+- **도감 등록 시점이 "잡았을 때" → "만났을 때"로 바뀌었어요** (2026-10-15, 결정 D-17). API 명세 v5의 "사용자별 종 도감 기록"(처음 본 시각 · 처음 잡은 시각, `OWNED`/`SEEN`/`UNKNOWN`)과 같은 규칙이에요. 앱은 v5대로 카테고리 칸을 가진 종만으로 세요.
+- **API 명세 v4 · v5에 맞춘 것** (D-19): 가진 종은 볼 없이 15G, 꽝 0.35, 전부 "못 했어"면 탐색 1회, 카테고리 최대 Lv.20, 출현 레벨 1/3/6/9/12/15/18 순서. 단, 앱의 종은 카테고리마다 4~6종이라 출현 레벨은 앞에서부터 종 수만큼 썼어요 — 시드도 같게 맞춰 주세요 (`Catalog.species`의 `unlockLevel`). 탐색 가중치 값이 정해지면 알려 주세요.
+- **호감도에 "끌어 옮기기"가 생겼어요** (2026-10-15, D-20). 홈 필드에서 몬스터를 끌어 옮기면 몬스터마다 하루 1번 호감도 +1이에요. `POST /monsters/{id}/affection`의 종류에 끌기(예: `DRAG`)를 추가하고, 쓰다듬기 · 놀아주기처럼 "오늘 했는지"를 기록해 주세요. 위치는 저장하지 않아요.
+
 확인할 것:
 - v1.6 `schema.sql`의 로그인 제공자 시드에 `APPLE`이 다시 들어 있어요. 앱 · 서버는 애플 로그인을 지원하지 않아요 (결정 D-02). 행이 있어도 서버 동작에는 영향이 없지만, 뺄지 DB 담당과 맞춰요.
 - 중복 포획 골드의 원장 사유가 `EXPLORE_GOLD` → `DUPLICATE`로 바뀌었어요. 설정 키 이름은 아직 `convert_gold`예요 (시드가 v1.5).

@@ -27,6 +27,19 @@ void main() {
       expect(wolf.affection, 5);
     });
 
+    test('끌어 옮기기는 몬스터마다 하루 1번 ♥+1', () {
+      final s = GameState.sample(gold: 1240, balls: 1);
+      final monkey = s.monsterByUid('m1')!; // 호감도 4
+      expect(s.drag(monkey), 1);
+      expect(s.drag(monkey), 0);
+      expect(monkey.affection, 5);
+      expect(monkey.draggedToday, isTrue);
+      final mouse = s.monsterByUid('m2')!;
+      mouse.affection = 10;
+      expect(s.drag(mouse), 0); // 꽉 찼으면 안 오르고, 오늘 기회도 안 쓴다
+      expect(mouse.draggedToday, isFalse);
+    });
+
     test('오늘의 성실도는 앞 3개 습관만, 75점 만점', () {
       final s = GameState.sample(gold: 1240, balls: 1);
       expect(s.todayScore, 0);
@@ -39,7 +52,7 @@ void main() {
 
   test('이름 뒤 와/과', () {
     expect(withWa('찌릿 쥐'), '찌릿 쥐와');
-    expect(withWa('새싹냥'), '새싹냥과');
+    expect(withWa('이끼 거북'), '이끼 거북과');
     expect(josaEunNeun('전공 공부'), '는');
     expect(josaEunNeun('아침 러닝'), '은');
   });
@@ -105,5 +118,76 @@ void main() {
     await tester.pump(const Duration(seconds: 6));
     await tester.tap(find.bySemanticsLabel('닫기').first);
     await tester.pump(const Duration(seconds: 6));
+  });
+
+  testWidgets('홈: 몬스터를 끌어 옮기면 따라오고, 처음 한 번 ♥+1', (tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final state = GameState.sample(gold: 1240, balls: 1);
+    await tester.pumpWidget(withGame(state, const MaterialApp(home: MainShell())));
+    await tester.pump();
+    // 테스트에선 그림을 읽기 전엔 크기가 0이라 누를 곳이 없다 → 먼저 읽어 둔다
+    await tester.runAsync(() async {
+      for (final e in find.byType(Image).evaluate()) {
+        await precacheImage((e.widget as Image).image, e);
+      }
+    });
+    await tester.pump();
+
+    final label = find.text('불씨 원숭이 Lv.7');
+    final before = tester.getTopLeft(label);
+    // 실제 손가락처럼 움직일 때마다 화면을 그린다 (끄는 중엔 바로 따라옴)
+    final g = await tester.startGesture(tester.getCenter(find.bySemanticsLabel('불씨 원숭이 정보 보기')));
+    for (var k = 0; k < 4; k++) {
+      await g.moveBy(const Offset(20, 8));
+      await tester.pump();
+    }
+    await g.up();
+    await tester.pump();
+    final after = tester.getTopLeft(label);
+    expect(after.dx, greaterThan(before.dx + 20));
+    expect(state.monsterByUid('m1')!.affection, 5);
+    expect(find.byKey(const ValueKey('hearts_m1_1')), findsOneWidget); // 하트 뿅뿅
+    expect(
+        find.byWidgetPredicate((w) => w is Text && const ['여기도 괜찮네!', '우와, 높다!', '새 자리 좋아!'].contains(w.data)),
+        findsOneWidget); // 놓으면 한마디 (친해진 사이 대사)
+    expect(find.text('상점 주인 마루'), findsNothing); // 끌기는 창을 열지 않는다
+
+    // 두 번째부터는 옮기기만
+    await tester.drag(find.bySemanticsLabel('불씨 원숭이 정보 보기'), const Offset(-60, 0));
+    await tester.pump();
+    expect(state.monsterByUid('m1')!.affection, 5);
+    await tester.pump(const Duration(milliseconds: 1300));
+    expect(find.byKey(const ValueKey('hearts_m1_1')), findsNothing); // 두 번째엔 하트 없음
+    await tester.pump(const Duration(seconds: 4)); // 쉬는 시간 · 토스트가 끝나게
+  });
+
+  testWidgets('홈: 아이콘 줄을 오른쪽으로 밀면 숨고, 손잡이를 누르면 다시 나온다', (tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final state = GameState.sample(gold: 1240, balls: 1);
+    await tester.pumpWidget(withGame(state, const MaterialApp(home: MainShell())));
+    await tester.pump();
+
+    final shop = find.text('상점'); // 아이콘 이름표
+    final shown = tester.getCenter(shop).dx;
+    final g = await tester.startGesture(tester.getCenter(shop));
+    for (var k = 0; k < 5; k++) {
+      await g.moveBy(const Offset(16, 0)); // 손가락처럼 여러 번 나눠 민다
+      await tester.pump();
+    }
+    await g.up();
+    await tester.pump(); // 숨기기 시작
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(tester.getTopLeft(shop).dx, greaterThanOrEqualTo(390)); // 화면 밖으로
+    expect(find.bySemanticsLabel('아이콘 보이기'), findsOneWidget);
+
+    await tester.tap(find.bySemanticsLabel('아이콘 보이기'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(tester.getCenter(shop).dx, shown);
+    await tester.pump(const Duration(seconds: 4));
   });
 }

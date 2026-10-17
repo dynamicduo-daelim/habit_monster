@@ -27,11 +27,12 @@ void main() {
       expect(s.canOpenCategory, isFalse);
       expect(s.openCategory('sl'), isFalse);
       s.monsters.addAll([
-        OwnedMonster(uid: 'x1', speciesId: 'chick'),
-        OwnedMonster(uid: 'x2', speciesId: 'moon'),
+        OwnedMonster(uid: 'x1', speciesId: 'chicken'),
+        OwnedMonster(uid: 'x2', speciesId: 'squirrel'),
       ]);
-      s.discoveredSpecies.addAll(['chick', 'moon']); // 잡으면 도감에 기록됨 (throwBall이 하는 일)
-      expect(s.discoveredCount, 5);
+      s.discoveredSpecies.addAll(['chicken', 'squirrel']); // 잡으면 도감 · 가진 종에 기록됨 (throwBall이 하는 일)
+      s.caughtSpecies.addAll(['chicken', 'squirrel']);
+      expect(s.caughtCount, 5);
       expect(s.categorySlotCount, 4);
       expect(s.openCategory('sl'), isTrue);
       expect(s.pickedCategories, contains('sl'));
@@ -92,13 +93,14 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     final s = GameState.sample(gold: 1240, balls: 1);
-    s.monsters.addAll([OwnedMonster(uid: 'x1', speciesId: 'chick'), OwnedMonster(uid: 'x2', speciesId: 'moon')]);
-    s.discoveredSpecies.addAll(['chick', 'moon']);
+    s.monsters.addAll([OwnedMonster(uid: 'x1', speciesId: 'chicken'), OwnedMonster(uid: 'x2', speciesId: 'squirrel')]);
+    s.discoveredSpecies.addAll(['chicken', 'squirrel']);
+    s.caughtSpecies.addAll(['chicken', 'squirrel']);
     await tester.pumpWidget(withGame(s, const MaterialApp(home: MainShell())));
     await tester.tap(find.text('도감'));
     await tester.pump();
     expect(find.text('카테고리 슬롯 3/4'), findsOneWidget);
-    expect(find.text('도감 5/10 발견하면 +1'), findsOneWidget);
+    expect(find.text('몬스터 5/10마리 모으면 +1'), findsOneWidget);
     await tester.tap(find.text('새 카테고리 열기! ▶'));
     await tester.pump();
     expect(find.text('새로운 길이 열렸다!'), findsOneWidget);

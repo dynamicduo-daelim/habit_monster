@@ -14,6 +14,9 @@ class LocalGameRepository implements GameRepository {
   Future<void> load() async {}
 
   @override
+  Future<bool> attend() async => state.attend();
+
+  @override
   Future<void> completeOnboarding({
     required List<String> picked,
     required List<Habit> habits,
@@ -45,6 +48,9 @@ class LocalGameRepository implements GameRepository {
 
   @override
   Future<int> feed(OwnedMonster m, ShopItem potion) async => state.feed(m, potion);
+
+  @override
+  Future<int> dragMonster(OwnedMonster m) async => state.drag(m);
 
   @override
   Future<bool> moveMonster(OwnedMonster m, {required bool toField}) async => state.moveMonster(m, toField: toField);
