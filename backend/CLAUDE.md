@@ -1,7 +1,7 @@
 # 루틴몬 서버 · DB — Claude 작업 안내
 
 루트 `CLAUDE.md`(원칙 · 기록 · 변경 통제)를 따르고, 서버(`backend/`)를 고칠 때는 이것도 지킨다.
-계약의 기준: **API 명세 v5** `docs/api/습관몬스터_API명세_v5.md` · **DB 설계 v1.7** `docs/데이터베이스/`.
+계약의 기준: **API 명세 v5** `docs/api/습관몬스터_API명세_v5.md` · **DB 설계** `docs/데이터베이스/` (스키마 v1.7 + 시드 v1.8).
 둘 다 **사용자(윤서)가 직접 썼다** — DB · 명세 파일은 Claude가 고치지 않고, 바꿔야 하면 사용자에게 제안한다.
 명세와 다르게 구현하기로 한 것은 `docs/진행현황-및-계획.md` 1장 (A1 ~ D6) · `docs/결정-기록.md` D-23 ~ D-31. 남은 단계 지시서는 `docs/handoff/`.
 
@@ -24,7 +24,7 @@
 - 골드 · 볼 · 물약 차감은 조건부 UPDATE(`… WHERE balance >= ?`), `CHECK(>= 0)` 위반은 422. 골드는 잔액 + 원장(`UNIQUE(reason_code, ref_id)`), 금액 0이면 원장에 안 씀.
 - **수치는 `config.balance_config`에서** (하드코딩 금지). 행은 지우지 않는다(상태값). 보상 기준값 · 완료 목표 · 끝난 탐색은 트리거가 수정을 막는다.
 - JPA는 테이블을 만들지 않는다 (`ddl-auto=none`) — 엔티티 컬럼은 `schema.sql`과 정확히 같게.
-- **앱 `frontend/lib/data/catalog.dart`의 코드(카테고리 · 몬스터 종 · 측정 항목 순서)는 DB 시드와 같아야 한다.** (2026-10-17 현재 앱은 새 28종, DB 시드 v1.7은 옛 5종 — 3단계 전에 시드 갱신 필요)
+- **앱 `frontend/lib/data/catalog.dart`의 코드(카테고리 · 몬스터 종 · 측정 항목 순서)는 DB 시드와 같아야 한다.** (시드 v1.8 = 앱의 28종, id는 카테고리 순서 · 스타터 1/6/10/15/19/23 — 종을 바꾸면 앱 · 시드 · `verify.sql`을 같이)
 
 ## 실행 · 테스트
 - 로컬 DB: `backend/`에서 `docker compose up -d` — `backend/.env`(커밋 금지, `.env.example` 참고)의 `HM_DB_DIR`가 공식 SQL 폴더(`…/docs/데이터베이스`), 이 PC는 `DB_PORT=5434`. 다시 적용: `docker compose down -v && docker compose up -d`

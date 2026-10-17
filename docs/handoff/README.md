@@ -2,7 +2,7 @@
 
 2026-10-16 작성, 10-17 갱신. 0 ~ 2단계는 끝났고 `feature/monster-art-v2`(몬스터 28종 · 필드 끌기 · 도감 본 종)도 합쳤다 (브랜치 `feature/backend-game-system`, 병합 커밋 `0410e52`). 아래는 남은 단계다.
 
-> ⚠️ **3-1 전에 먼저: DB 시드의 몬스터 종을 앱의 새 28종에 맞춰야 한다** (사용자가 DB를 고친다). 지금 시드 v1.7은 옛 5종(wolf · spark · chick · sprout · moon)이고, 앱은 28종(monkey · mouse · turtle · koala · squirrel · redpanda가 스타터 …)이다. `wolf`는 앱에선 명상, 시드에선 운동이라 코드도 겹친다. 자세한 건 `00-공통.md` 9장.
+> ✅ (10-17 해결) DB 시드 v1.8 = 앱의 28종 (id는 카테고리 순서, 스타터 1 · 6 · 10 · 15 · 19 · 23 — 결정 D-32). 로컬 Docker DB는 `docker compose down -v && up -d`로 다시 만들어야 새 시드가 들어간다.
 
 ## 쓰는 법
 

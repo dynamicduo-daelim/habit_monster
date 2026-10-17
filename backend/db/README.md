@@ -1,8 +1,18 @@
 # DB 공식 설계 메모 — 앱 · 서버에 맞추기
 
-## v1.7 (2026-10-15) — 지금 기준
+## v1.8 (2026-10-17) — 지금 기준 (시드만 바뀜, `schema.sql`은 v1.7 그대로)
 
-원본은 저장소 밖 `D:/teamProject/docs/데이터베이스/` (`schema.sql` · `seed.sql` · `schema_later.sql` · `verify.sql` · `verify_later.sql`).
+**몬스터를 앱의 새 픽셀 그림 28종으로** (앱 `frontend/lib/data/catalog.dart`에서 그대로 뽑음 — 결정 D-32):
+- `monster_species` 28행. **id = 카테고리 순서**: 운동 1 ~ 5 · 공부 6 ~ 9 · 식습관 10 ~ 14 · 명상 15 ~ 18 · 수면 19 ~ 22 · 절약 23 ~ 28
+- **스타터 6종** (카테고리 첫 번호): 1 monkey · 6 mouse · 10 turtle · 15 koala · 19 squirrel · 23 redpanda
+- `code` = 앱 종 id = 그림 이름 (서버 응답 `imageKey`, D1). 해금 레벨은 카테고리 안 1/3/6/9/12(/15), 도감 번호 = (카테고리 순서 − 1) × 6 + 순번
+- 대사 `species_line` 252줄 (28종 × 호감도 3단계 × 3줄), 진화 단계 `monster_form` 84행 (자동 생성)
+- `verify.sql`: 검사가 쓰던 종 번호를 새 번호로 (옛 2 → 6 · 3 → 7 · 4 → 10 · 5 → 19), S-2를 "모든 카테고리에 스타터" 검사로
+- **검증**: 임시 PostgreSQL 16에서 `schema → seed → schema_later → verify → verify_later` **173개 모두 통과**
+
+## v1.7 (2026-10-15)
+
+원본 위치: 저장소 `docs/데이터베이스/` (`schema.sql` · `seed.sql` · `schema_later.sql` · `verify.sql` · `verify_later.sql`, 10-16에 저장소 밖에서 옮김).
 로컬 DB는 `backend/docker-compose.yml`이 이 폴더(`backend/.env`의 `HM_DB_DIR`)의 `schema.sql` → `seed.sql`을 자동 적용해요.
 > Docker Desktop은 `C:\Desktop`처럼 공유 범위 밖 폴더를 빈 폴더로 보여요. D: 드라이브나 `C:\Users` 아래에 두세요.
 
@@ -19,7 +29,7 @@
 
 **DB에 더할 것 (다음 판에서 결정 — DB · API 명세는 윤서 작성)**
 - 도감 "본 종"(API 명세 v5): `monster.dex_entry`에 처음 본 시각 (지금은 잡은 시각만)
-- 몬스터 종이 5마리뿐 — 운동 · 식습관 · 수면은 시작 몬스터 1종이라 탐색하면 "가진 종 → 15G"만 나옴 (결정 B5는 아트가 나와야 가능)
+- (해결 — v1.8) ~~몬스터 종이 5마리뿐~~
 
 ---
 

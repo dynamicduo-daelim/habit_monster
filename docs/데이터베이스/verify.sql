@@ -1,10 +1,13 @@
 -- =====================================================================
 -- 5단계 검증 스크립트: 스키마 규칙 + 비즈니스 규칙 위반이 DB에서 막히는지
--- 실행: psql -v ON_ERROR_STOP=1 -f schema.sql -f seed.sql -f verify.sql   (v1.7)
+-- 실행: psql -v ON_ERROR_STOP=1 -f schema.sql -f seed.sql -f verify.sql   (v1.8)
 -- MVP 이후 블록까지: … -f schema_later.sql -f verify.sql -f verify_later.sql
 -- 각 검사는 PASS/FAIL을 결과 표로 출력하고, FAIL이 하나라도 있으면 마지막에 예외
 -- v1.7: 이메일 고유·Apple 제외, 출석, 습관 기간(habit_period)·채운 날, 탐색 DUPLICATE/EXPIRED,
 --       체크인 대사, 중복 요청 방지 키, 설정값 변경 검사 추가
+-- v1.8: 시드 몬스터 28종 (id = 카테고리 순서). 검사가 쓰는 종 id를 새 번호로 —
+--       1 운동 스타터(그대로) · 6 공부 스타터(옛 2) · 7 공부 비스타터(옛 3) · 10 식습관 스타터(옛 4) · 19 수면 스타터(옛 5).
+--       S-2를 "스타터 없는 카테고리 0개" 검사로 (6개 카테고리 모두 스타터)
 -- =====================================================================
 CREATE TEMP TABLE _result (id text, ok boolean, note text);
 
@@ -85,9 +88,9 @@ FROM (
     AND a.atttypid <> 'text'::regtype
 ) v;
 
--- S-2 시드: 스타터 종이 없는 카테고리 (명상·절약은 아트 미정이라 2개가 정상적으로 검출되어야 함)
+-- S-2 시드: 모든 카테고리에 스타터 종이 있다 (v1.8: 6개 카테고리 모두. 최대 1종은 uq_species_starter)
 INSERT INTO _result
-SELECT 'S-2 스타터 없는 카테고리 검출(데이터 TODO)', true,
+SELECT 'S-2 모든 카테고리에 스타터 종', count(*) = 0,
        coalesce(string_agg(c.code, ','), '없음')
 FROM habit.category c
 WHERE NOT EXISTS (SELECT 1 FROM monster.monster_species s WHERE s.category_code = c.code AND s.is_starter);
@@ -405,13 +408,13 @@ SELECT pg_temp.expect_ok  ('초기 몬스터 지급: 운동 카테고리 (대화
     INSERT INTO monster.dex_entry (user_id, species_id) VALUES (1,1)$$);
 SELECT pg_temp.expect_fail('다른 카테고리 종을 초기 몬스터로 지급 불가 (수면 종을 공부 카테고리에)',
   $$WITH m AS (INSERT INTO monster.user_monster (user_id, species_id, location, acquired_via)
-               VALUES (1,5,'BAG','STARTER') RETURNING id)
-    INSERT INTO monster.starter_grant (user_id, category_code, user_monster_id, species_id) SELECT 1,'st',id,5 FROM m$$);
+               VALUES (1,19,'BAG','STARTER') RETURNING id)
+    INSERT INTO monster.starter_grant (user_id, category_code, user_monster_id, species_id) SELECT 1,'st',id,19 FROM m$$);
 SELECT pg_temp.expect_ok  ('v1.5 초기 몬스터 지급: 공부 카테고리 (카테고리마다 1마리)',
   $$WITH m AS (INSERT INTO monster.user_monster (user_id, species_id, affection, location, acquired_via)
-               VALUES (1,2,3,'FIELD','STARTER') RETURNING id)
-    INSERT INTO monster.starter_grant (user_id, category_code, user_monster_id, species_id) SELECT 1,'st',id,2 FROM m;
-    INSERT INTO monster.dex_entry (user_id, species_id) VALUES (1,2)$$);
+               VALUES (1,6,3,'FIELD','STARTER') RETURNING id)
+    INSERT INTO monster.starter_grant (user_id, category_code, user_monster_id, species_id) SELECT 1,'st',id,6 FROM m;
+    INSERT INTO monster.dex_entry (user_id, species_id) VALUES (1,6)$$);
 SELECT pg_temp.expect_fail('같은 카테고리 초기 몬스터 두 번 불가',
   $$INSERT INTO monster.monster_species (id, code, category_code, name, rarity, unlock_level, dex_no, description)
     VALUES (90,'test_ex','ex','테스트종',1,1,90,'-');
@@ -420,12 +423,12 @@ SELECT pg_temp.expect_fail('같은 카테고리 초기 몬스터 두 번 불가'
     INSERT INTO monster.starter_grant (user_id, category_code, user_monster_id, species_id) SELECT 1,'ex',id,90 FROM m$$);
 SELECT pg_temp.expect_fail('열지 않은 카테고리에 초기 몬스터 불가 (스키마 간 FK)',
   $$WITH m AS (INSERT INTO monster.user_monster (user_id, species_id, location, acquired_via)
-               VALUES (1,4,'BAG','STARTER') RETURNING id)
-    INSERT INTO monster.starter_grant (user_id, category_code, user_monster_id, species_id) SELECT 1,'fd',id,4 FROM m$$);
+               VALUES (1,10,'BAG','STARTER') RETURNING id)
+    INSERT INTO monster.starter_grant (user_id, category_code, user_monster_id, species_id) SELECT 1,'fd',id,10 FROM m$$);
 SELECT pg_temp.expect_fail('BR-54 같은 종 두 마리 불가',
   $$INSERT INTO monster.user_monster (user_id, species_id, location, acquired_via) VALUES (1,1,'BAG','EXPLORE')$$);
 SELECT pg_temp.expect_fail('BR-61 대화 상대 2마리 불가',
-  $$INSERT INTO monster.user_monster (user_id, species_id, location, is_partner, acquired_via) VALUES (1,3,'FIELD',true,'EXPLORE')$$);
+  $$INSERT INTO monster.user_monster (user_id, species_id, location, is_partner, acquired_via) VALUES (1,7,'FIELD',true,'EXPLORE')$$);
 SELECT pg_temp.expect_fail('탐색 쿼터 없이 탐색 불가 (체크인 전)',
   $$INSERT INTO monster.explore_log (user_id, quota_date, seq, idempotency_key, result)
     VALUES (1,'2026-10-05',1,'00000000-0000-0000-0000-0000000000c1','MISS')$$);
@@ -440,29 +443,29 @@ SELECT pg_temp.expect_fail('BR-50 사용 횟수 > 기본 횟수 불가',
 -- ---------- v1.7 탐색: 꽝 / 가진 종(볼 없이 골드) / 안 가진 종 → 포획·도망·건너뜀·만료 ----------
 SELECT pg_temp.expect_ok  ('안 가진 종 등장 (처리 전)',
   $$INSERT INTO monster.explore_log (user_id, quota_date, seq, idempotency_key, result, species_id)
-    VALUES (1,'2026-10-05',1,'00000000-0000-0000-0000-0000000000c1','ENCOUNTER',3)$$);
+    VALUES (1,'2026-10-05',1,'00000000-0000-0000-0000-0000000000c1','ENCOUNTER',7)$$);
 SELECT pg_temp.expect_fail('처리 전 등장은 1건만 (다음 탐색 전에 닫음)',
   $$INSERT INTO monster.explore_log (user_id, quota_date, seq, idempotency_key, result, species_id)
-    VALUES (1,'2026-10-05',2,'00000000-0000-0000-0000-0000000000c2','ENCOUNTER',2)$$);
+    VALUES (1,'2026-10-05',2,'00000000-0000-0000-0000-0000000000c2','ENCOUNTER',6)$$);
 SELECT pg_temp.expect_fail('포획인데 볼 소모가 없으면 불가',
   $$UPDATE monster.explore_log SET outcome = 'CAPTURED', resolved_at = now(),
       user_monster_id = (SELECT max(id) FROM monster.user_monster) WHERE seq = 1 AND quota_date = '2026-10-05'$$);
 SELECT pg_temp.expect_ok  ('포획 성공 = 볼 소모 + 개체 생성 + 도감 + 처리 (한 트랜잭션)',
   $$INSERT INTO shop.item_consumption (user_id, item_code, quantity, consumer_key) VALUES (1,'BALL',1,'CAPTURE:k1');
     WITH m AS (INSERT INTO monster.user_monster (user_id, species_id, location, acquired_via)
-               VALUES (1,3,'FIELD','EXPLORE') RETURNING id)
+               VALUES (1,7,'FIELD','EXPLORE') RETURNING id)
     UPDATE monster.explore_log SET outcome = 'CAPTURED', resolved_at = now(),
       consumption_id = (SELECT id FROM shop.item_consumption WHERE consumer_key = 'CAPTURE:k1'),
       user_monster_id = (SELECT id FROM m)
     WHERE seq = 1 AND quota_date = '2026-10-05';
-    INSERT INTO monster.dex_entry (user_id, species_id) VALUES (1,3) ON CONFLICT DO NOTHING$$);
+    INSERT INTO monster.dex_entry (user_id, species_id) VALUES (1,7) ON CONFLICT DO NOTHING$$);
 SELECT pg_temp.expect_fail('처리 끝난 등장 결과 변경 불가',
   $$UPDATE monster.explore_log SET outcome = 'ESCAPED', user_monster_id = NULL WHERE seq = 1 AND quota_date = '2026-10-05'$$);
 SELECT pg_temp.expect_fail('포획 재시도: 같은 볼 키는 소모 단계에서 차단',
   $$INSERT INTO shop.item_consumption (user_id, item_code, quantity, consumer_key) VALUES (1,'BALL',1,'CAPTURE:k1')$$);
 SELECT pg_temp.expect_ok  ('도망 = 볼만 소모, 개체 없음, 등장 끝',
   $$INSERT INTO monster.explore_log (user_id, quota_date, seq, idempotency_key, result, species_id)
-    VALUES (1,'2026-10-05',2,'00000000-0000-0000-0000-0000000000c3','ENCOUNTER',2);
+    VALUES (1,'2026-10-05',2,'00000000-0000-0000-0000-0000000000c3','ENCOUNTER',6);
     INSERT INTO shop.item_consumption (user_id, item_code, quantity, consumer_key) VALUES (1,'BALL',1,'CAPTURE:k2');
     UPDATE monster.explore_log SET outcome = 'ESCAPED', resolved_at = now(),
       consumption_id = (SELECT id FROM shop.item_consumption WHERE consumer_key = 'CAPTURE:k2')
@@ -491,21 +494,21 @@ SELECT pg_temp.expect_fail('v1.7 옛 포획 결과 DUPLICATE(볼 소모 후 골�
     VALUES (1,'2026-10-05',9,'00000000-0000-0000-0000-0000000000c5','ENCOUNTER',1,'DUPLICATE',now(),15)$$);
 SELECT pg_temp.expect_ok  ('건너뜀 = 볼 안 던지고 같은 날 다시 탐색, 보상 없음',
   $$INSERT INTO monster.explore_log (user_id, quota_date, seq, idempotency_key, result, species_id)
-    VALUES (1,'2026-10-05',4,'00000000-0000-0000-0000-0000000000c9','ENCOUNTER',2);
+    VALUES (1,'2026-10-05',4,'00000000-0000-0000-0000-0000000000c9','ENCOUNTER',6);
     UPDATE monster.explore_log SET outcome = 'SKIPPED', resolved_at = now() WHERE seq = 4 AND quota_date = '2026-10-05'$$);
 SELECT pg_temp.expect_ok  ('v1.7 만료 = 처리 안 한 채 날짜가 바뀐 등장, 보상 없음',
   $$INSERT INTO monster.explore_log (user_id, quota_date, seq, idempotency_key, result, species_id)
-    VALUES (1,'2026-10-05',5,'00000000-0000-0000-0000-0000000000ca','ENCOUNTER',2);
+    VALUES (1,'2026-10-05',5,'00000000-0000-0000-0000-0000000000ca','ENCOUNTER',6);
     UPDATE monster.explore_log SET outcome = 'EXPIRED', resolved_at = now() WHERE seq = 5 AND quota_date = '2026-10-05'$$);
 SELECT pg_temp.expect_fail('건너뜀·만료에 골드 불가',
   $$INSERT INTO monster.explore_log (user_id, quota_date, seq, idempotency_key, result, species_id, outcome, resolved_at, gold_awarded)
-    VALUES (1,'2026-10-05',9,'00000000-0000-0000-0000-0000000000cb','ENCOUNTER',2,'SKIPPED',now(),15)$$);
+    VALUES (1,'2026-10-05',9,'00000000-0000-0000-0000-0000000000cb','ENCOUNTER',6,'SKIPPED',now(),15)$$);
 SELECT pg_temp.expect_fail('v1.6 골드 전환(CONVERTED) 없음',
   $$INSERT INTO monster.explore_log (user_id, quota_date, seq, idempotency_key, result, species_id, outcome, resolved_at)
-    VALUES (1,'2026-10-05',9,'00000000-0000-0000-0000-0000000000cc','ENCOUNTER',2,'CONVERTED',now())$$);
+    VALUES (1,'2026-10-05',9,'00000000-0000-0000-0000-0000000000cc','ENCOUNTER',6,'CONVERTED',now())$$);
 SELECT pg_temp.expect_fail('같은 볼로 두 등장을 처리 불가',
   $$INSERT INTO monster.explore_log (user_id, quota_date, seq, idempotency_key, result, species_id)
-    VALUES (1,'2026-10-05',6,'00000000-0000-0000-0000-0000000000c8','ENCOUNTER',2);
+    VALUES (1,'2026-10-05',6,'00000000-0000-0000-0000-0000000000c8','ENCOUNTER',6);
     UPDATE monster.explore_log SET outcome = 'ESCAPED', resolved_at = now(),
       consumption_id = (SELECT id FROM shop.item_consumption WHERE consumer_key = 'CAPTURE:k1')
     WHERE seq = 6 AND quota_date = '2026-10-05'$$);
@@ -620,7 +623,7 @@ WHERE (SELECT count(*) FROM monster.monster_form f WHERE f.species_id = s.id) <>
 
 -- ---------- ai ----------
 INSERT INTO ai.chat_session (user_id, session_date, partner_species_code, affection_tier)
-VALUES (1,'2026-10-05','wolf','MID');
+VALUES (1,'2026-10-05','monkey','MID');
 SELECT pg_temp.expect_fail('사용자 메시지는 위젯 입력만 (자유 텍스트 없음, A-1)',
   $$INSERT INTO ai.chat_message (session_id, seq, role, source, content)
     SELECT id, 1, 'USER', 'LLM', '했어' FROM ai.chat_session WHERE user_id = 1$$);
