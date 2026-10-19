@@ -147,11 +147,21 @@ public class AuthService {
 		return new MeView(user.getId(), user.getEmail(), cred.getProvider().name(), user.isOnboardingDone());
 	}
 
-	/** 예전 온보딩 완료 API ({@code PATCH /me/onboarding}). 3단계에서 {@code POST /onboarding}이 생기면 지운다. */
+	/**
+	 * 온보딩 완료 표시 ({@code POST /onboarding}이 같은 트랜잭션에서 맨 먼저 부른다).
+	 * 이미 끝낸 사용자면 409 {@code ALREADY_ONBOARDED} — 다른 모듈의 행을 만들기 전에 막는다.
+	 */
 	@Transactional
-	public MeView completeOnboarding(Long userId) {
-		activeUser(userId).completeOnboarding(clock.instant());
-		return me(userId);
+	public void markOnboarded(long userId) {
+		if (users.markOnboarded(userId, clock.instant()) == 0) {
+			throw new ApiException(ErrorCode.ALREADY_ONBOARDED);
+		}
+	}
+
+	/** 온보딩을 끝낸 시각 (끝내기 전이면 null). 상단 바의 "DAY n" 계산에 쓴다 (결정 D-37). */
+	@Transactional(readOnly = true)
+	public Instant onboardedAt(long userId) {
+		return activeUser(userId).getOnboardedAt();
 	}
 
 	/**

@@ -30,6 +30,18 @@
 **DB에 더할 것 (다음 판에서 결정 — DB · API 명세는 윤서 작성)**
 - 도감 "본 종"(API 명세 v5): `monster.dex_entry`에 처음 본 시각 (지금은 잡은 시각만)
 - (해결 — v1.8) ~~몬스터 종이 5마리뿐~~
+- **시작 골드 · 성실볼 (10-18 제안, 결정 D-35)**: 앱은 골드 50 · 볼 3개로 시작(D-05)하지만 DB에는 지급 사유 · 설정 키가 없어 서버 모드는 0으로 시작한다. 주려면 다음 판에:
+  ```sql
+  -- schema.sql: 원장 사유 (열린 집합 — INSERT 한 줄)
+  INSERT INTO wallet.ledger_reason (code, direction, description) VALUES ('STARTER_GOLD','CREDIT','온보딩 시작 골드');
+  -- seed.sql: 수치
+  INSERT INTO config.balance_config (key, value, description) VALUES
+   ('starting_gold',  '50', '온보딩 시작 골드 (원장 STARTER_GOLD, ref_id = user_id)'),
+   ('starting_balls', '3',  '온보딩 시작 성실볼 (shop.inventory BALL)');
+  ```
+  볼까지 주면 `verify.sql` S-12(가방 수량 = 구매 합 − 소모 합)가 깨진다 → 둘 중 하나: (1) S-12를 "구매 + 시작 지급 − 소모"로 바꾸고 시작 지급을 기록할 곳(예: 새 `shop.item_grant` 테이블, 또는 `shop.purchase`에 가격 0 허용)을 둔다 (2) 볼은 주지 않고 골드만(볼 값 50G보다 넉넉히) 준다.
+  판이 나오면 서버는 두 키를 `BalanceConfig.REQUIRED`에 넣고 `OnboardingService`에서 지급한다.
+- **API 명세 다음 판 제안 (10-18)**: `POST /onboarding`의 선택 필드 `partnerCategory`(D-36), `GET /me/status`의 `dayCount`(D-37), `GET /monsters` 목록에 `affection` · `expInLevel`(앱이 마리마다 상세를 부르지 않게, D-40)
 
 ---
 

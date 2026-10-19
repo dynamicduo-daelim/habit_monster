@@ -11,8 +11,6 @@ import java.util.UUID;
 import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.dao.PessimisticLockingFailureException;
-import org.springframework.dao.QueryTimeoutException;
-import org.springframework.jdbc.core.ConnectionCallback;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -44,16 +42,12 @@ class IdempotencyStore {
 	private final JdbcTemplate jdbc;
 	private final Clock clock;
 	private final TransactionTemplate newTx;
-	/** 응답 본문 자리표시자. PostgreSQL 컬럼은 JSONB라 형 변환이 필요하고, H2(테스트) 테이블은 문자열이다. */
-	private final String jsonParam;
 
 	IdempotencyStore(JdbcTemplate jdbc, Clock clock, PlatformTransactionManager txm) {
 		this.jdbc = jdbc;
 		this.clock = clock;
 		this.newTx = new TransactionTemplate(txm);
 		this.newTx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
-		String db = jdbc.execute((ConnectionCallback<String>) c -> c.getMetaData().getDatabaseProductName());
-		this.jsonParam = "PostgreSQL".equalsIgnoreCase(db) ? "cast(? as jsonb)" : "?";
 	}
 
 	/**
@@ -106,10 +100,10 @@ class IdempotencyStore {
 
 	/**
 	 * "다른 요청이 잠그고 있음"인지. PostgreSQL은 SQL 상태 55P03(lock_not_available)인데 Spring이 잠금 예외로 바꿔 주지 않아
-	 * (UncategorizedSQLException) 상태 코드로 직접 본다. H2(테스트)는 잠금 시간 초과(QueryTimeoutException)로 알려 준다.
+	 * (UncategorizedSQLException) 상태 코드로 직접 본다.
 	 */
 	private static boolean isLockFailure(DataAccessException e) {
-		if (e instanceof PessimisticLockingFailureException || e instanceof QueryTimeoutException) {
+		if (e instanceof PessimisticLockingFailureException) {
 			return true;
 		}
 		for (Throwable t = e; t != null; t = t.getCause()) {
@@ -135,9 +129,8 @@ class IdempotencyStore {
 	void complete(Scope s, int status, String body) {
 		jdbc.update("""
 			update api.idempotency_record
-			   set status = 'COMPLETED', locked_until = null, response_status = ?, response_body = %s, completed_at = ?
-			 where user_id = ? and http_method = ? and request_path = ? and idempotency_key = ? and status = 'IN_PROGRESS'"""
-			.formatted(jsonParam),
+			   set status = 'COMPLETED', locked_until = null, response_status = ?, response_body = cast(? as jsonb), completed_at = ?
+			 where user_id = ? and http_method = ? and request_path = ? and idempotency_key = ? and status = 'IN_PROGRESS'""",
 			status, body == null || body.isBlank() ? null : body, ts(clock.instant()),
 			s.userId(), s.method(), s.path(), s.key());
 	}

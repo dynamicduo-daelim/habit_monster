@@ -6,7 +6,6 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -19,44 +18,25 @@ import kr.habitmonster.auth.social.SocialIdentity;
 import kr.habitmonster.common.ApiException;
 import kr.habitmonster.common.ErrorCode;
 import kr.habitmonster.identity.AuthProvider;
+import kr.habitmonster.support.PostgresTest;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
 /** 회원 · 설정 API — API 명세 v5 "1. 회원 · 설정" + 결정 A5 · C4 · D4. */
-// 소셜 키는 비워서 "설정 전" 상태로 검사 (실제 카카오 · 구글에 접속하지 않게)
-@SpringBootTest(properties = { "app.auth.google.client-ids=", "app.auth.kakao.app-id=" })
-@AutoConfigureMockMvc
-@ActiveProfiles("local")
-class AuthApiTest {
-
-	@Autowired
-	MockMvc mvc;
-
-	@Autowired
-	JdbcTemplate jdbc;
+// 소셜 키는 비워서 "설정 전" 상태로 검사 (PostgresTest — 실제 카카오 · 구글에 접속하지 않게)
+class AuthApiTest extends PostgresTest {
 
 	@MockitoBean
 	KakaoVerifier kakao;
 
 	@BeforeEach
-	void clean() {
-		jdbc.update("delete from api.idempotency_record");
-		jdbc.update("delete from identity.device_token");
-		jdbc.update("delete from identity.refresh_token");
-		jdbc.update("delete from identity.auth_credential");
-		jdbc.update("delete from identity.users");
+	void mockKakao() {
 		given(kakao.provider()).willReturn(AuthProvider.KAKAO);
 	}
 
@@ -70,11 +50,6 @@ class AuthApiTest {
 
 	String body(ResultActions r) throws Exception {
 		return r.andReturn().getResponse().getContentAsString();
-	}
-
-	String signUp(String email) throws Exception {
-		return JsonPath.read(body(postJson("/auth/signup", "{\"email\":\"" + email + "\",\"password\":\"password1\"}")
-			.andExpect(status().isCreated())), "$.accessToken");
 	}
 
 	@Test
@@ -99,8 +74,8 @@ class AuthApiTest {
 			.andExpect(jsonPath("$.code").value("EMAIL_TAKEN"))
 			.andExpect(jsonPath("$.message").value("이미 가입된 이메일이에요"));
 
-		as(access, patch("/me/onboarding")).andExpect(status().isOk()).andExpect(jsonPath("$.onboarded").value(true));
-		as(access, patch("/me/onboarding")).andExpect(status().isOk()).andExpect(jsonPath("$.onboarded").value(true));
+		onboard(access, DEFAULT_ONBOARDING).andExpect(status().isCreated());
+		as(access, get("/me")).andExpect(status().isOk()).andExpect(jsonPath("$.onboarded").value(true));
 
 		postJson("/auth/login", "{\"email\":\"me@habit.kr\",\"password\":\"wrong-pass\"}")
 			.andExpect(status().isUnauthorized()).andExpect(jsonPath("$.code").value("INVALID_CREDENTIALS"));

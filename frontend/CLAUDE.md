@@ -25,7 +25,9 @@
 - **상태를 바꿀 땐 `GameRepository`**(`core/state/game_repository.dart`)로: 화면에서는 `runGameAction(context, (repo) => repo.buy(…))`.
   `GameState`의 규칙 메서드를 화면에서 직접 부르지 않는다 (서버 모드에서 서버를 거치지 않게 됨). 게임 API 통신은 `core/api/ApiClient`
   (Bearer · `Idempotency-Key` · 만료 시 재발급 · 같은 키 재시도). 새 동작을 만들면 `GameRepository`에 메서드를 추가하고 `LocalGameRepository`에서 `GameState` 규칙을 부른다.
-  서버 구현 `HttpGameRepository`는 3단계부터 (`docs/handoff/`). 위젯 테스트는 `test/game_harness.dart`의 `withGame(state, child)`로 감싼다.
+  서버 구현 `HttpGameRepository`(10-18~): `load` · `attend` · `completeOnboarding`은 서버로, 나머지는 `LocalGameRepository`에 넘기며 단계마다 옮긴다 (`docs/handoff/`).
+  서버 모드는 `GameState.empty()`로 시작해 `GameLoader`가 `load()` 뒤 홈을 그린다. 서버 응답은 `GameState.apply…`로 옮긴다 (규칙 메서드에 서버 값을 넣지 않기).
+  위젯 테스트는 `test/game_harness.dart`의 `withGame(state, child)`로 감싼다. 서버 연동은 `test/http_game_repository_test.dart`처럼 MockClient로.
 - 앱의 코드(카테고리 · 몬스터 종 id · 측정 항목 순서 · 상점은 `Catalog.serverCodeOf`)는 **DB 시드와 같아야 한다** (서버가 이 코드로 응답한다)
 - 서버·AI 연동 지점: `backend/README.md`의 "프론트 연동 지점" · "AI 챗봇 연결"
 

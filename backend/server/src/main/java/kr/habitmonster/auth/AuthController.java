@@ -13,7 +13,6 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -81,12 +80,6 @@ public class AuthController {
 	@ResponseStatus(HttpStatus.NO_CONTENT)
 	void unregisterDeviceToken(@AuthenticationPrincipal Jwt jwt, @RequestBody DeviceTokenRequest req) {
 		auth.unregisterDeviceToken(userId(jwt), req.fcmToken());
-	}
-
-	/** 예전 온보딩 완료 (본문 없음). 3단계에서 {@code POST /onboarding}으로 바뀌면 지운다. */
-	@PatchMapping("/me/onboarding")
-	MeView onboarding(@AuthenticationPrincipal Jwt jwt) {
-		return auth.completeOnboarding(userId(jwt));
 	}
 
 	private static Long userId(Jwt jwt) {

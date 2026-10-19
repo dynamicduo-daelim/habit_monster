@@ -69,7 +69,7 @@ abstract class AuthService {
   /// 카카오 · 구글 로그인 (처음이면 자동 가입).
   Future<AuthSession> signInWithProvider(AuthProvider provider);
 
-  /// 온보딩을 끝냈다고 서버에 알린다 (`PATCH /me/onboarding`).
+  /// 온보딩을 끝냈다고 기억한다. 서버 모드에선 온보딩 제출(`POST /onboarding`)이 이미 서버에 기록하므로 할 일이 없다.
   Future<void> completeOnboarding(AuthSession session);
 
   Future<void> signOut(AuthSession session);

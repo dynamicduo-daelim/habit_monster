@@ -2,6 +2,7 @@ package kr.habitmonster.common;
 
 import java.time.Clock;
 import java.time.DayOfWeek;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.temporal.TemporalAdjusters;
@@ -31,7 +32,12 @@ public class BusinessDates {
 
 	/** 지금의 업무 날짜. 경계가 04시라면 03:59는 전날이다. */
 	public LocalDate today() {
-		return clock.instant().atZone(zone).minusHours(boundaryHour).toLocalDate();
+		return dateOf(clock.instant());
+	}
+
+	/** 어떤 시각이 속한 업무 날짜 (예: 온보딩한 날). */
+	public LocalDate dateOf(Instant t) {
+		return t.atZone(zone).minusHours(boundaryHour).toLocalDate();
 	}
 
 	public LocalDate weekStart() {

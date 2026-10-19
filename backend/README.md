@@ -47,7 +47,6 @@
 | DELETE | /me | (Bearer) | 204 탈퇴 |
 | PUT | /me/device-token | `{fcmToken, platform}` | 204. 같은 토큰이 다른 계정에 있으면 이 계정으로 옮김 |
 | DELETE | /me/device-token | `{fcmToken}` | 204. 로그아웃 때 해제 — 명세에 없어서 더함 (결정 A5) |
-| PATCH | /me/onboarding | (본문 없음) | 임시. 3단계에서 지움 |
 
 오류 응답은 `{ "code": "...", "message": "화면에 보여줄 문구" }` (+ 경우에 따라 `errors`, `provider`).
 
@@ -75,6 +74,27 @@
 - **탈퇴**: `users`는 지우지 않고 `WITHDRAWN` + 이메일 비우기(같은 이메일로 재가입 가능). 로그인 수단 · refresh · 푸시 토큰 삭제,
   다른 모듈 데이터는 각 모듈의 `WithdrawalStep`이 정리 (지금은 중복 방지 키 기록). 남아 있는 access 토큰은 `UserGateFilter`가 막는다.
 
+## 게임 API — 3-1 · 3-2단계 (10-18)
+
+모두 Bearer 필요, 온보딩 전엔 `/categories` · `/measure-types` · `/onboarding`만 (그 밖은 403 `ONBOARDING_REQUIRED`). 응답 모양은 API 명세 v5 그대로이고, 다른 점만 적는다.
+
+| 메서드 | 경로 | 응답 · 설명 |
+| --- | --- | --- |
+| GET | /categories | 6개, `opened`(내가 열었는지) + `starter{speciesId, name, imageKey}` — 이미지 URL 대신 `imageKey`(D1) |
+| GET | /measure-types?categories=ex,st | 카테고리 순서로 `{categoryCode, measureTypes[], presets[]}`. 생략하면 전체, 모르는 코드면 400. RANGE(수면)만 `rangeBelow` · `rangeAbove` (D-28) |
+| POST | /onboarding | **Idempotency-Key 필수**(A3). 201 `{starters[{userMonsterId, speciesId, categoryCode, name, imageKey, location}], partnerMonsterId, habitIds, goalIds}`. 선택 필드 `partnerCategory`(D-36). 틀리면 400 + `errors` 전부, 이미 끝냈으면 409 `ALREADY_ONBOARDED`. 시작 골드 · 볼 0 (D-35) |
+| POST | /me/attendance | `{date, alreadyAttended, currentStreak, longestStreak}`. 하루 여러 번 불러도 1행 |
+| GET | /me/status | `{businessDate, dayCount, currentStreak, gold, ballCount, checkedInToday, exploreRemaining, exploreTotal, endedHabitCount}` — `dayCount`는 더한 값 (D-37) |
+| GET | /me/today | `{businessDate, checkedIn, goldEarned, overallRate, habits[]}`. 체크인 전이면 보상 필드 null, 습관은 오늘 체크인 대상 |
+| GET | /monsters?location=FIELD\|BAG | 생략하면 전체. `imageKey` · `stage` · `isPartner` |
+| GET | /monsters/{id} | `expToNextLevel` 대신 `expRequired`(B2), `todayActions{pet, play}`. 남의 몬스터 · 없는 몬스터는 404 (C3) |
+| GET | /shop/items | `{gold, items[]}` |
+| GET | /inventory | `{items[{itemCode, name, quantity}]}` — 0개는 뺌 (D-39) |
+| GET | /habits?status=ACTIVE,ENDED | 생략하면 ACTIVE · ENDED. 기간 값은 마지막 기간 기준 |
+| GET | /goals | 이번 주 · 이번 달 `{periodStart, slotsTotal, slotsUsed, rewardGold, goals[]}` |
+
+`PATCH /me/onboarding`(예전 임시 API)은 지웠다 — `POST /onboarding`이 완료 시각까지 찍는다.
+
 ## 서버가 꼭 검증해야 하는 것
 
 골드·EXP·호감도는 앱에서 계산해 보내지 말고 서버가 계산해요 (조작 방지).
@@ -94,7 +114,9 @@
 
 | `GameRepository` 메서드 | 서버 API (명세 v5) | 돌려주는 모양 |
 | --- | --- | --- |
-| `completeOnboarding` | `POST /onboarding` | — |
+| `load` | `GET /me/status` · `/me/today` · `/categories` · `/monsters`(+ 마리마다 `/monsters/{id}`) · `/inventory` · `/habits` · `/goals` | — (GameState를 채움) — **10-18 연결** |
+| `attend` | `POST /me/attendance` | 처음 출석이면 true — **10-18 연결** |
+| `completeOnboarding` | `POST /onboarding` (측정 항목은 `GET /measure-types`로 id 변환) | — **10-18 연결** |
 | `confirmCheckin` · `resubmitCheckin` | `POST` · `PUT /checkins/today` | `DailyCheckinResult` (`lib/data/results.dart`) |
 | `explore` · `throwBall` | `POST /explores` · `/explores/{id}/capture` | `EncounterResult` · `CatchResult` |
 | `buy` | `POST /shop/purchases` (코드는 `Catalog.serverCodeOf`) | 성공 여부 |

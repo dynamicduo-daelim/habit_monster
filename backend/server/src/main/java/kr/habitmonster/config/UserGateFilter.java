@@ -33,8 +33,7 @@ public class UserGateFilter extends OncePerRequestFilter {
 	/** 온보딩 전에도 부를 수 있는 경로 (컨텍스트 경로 {@code /api/v1} 뒤). */
 	static final Set<String> BEFORE_ONBOARDING = Set.of(
 		"/categories", "/measure-types", "/onboarding", // 온보딩 화면
-		"/me", "/me/device-token", // 계정 표시 · 탈퇴 · 푸시 토큰
-		"/me/onboarding"); // 예전 온보딩 완료 API — 1단계에서 POST /onboarding으로 바뀌면 지운다
+		"/me", "/me/device-token"); // 계정 표시 · 탈퇴 · 푸시 토큰
 
 	private final UserRepository users;
 

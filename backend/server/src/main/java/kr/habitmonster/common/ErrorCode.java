@@ -26,10 +26,12 @@ public enum ErrorCode {
 	EMAIL_TAKEN(HttpStatus.CONFLICT, "이미 가입된 이메일이에요"),
 	/** 응답에 {@code provider}(원래 가입 방법, 소문자)가 같이 간다. */
 	EMAIL_REGISTERED_WITH_OTHER_METHOD(HttpStatus.CONFLICT, "다른 방법으로 가입된 이메일이에요"),
+	ALREADY_ONBOARDED(HttpStatus.CONFLICT, "이미 시작하기를 마쳤어요"),
 	BUSINESS_DATE_CHANGED(HttpStatus.CONFLICT, "날짜가 바뀌었어요. 화면을 새로 불러올게요"),
 	REQUEST_IN_PROGRESS(HttpStatus.CONFLICT, "처리 중이에요. 잠시 후 다시 시도해 주세요"),
 	// 422
 	IDEMPOTENCY_KEY_REUSED(HttpStatus.UNPROCESSABLE_CONTENT, "요청을 확인해 주세요"),
+	NOT_ENOUGH_GOLD(HttpStatus.UNPROCESSABLE_CONTENT, "골드가 모자라요"),
 	// 503
 	SOCIAL_NOT_CONFIGURED(HttpStatus.SERVICE_UNAVAILABLE, "아직 준비 중인 로그인 방식이에요");
 

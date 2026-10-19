@@ -92,15 +92,6 @@ public class User {
 		return status == Status.WITHDRAWN;
 	}
 
-	/** 온보딩 완료. 이미 끝냈으면 처음 시각을 그대로 둔다. */
-	public void completeOnboarding(Instant now) {
-		if (onboardedAt != null) {
-			return;
-		}
-		this.onboardedAt = now;
-		this.updatedAt = now;
-	}
-
 	/** 탈퇴 — 행은 지우지 않고(DB 원칙 7) 상태만 바꾸고, 이메일은 비운다 (같은 이메일로 다시 가입 가능). */
 	public void withdraw(Instant now) {
 		this.status = Status.WITHDRAWN;

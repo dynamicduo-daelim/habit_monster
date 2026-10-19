@@ -3,7 +3,6 @@ package kr.habitmonster.common;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -21,13 +20,12 @@ import com.jayway.jsonpath.JsonPath;
 
 import kr.habitmonster.idempotency.Idempotent;
 import kr.habitmonster.idempotency.IdempotencyFilter;
+import kr.habitmonster.support.PostgresTest;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -39,8 +37,6 @@ import org.springframework.security.oauth2.jwt.JwsHeader;
 import org.springframework.security.oauth2.jwt.JwtClaimsSet;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
-import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -49,11 +45,8 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 /** 0단계 공통 기반: 토큰 만료 구분 · 탈퇴/온보딩 차단 · 중복 방지 키 · /api/v1 경로. */
-@SpringBootTest(properties = { "app.auth.google.client-ids=", "app.auth.kakao.app-id=" })
-@AutoConfigureMockMvc
-@ActiveProfiles("local")
 @Import(CommonApiTest.TestApi.class)
-class CommonApiTest {
+class CommonApiTest extends PostgresTest {
 
 	/** 중복 방지 키를 검사하려고 테스트에서만 쓰는 API. 닉네임을 바꾸고, 몇 번 실행됐는지 센다. */
 	@RestController
@@ -96,35 +89,17 @@ class CommonApiTest {
 	}
 
 	@Autowired
-	MockMvc mvc;
-
-	@Autowired
-	JdbcTemplate jdbc;
-
-	@Autowired
 	JwtEncoder jwtEncoder;
 
 	@BeforeEach
-	void clean() {
-		jdbc.update("delete from api.idempotency_record");
-		jdbc.update("delete from identity.device_token");
-		jdbc.update("delete from identity.refresh_token");
-		jdbc.update("delete from identity.auth_credential");
-		jdbc.update("delete from identity.users");
+	void resetTestApi() {
 		TestApi.runs.set(0);
 		TestApi.entered = new CountDownLatch(1);
 		TestApi.release = new CountDownLatch(0);
 	}
 
 	String signUp(String email, boolean onboarded) throws Exception {
-		String res = mvc.perform(post("/auth/signup").contentType(MediaType.APPLICATION_JSON)
-				.content("{\"email\":\"" + email + "\",\"password\":\"password1\"}"))
-			.andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
-		String access = JsonPath.read(res, "$.accessToken");
-		if (onboarded) {
-			mvc.perform(patch("/me/onboarding").header("Authorization", "Bearer " + access)).andExpect(status().isOk());
-		}
-		return access;
+		return onboarded ? onboardedUser(email) : signUp(email);
 	}
 
 	ResultActions nick(String access, UUID key, String nickname, String fail) throws Exception {
@@ -190,7 +165,7 @@ class CommonApiTest {
 		mvc.perform(get("/api/v1/test/ping").contextPath("/api/v1").header("Authorization", "Bearer " + access))
 			.andExpect(status().isForbidden());
 
-		mvc.perform(patch("/me/onboarding").header("Authorization", "Bearer " + access)).andExpect(status().isOk());
+		onboard(access, DEFAULT_ONBOARDING).andExpect(status().isCreated());
 		mvc.perform(get("/test/ping").header("Authorization", "Bearer " + access)).andExpect(status().isOk());
 		mvc.perform(get("/no-such-api").header("Authorization", "Bearer " + access))
 			.andExpect(status().isNotFound()).andExpect(jsonPath("$.code").value("NOT_FOUND"));

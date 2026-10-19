@@ -101,12 +101,9 @@ class HttpAuthService implements AuthService, TokenSource {
     return _login('/auth/social/${provider.name}', {'providerToken': token});
   }
 
+  /// 서버에 따로 알릴 것이 없다 — 온보딩 일괄 제출(`POST /onboarding`, `HttpGameRepository`)이 완료 시각까지 찍는다.
   @override
-  Future<void> completeOnboarding(AuthSession session) async {
-    _accessToken ??= session.accessToken;
-    // 본문 없음: 서버가 완료 시각(onboarded_at)을 찍는다. 3단계에서 POST /onboarding(일괄 제출)으로 바뀐다.
-    await _authed('PATCH', '/me/onboarding', const {});
-  }
+  Future<void> completeOnboarding(AuthSession session) async {}
 
   @override
   Future<void> signOut(AuthSession session) async {

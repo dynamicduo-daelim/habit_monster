@@ -3,7 +3,7 @@
 루트 `CLAUDE.md`(원칙 · 기록 · 변경 통제)를 따르고, 서버(`backend/`)를 고칠 때는 이것도 지킨다.
 계약의 기준: **API 명세 v5** `docs/api/습관몬스터_API명세_v5.md` · **DB 설계** `docs/데이터베이스/` (스키마 v1.7 + 시드 v1.8).
 둘 다 **사용자(윤서)가 직접 썼다** — DB · 명세 파일은 Claude가 고치지 않고, 바꿔야 하면 사용자에게 제안한다.
-명세와 다르게 구현하기로 한 것은 `docs/진행현황-및-계획.md` 1장 (A1 ~ D6) · `docs/결정-기록.md` D-23 ~ D-31. 남은 단계 지시서는 `docs/handoff/`.
+명세와 다르게 구현하기로 한 것은 `docs/진행현황-및-계획.md` 1장 (A1 ~ D6) · `docs/결정-기록.md` D-23 ~ D-41. 남은 단계 지시서는 `docs/handoff/`.
 
 ## 이미 있는 기반 — 새로 만들지 말고 쓴다 (`server/src/main/java/kr/habitmonster/`)
 | 무엇 | 쓰는 법 |
@@ -28,7 +28,9 @@
 
 ## 실행 · 테스트
 - 로컬 DB: `backend/`에서 `docker compose up -d` — `backend/.env`(커밋 금지, `.env.example` 참고)의 `HM_DB_DIR`가 공식 SQL 폴더(`…/docs/데이터베이스`), 이 PC는 `DB_PORT=5434`. 다시 적용: `docker compose down -v && docker compose up -d`
-- 테스트: `server/`에서 PowerShell로 `.\gradlew.bat test`. **H2에서 통과해도 실제 PostgreSQL로 다시 돌린다** (PostgreSQL에서만 난 버그가 있었다): 같은 창에서 `$env:SPRING_DATASOURCE_URL='jdbc:postgresql://localhost:5434/habit_monster'; $env:SPRING_DATASOURCE_USERNAME='habit'; $env:SPRING_DATASOURCE_PASSWORD='habit'; $env:SPRING_JPA_HIBERNATE_DDL_AUTO='none'` 후 test
-- 실행: `$env:DB_URL='jdbc:postgresql://localhost:5434/habit_monster'; $env:DB_USER='habit'; $env:DB_PASSWORD='habit'; $env:JWT_SECRET='local-dev-secret-change-me-0123456789abcdef'; .\gradlew.bat bootRun --args='--server.port=8081'` (8080은 다른 서버가 떠 있을 수 있음)
-- 실제 DB 테스트는 외래키 때문에 정리 순서가 중요 (자식 → 부모, `api.idempotency_record`는 사용자보다 먼저)
+- 테스트: `server/`에서 PowerShell로 `.\gradlew.bat test` — **Docker가 켜져 있어야 한다.** 테스트가 postgres:16 컨테이너를 스스로 띄우고 `docs/데이터베이스/schema.sql` · `seed.sql`을 적용해 그 위에서 돈다 (Testcontainers, D-33). 새 테스트는 `support/PostgresTest`를 상속 (가입 · 기본 온보딩 도우미, 테스트마다 사용자 데이터 비움). H2는 없다 (D-41)
+- 게임 모듈 저장소는 `JdbcClient` SQL, package-private (D-34). 여러 모듈을 모으는 일은 테이블 없는 조율 서비스(`onboarding/` · `home/`)가 각 모듈 서비스를 부른다. 수치는 `config/BalanceConfig`, 골드는 `wallet/WalletService`로만. 규칙은 `ArchitectureTest`가 검사
+- 실행 (간단히): Docker DB를 띄운 뒤 `.\gradlew.bat bootRun --args='--spring.profiles.active=local --server.port=8081'` — `local` 프로필 = 5434 DB + 로컬 JWT 키 + 카카오 · 구글 공개 값 (D-41)
+- 실행 (환경변수로): `$env:DB_URL='jdbc:postgresql://localhost:5434/habit_monster'; $env:DB_USER='habit'; $env:DB_PASSWORD='habit'; $env:JWT_SECRET='local-dev-secret-change-me-0123456789abcdef'; .\gradlew.bat bootRun --args='--server.port=8081'` (8080은 다른 서버가 떠 있을 수 있음)
+- 실제 DB 테스트의 정리는 `PostgresTest`가 `truncate identity.users cascade` 한 줄로 한다 (외래키를 따라 사용자 데이터만 비움, 마스터 · 설정은 남음)
 - 새 API를 만들면 `backend/README.md`의 API 표를 갱신한다

@@ -65,6 +65,27 @@ class GameState extends ChangeNotifier {
   /// 카테고리 칸 진행(`dexCount`)은 이 수만 센다 (API 명세 v5). [discoveredSpecies]에도 항상 들어 있다.
   final Set<String> caughtSpecies = {};
 
+  /// 서버 데이터를 다 불러왔는지. 서버 모드는 [GameState.empty]로 시작해 `HttpGameRepository.load()`가 채운 뒤 true가 된다
+  /// (그 전엔 홈 대신 로딩 화면 — 결정 D-40). 서버 없이 쓰는 샘플 상태는 처음부터 true.
+  bool loaded = true;
+
+  /// 서버 모드의 시작 상태: 아무것도 없고 [loaded]가 false. 로그아웃하면 다시 이 상태로 (다른 계정의 데이터가 남지 않게).
+  factory GameState.empty({math.Random? random}) {
+    final s = GameState(
+      random: random,
+      gold: 0,
+      balls: 0,
+      monsters: [],
+      habits: [],
+      goals: [],
+      pickedCategories: [],
+      categoryPoints: {},
+      dayCount: 0,
+    )..loaded = false;
+    s.inventory.updateAll((id, count) => 0);
+    return s;
+  }
+
   /// 디자인 시안과 같은 샘플 데이터 (DAY 12).
   factory GameState.sample({
     math.Random? random,
@@ -521,6 +542,89 @@ class GameState extends ChangeNotifier {
   }
 
   void touch() => notifyListeners();
+
+  // ---------- 서버 응답 반영 (HttpGameRepository만 부른다) ----------
+  // 규칙(점수 · 보상 계산)은 서버가 하고, 여기선 받은 값을 그대로 옮긴다. 다 옮긴 뒤 [markLoaded]가 한 번에 다시 그린다.
+
+  /// `GET /me/status`: 상단 바 값. 연속 출석은 [applyAttendance]가 오늘 출석까지 반영한다.
+  void applyStatus({
+    required int gold,
+    required int balls,
+    required int currentStreak,
+    required bool checkedInToday,
+    required int exploreRemaining,
+    required int dayCount,
+  }) {
+    this.gold = gold;
+    this.balls = balls;
+    streakDays = currentStreak;
+    attendedToday = false;
+    this.checkedInToday = checkedInToday;
+    encountersLeft = exploreRemaining;
+    this.dayCount = dayCount;
+  }
+
+  /// `POST /me/attendance` 응답. 서버의 연속 일수는 오늘을 포함하므로 [currentStreak] = 어제까지 + 오늘 1.
+  void applyAttendance({required int currentStreak}) {
+    attendedToday = true;
+    streakDays = math.max(0, currentStreak - 1);
+    notifyListeners();
+  }
+
+  /// `GET /categories`의 연 카테고리 (카테고리 순서).
+  void applyCategories(List<String> opened) {
+    pickedCategories
+      ..clear()
+      ..addAll(opened);
+  }
+
+  /// `GET /monsters` + 마리마다 `GET /monsters/{id}`. 가진 종은 도감에도 (본 종 · 탐색 기록은 3-4단계).
+  void applyMonsters(List<OwnedMonster> list, {String? partnerUid}) {
+    monsters
+      ..clear()
+      ..addAll(list);
+    chatPartnerUid = partnerUid ?? monsters.firstOrNull?.uid;
+    caughtSpecies.addAll(list.map((m) => m.speciesId));
+    discoveredSpecies.addAll(list.map((m) => m.speciesId));
+  }
+
+  /// `GET /habits` (진행 중 + 기간을 채운 습관).
+  void applyHabits(List<Habit> list) {
+    habits
+      ..clear()
+      ..addAll(list);
+  }
+
+  /// `GET /goals` (이번 주 · 이번 달).
+  void applyGoals(List<Goal> list) {
+    goals
+      ..clear()
+      ..addAll(list);
+  }
+
+  /// `GET /inventory`의 물약 (앱 아이템 id → 개수). 없는 물약은 0.
+  void applyPotions(Map<String, int> counts) {
+    inventory.updateAll((id, _) => counts[id] ?? 0);
+  }
+
+  /// `GET /me/today`가 체크인 후일 때: 습관 id → 보상 기준 값 · 점수, 반영된 습관.
+  /// 기록 값은 첫 제출 값이다 (다시 체크한 최신 값은 3-3단계의 `GET /checkins/today`에서).
+  void applyToday({required Map<String, double> values, required Map<String, int> scores, required Set<String> counted}) {
+    todayRecords
+      ..clear()
+      ..addAll(values);
+    rewardedScores
+      ..clear()
+      ..addAll(scores);
+    countedToday
+      ..clear()
+      ..addAll(counted);
+  }
+
+  void markLoaded() {
+    loaded = true;
+    notifyListeners();
+  }
 }
 
 /// 위젯 트리 어디서든 `GameScope.of(context)`로 상태를 꺼내 쓰고, 바뀌면 다시 그린다.

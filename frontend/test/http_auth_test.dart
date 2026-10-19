@@ -136,35 +136,32 @@ void main() {
   });
 
   test('access 만료(TOKEN_EXPIRED)면 한 번 재발급하고 다시 보냄', () async {
-    var patches = 0;
+    var mes = 0;
     final s = service((r) async {
       if (r.url.path.endsWith('/auth/login')) return _json(_tokens('old', 'r1'));
       if (r.url.path.endsWith('/auth/refresh')) return _json(_tokens('new', 'r2'));
-      if (r.url.path.endsWith('/me')) return _json(_me());
-      patches++;
+      mes++; // GET /me — 로그인 직후 계정 정보
       return r.headers['Authorization'] == 'Bearer old' ? _expired() : _json(_me(onboarded: true));
     });
     final session = await s.signInWithEmail(email: 'me@habit.kr', password: 'password1');
-    await s.completeOnboarding(session);
-    expect(patches, 2);
-    expect(requests.last.method, 'PATCH');
+    expect(mes, 2);
+    expect(requests.last.url.path, '/api/v1/me');
     expect(requests.last.headers['Authorization'], 'Bearer new');
+    expect(session.accessToken, 'new');
     expect(store.value, 'r2');
   });
 
   test('위조 · 폐기(INVALID_TOKEN)면 재발급하지 않고 그대로 실패', () async {
     final s = service((r) async {
       if (r.url.path.endsWith('/auth/login')) return _json(_tokens('a1', 'r1'));
-      if (r.url.path.endsWith('/me')) return _json(_me());
       return _json({'code': 'INVALID_TOKEN', 'message': '다시 로그인해 주세요'}, 401);
     });
-    final session = await s.signInWithEmail(email: 'me@habit.kr', password: 'password1');
-    await expectLater(s.completeOnboarding(session),
+    await expectLater(s.signInWithEmail(email: 'me@habit.kr', password: 'password1'),
         throwsA(isA<AuthException>().having((e) => e.code, 'code', 'INVALID_TOKEN')));
     expect(requests.where((r) => r.url.path.endsWith('/auth/refresh')), isEmpty);
   });
 
-  test('동시에 여러 요청이 만료돼도 재발급은 한 번만', () async {
+  test('동시에 여러 요청이 만료돼도 재발급은 한 번만 (게임 API도 같은 refreshOnce를 쓴다)', () async {
     final release = Completer<void>();
     var refreshes = 0;
     final s = service((r) async {
@@ -174,15 +171,15 @@ void main() {
         await release.future; // 재발급이 끝나기 전에 다른 요청도 만료되게
         return _json(_tokens('new', 'r2'));
       }
-      if (r.headers['Authorization'] == 'Bearer old' && r.method == 'PATCH') return _expired();
       return _json(_me());
     });
-    final session = await s.signInWithEmail(email: 'me@habit.kr', password: 'password1');
-    final both = Future.wait([s.completeOnboarding(session), s.completeOnboarding(session)]);
+    await s.signInWithEmail(email: 'me@habit.kr', password: 'password1');
+    final both = Future.wait([s.refreshOnce(), s.refreshOnce()]);
     await Future<void>.delayed(Duration.zero);
     release.complete();
     await both;
     expect(refreshes, 1);
+    expect(s.accessToken, 'new');
     expect(store.value, 'r2');
   });
 

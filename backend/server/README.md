@@ -1,27 +1,33 @@
 # 습관 몬스터 서버 (Spring Boot)
 
-Spring Boot 4.1 · Java 21 · PostgreSQL. 지금은 **인증 + 공통 기반**(오류 형식 · 토큰 만료 구분 · 탈퇴/온보딩 차단 · 중복 방지 키 · 업무 날짜)이 들어 있어요.
-API 계약은 「습관몬스터 API 명세 v4」 + `docs/진행현황-및-계획.md`의 v5 변경. **모든 경로는 `/api/v1` 아래**예요.
+Spring Boot 4.1 · Java 21 · PostgreSQL. **인증 + 공통 기반**(오류 형식 · 토큰 만료 구분 · 탈퇴/온보딩 차단 · 중복 방지 키 · 업무 날짜) +
+**게임 3-0 ~ 3-2단계**(설정값 · 지갑 · 온보딩 · 출석 · 메인 조회)가 들어 있어요. API 계약은 「습관몬스터 API 명세 v5」(`docs/api/`) + `docs/진행현황-및-계획.md` 1장. **모든 경로는 `/api/v1` 아래**예요.
 
 > **JDK 21 이상**이 필요해요. Gradle은 `JAVA_HOME`의 JDK로 돌아가니, `JAVA_HOME`이 그보다 낮은 버전(예: jdk-20)이면
 > `release version 21 not supported` 오류가 나요. `JAVA_HOME`을 jdk-21 이상으로 바꾸거나 IntelliJ에서 Gradle JVM을 21+로 고르세요.
 
-## 바로 띄워 보기 (DB 없이)
+## 바로 띄워 보기 (`local` 프로필 — Docker DB에 붙음)
+
+먼저 아래 "PostgreSQL로 띄우기" 1번처럼 Docker DB를 띄워요 (`backend/`에서 `docker compose up -d`, 이 PC는 포트 5434).
+그다음 환경변수 없이:
 
 ```bash
 ./gradlew bootRun --args='--spring.profiles.active=local'
 ```
 
-메모리 DB(H2)라 서버를 끄면 데이터가 사라져요. `http://localhost:8080/api/v1/auth/signup` 등으로 호출해 보면 돼요.
+`local` 프로필에는 DB 주소(`localhost:5434`, 계정 `habit`/`habit`) · 로컬 전용 JWT 키 · 카카오/구글 공개 값이 들어 있어요 (`application-local.properties`).
+8080을 다른 서버가 쓰고 있으면 `--args='--spring.profiles.active=local --server.port=8081'`.
 앱은 `flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8080/api/v1` (에뮬레이터에서 PC = `10.0.2.2`).
 
 ```bash
 curl -X POST localhost:8080/api/v1/auth/signup -H "Content-Type: application/json" -d '{"email":"me@habit.kr","password":"password1"}'
 ```
 
+> 10-19부터 메모리 DB(H2)는 없어요 (결정 D-41). 게임 테이블 · 설정값이 PostgreSQL 전용이라 H2로는 서버가 뜨지 않았어요.
+
 ## PostgreSQL로 띄우기
 
-1. **Docker로 DB 띄우기** (권장): `backend/.env.example`을 `backend/.env`로 복사하고 `HM_DB_DIR`에 공식 DB 파일 폴더(`schema.sql` · `seed.sql`, 지금은 v1.7 — `D:/teamProject/docs/데이터베이스`) 경로를 적은 뒤
+1. **Docker로 DB 띄우기** (권장): `backend/.env.example`을 `backend/.env`로 복사하고 `HM_DB_DIR`에 공식 DB 파일 폴더(`schema.sql` · `seed.sql`, 스키마 v1.7 + 시드 v1.8 — 저장소의 `docs/데이터베이스`) 경로를 적은 뒤
    ```bash
    cd backend && docker compose up -d
    ```
@@ -46,8 +52,19 @@ JPA는 테이블을 만들거나 바꾸지 않아요 (`ddl-auto=none`). 스키�
 ./gradlew test
 ```
 
-`local` 프로필(H2)로 가입 · 로그인 · refresh 교체/재사용 감지 · 로그아웃 · 소셜(카카오는 가짜로 대체) · 탈퇴 계정을 검사해요.
-`CommonApiTest`는 공통 기반(토큰 만료 · 탈퇴 즉시 차단 · 온보딩 차단 · 중복 방지 키의 재전송/다른 본문/4xx/5xx/동시 요청), `BusinessDatesTest`는 업무 날짜 경계를 검사해요.
+**Docker가 켜져 있어야 해요.** 테스트가 `postgres:16` 컨테이너를 스스로 띄우고(Testcontainers) 저장소의 `docs/데이터베이스/schema.sql` → `seed.sql`을 적용한 뒤,
+모든 테스트가 그 실제 PostgreSQL에서 돌아요 (결정 D-33). 로컬 개발 DB(5434)는 건드리지 않아요. 다른 폴더의 SQL로 돌리려면 환경변수 `HM_DB_DIR`.
+컨테이너는 한 번만 띄워 모든 테스트 클래스가 같이 쓰고, 테스트마다 `truncate identity.users cascade`로 사용자 데이터만 비워요 (마스터 · 설정은 남음).
+공통 바닥은 `support/PostgresTest` (가입 · 기본 온보딩 도우미 포함).
+
+| 테스트 | 검사하는 것 |
+| --- | --- |
+| `AuthApiTest` · `CommonApiTest` · `BusinessDatesTest` | 회원 · 토큰 · 탈퇴/온보딩 차단 · 중복 방지 키(재전송 · 다른 본문 · 4xx · 5xx · 동시) · 업무 날짜 |
+| `BalanceConfigTest` | 시드 수치를 타입대로 읽음, 시드의 모든 키가 "읽음/안 씀" 목록에 있음, 필요한 키가 없으면 시작 실패 |
+| `WalletServiceTest` | 적립 · 차감 = 잔액 + 원장, 0원은 원장 없음, 같은 (사유, ref) 한 번, 잔액 부족 422, 동시 차감에도 음수 없음 |
+| `ArchitectureTest` | 모듈 규칙: 저장소는 자기 모듈 안에서만, 엔티티 `@Table(schema)` = 패키지, SQL 문자열의 `스키마.테이블` = 자기 스키마 |
+| `OnboardingApiTest` | 온보딩 전 허용/차단, 모든 모듈 행 생성, 대화 상대 규칙, 여러 오류 400 + 아무것도 안 남음, 409 · 같은 키 재전송, 출석 연속 일수, 탈퇴 정리 |
+| `MainQueryApiTest` | 상단 바 · 오늘 요약(체크인 전/후) · 몬스터 목록/상세 · 남의 몬스터 404 · 상점 · 가방 · 습관 · 목표, 온보딩 전 403 |
 
 ## 구조
 
@@ -57,8 +74,20 @@ kr.habitmonster
 │  └─ social/       KakaoVerifier · GoogleVerifier (토큰을 서버가 직접 검증)
 ├─ identity/        identity 스키마 엔티티 (User · AuthCredential · RefreshToken) + 저장소
 ├─ config/          SecurityConfig (/auth/** 만 공개) · JwtConfig(만료 구분) · UserGateFilter(탈퇴 · 온보딩 차단) · AuthProperties
+│                   · BalanceConfig (config.balance_config 수치, 없는 키면 시작 실패)
 ├─ idempotency/     @Idempotent · IdempotencyFilter · IdempotencyStore (중복 요청 방지 키)
-└─ common/          ErrorCode · ApiException · ApiExceptionHandler ({code, message, errors?}) · ErrorResponses · BusinessDates(업무 날짜)
+├─ common/          ErrorCode · ApiException · ApiExceptionHandler ({code, message, errors?}) · ErrorResponses · BusinessDates(업무 날짜) · Decimals
+│
+│  ── 게임 모듈: 패키지 = DB 스키마. 저장소(SQL, package-private)는 자기 스키마 테이블만 (ArchitectureTest) ──
+├─ habit/           카테고리 · 측정 항목 마스터, 습관 · 기간 · 출석 · 오늘 체크인 조회 (+ 탈퇴 시 습관 이름 비움)
+├─ goal/            목표 (+ 탈퇴 시 제목 비움)
+├─ wallet/          WalletService — 골드 증감은 여기로만 (잔액 + 원장, 조건부 차감)
+├─ shop/            상점 목록 · 가방
+├─ monster/         종 마스터 · 스타터 지급 · 내 몬스터 목록/상세 · 오늘 탐색 기회
+│
+│  ── 조율 (테이블 없음, 각 모듈 서비스만 부름) ──
+├─ onboarding/      GET /categories · POST /onboarding (회원 → 습관 → 목표 → 몬스터 → 지갑 = 잠금 순서)
+└─ home/            GET /me/status · /me/today (여러 모듈 값을 모으는 조회)
 ```
 
 ### 요청이 지나가는 순서 (API 명세 v4 "요청 검사 순서")
@@ -74,4 +103,4 @@ kr.habitmonster
   결과 저장과 비즈니스 변경이 같이 커밋되므로 "골드는 들어갔는데 결과는 저장 안 됨" 같은 반쪽 상태가 없어요.
 - 업무 날짜는 `BusinessDates.today()`만 써요 (`LocalDate.now()` 금지 — 서버 시간대와 00시 경계가 달라질 수 있음).
 
-다음에 붙일 것: habits · checkins · explore · monsters · shop · goals (`../README.md` API 초안).
+다음에 붙일 것: 체크인(3-3) · 탐색/포획(3-4) · 구매/교감(3-5) · 습관/목표 쓰기 · 도감 · 통계(4) — `docs/handoff/`.
