@@ -27,10 +27,10 @@
 - **앱 `frontend/lib/data/catalog.dart`의 코드(카테고리 · 몬스터 종 · 측정 항목 순서)는 DB 시드와 같아야 한다.** (시드 v1.8 = 앱의 28종, id는 카테고리 순서 · 스타터 1/6/10/15/19/23 — 종을 바꾸면 앱 · 시드 · `verify.sql`을 같이)
 
 ## 실행 · 테스트
-- 로컬 DB: `backend/`에서 `docker compose up -d` — `backend/.env`(커밋 금지, `.env.example` 참고)의 `HM_DB_DIR`가 공식 SQL 폴더(`…/docs/데이터베이스`), 이 PC는 `DB_PORT=5434`. 다시 적용: `docker compose down -v && docker compose up -d`
+- 로컬 DB: `backend/`에서 `docker compose up -d` — `backend/.env`(커밋 금지, `.env.example` 참고)의 `HM_DB_DIR`가 공식 SQL 폴더(`…/docs/데이터베이스`), 이 PC는 `DB_PORT=5435`. 다시 적용: `docker compose down -v && docker compose up -d`
 - 테스트: `server/`에서 PowerShell로 `.\gradlew.bat test` — **Docker가 켜져 있어야 한다.** 테스트가 postgres:16 컨테이너를 스스로 띄우고 `docs/데이터베이스/schema.sql` · `seed.sql`을 적용해 그 위에서 돈다 (Testcontainers, D-33). 새 테스트는 `support/PostgresTest`를 상속 (가입 · 기본 온보딩 도우미, 테스트마다 사용자 데이터 비움). H2는 없다 (D-41)
 - 게임 모듈 저장소는 `JdbcClient` SQL, package-private (D-34). 여러 모듈을 모으는 일은 테이블 없는 조율 서비스(`onboarding/` · `home/`)가 각 모듈 서비스를 부른다. 수치는 `config/BalanceConfig`, 골드는 `wallet/WalletService`로만. 규칙은 `ArchitectureTest`가 검사
-- 실행 (간단히): Docker DB를 띄운 뒤 `.\gradlew.bat bootRun --args='--spring.profiles.active=local --server.port=8081'` — `local` 프로필 = 5434 DB + 로컬 JWT 키 + 카카오 · 구글 공개 값 (D-41)
-- 실행 (환경변수로): `$env:DB_URL='jdbc:postgresql://localhost:5434/habit_monster'; $env:DB_USER='habit'; $env:DB_PASSWORD='habit'; $env:JWT_SECRET='local-dev-secret-change-me-0123456789abcdef'; .\gradlew.bat bootRun --args='--server.port=8081'` (8080은 다른 서버가 떠 있을 수 있음)
+- 실행 (간단히): Docker DB를 띄운 뒤 `.\gradlew.bat bootRun --args='--spring.profiles.active=local --server.port=8081'` — `local` 프로필 = 5435 DB + 로컬 JWT 키 + 카카오 · 구글 공개 값 (D-41)
+- 실행 (환경변수로): `$env:DB_URL='jdbc:postgresql://localhost:5435/habit_monster'; $env:DB_USER='habit'; $env:DB_PASSWORD='habit'; $env:JWT_SECRET='local-dev-secret-change-me-0123456789abcdef'; .\gradlew.bat bootRun --args='--server.port=8081'` (8080은 다른 서버가 떠 있을 수 있음)
 - 실제 DB 테스트의 정리는 `PostgresTest`가 `truncate identity.users cascade` 한 줄로 한다 (외래키를 따라 사용자 데이터만 비움, 마스터 · 설정은 남음)
 - 새 API를 만들면 `backend/README.md`의 API 표를 갱신한다

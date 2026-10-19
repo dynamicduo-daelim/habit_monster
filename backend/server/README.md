@@ -8,14 +8,14 @@ Spring Boot 4.1 · Java 21 · PostgreSQL. **인증 + 공통 기반**(오류 형�
 
 ## 바로 띄워 보기 (`local` 프로필 — Docker DB에 붙음)
 
-먼저 아래 "PostgreSQL로 띄우기" 1번처럼 Docker DB를 띄워요 (`backend/`에서 `docker compose up -d`, 이 PC는 포트 5434).
+먼저 아래 "PostgreSQL로 띄우기" 1번처럼 Docker DB를 띄워요 (`backend/`에서 `docker compose up -d`, 이 PC는 포트 5435).
 그다음 환경변수 없이:
 
 ```bash
 ./gradlew bootRun --args='--spring.profiles.active=local'
 ```
 
-`local` 프로필에는 DB 주소(`localhost:5434`, 계정 `habit`/`habit`) · 로컬 전용 JWT 키 · 카카오/구글 공개 값이 들어 있어요 (`application-local.properties`).
+`local` 프로필에는 DB 주소(`localhost:5435`, 계정 `habit`/`habit`) · 로컬 전용 JWT 키 · 카카오/구글 공개 값이 들어 있어요 (`application-local.properties`).
 8080을 다른 서버가 쓰고 있으면 `--args='--spring.profiles.active=local --server.port=8081'`.
 앱은 `flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8080/api/v1` (에뮬레이터에서 PC = `10.0.2.2`).
 
@@ -53,7 +53,7 @@ JPA는 테이블을 만들거나 바꾸지 않아요 (`ddl-auto=none`). 스키�
 ```
 
 **Docker가 켜져 있어야 해요.** 테스트가 `postgres:16` 컨테이너를 스스로 띄우고(Testcontainers) 저장소의 `docs/데이터베이스/schema.sql` → `seed.sql`을 적용한 뒤,
-모든 테스트가 그 실제 PostgreSQL에서 돌아요 (결정 D-33). 로컬 개발 DB(5434)는 건드리지 않아요. 다른 폴더의 SQL로 돌리려면 환경변수 `HM_DB_DIR`.
+모든 테스트가 그 실제 PostgreSQL에서 돌아요 (결정 D-33). 로컬 개발 DB(5435)는 건드리지 않아요. 다른 폴더의 SQL로 돌리려면 환경변수 `HM_DB_DIR`.
 컨테이너는 한 번만 띄워 모든 테스트 클래스가 같이 쓰고, 테스트마다 `truncate identity.users cascade`로 사용자 데이터만 비워요 (마스터 · 설정은 남음).
 공통 바닥은 `support/PostgresTest` (가입 · 기본 온보딩 도우미 포함).
 
