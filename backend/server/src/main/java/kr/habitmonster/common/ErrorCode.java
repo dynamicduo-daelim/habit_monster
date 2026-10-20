@@ -22,6 +22,7 @@ public enum ErrorCode {
 	// 404
 	NOT_FOUND(HttpStatus.NOT_FOUND, "찾을 수 없어요"),
 	UNSUPPORTED_PROVIDER(HttpStatus.NOT_FOUND, "지원하지 않는 로그인 방식이에요"),
+	CHECKIN_NOT_FOUND(HttpStatus.NOT_FOUND, "오늘 체크인을 먼저 해 주세요"),
 	// 409
 	EMAIL_TAKEN(HttpStatus.CONFLICT, "이미 가입된 이메일이에요"),
 	/** 응답에 {@code provider}(원래 가입 방법, 소문자)가 같이 간다. */
@@ -29,6 +30,9 @@ public enum ErrorCode {
 	ALREADY_ONBOARDED(HttpStatus.CONFLICT, "이미 시작하기를 마쳤어요"),
 	BUSINESS_DATE_CHANGED(HttpStatus.CONFLICT, "날짜가 바뀌었어요. 화면을 새로 불러올게요"),
 	REQUEST_IN_PROGRESS(HttpStatus.CONFLICT, "처리 중이에요. 잠시 후 다시 시도해 주세요"),
+	ALREADY_SUBMITTED(HttpStatus.CONFLICT, "오늘 체크인은 이미 했어요"),
+	/** 앱은 습관 추가 · 연장을 안내한다. */
+	NO_ACTIVE_HABIT(HttpStatus.CONFLICT, "오늘 체크인할 습관이 없어요"),
 	// 422
 	IDEMPOTENCY_KEY_REUSED(HttpStatus.UNPROCESSABLE_CONTENT, "요청을 확인해 주세요"),
 	NOT_ENOUGH_GOLD(HttpStatus.UNPROCESSABLE_CONTENT, "골드가 모자라요"),

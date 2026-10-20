@@ -17,6 +17,7 @@ import org.springframework.security.web.SecurityFilterChain;
 
 /**
  * {@code /auth/**}만 열고, 나머지는 {@code Authorization: Bearer <accessToken>} 필요. 세션 · CSRF 없음 (앱 전용 API).
+ * 브라우저(웹)의 다른 출처 요청은 {@link CorsConfig} 설정으로 허용 여부를 정한다 (기본 꺼짐, local 프로필만 localhost:5000).
  * 요청 검사 순서 (API 명세 v4): ① 토큰 → ② 사용자 상태 · 온보딩({@link UserGateFilter}) → ③ 중복 방지 키(IdempotencyFilter) → 컨트롤러.
  */
 @Configuration
@@ -27,6 +28,7 @@ public class SecurityConfig {
 		AuthenticationEntryPoint unauthorized = (req, res, e) ->
 			ErrorResponses.write(res, isExpired(e) ? ErrorCode.TOKEN_EXPIRED : ErrorCode.INVALID_TOKEN);
 		return http
+			.cors(Customizer.withDefaults()) // CorsConfigurationSource 빈 — 사전 요청(OPTIONS)은 토큰 검사 전에 여기서 답한다
 			.csrf(c -> c.disable())
 			.httpBasic(b -> b.disable())
 			.formLogin(f -> f.disable())

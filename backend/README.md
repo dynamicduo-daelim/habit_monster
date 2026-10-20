@@ -74,7 +74,7 @@
 - **탈퇴**: `users`는 지우지 않고 `WITHDRAWN` + 이메일 비우기(같은 이메일로 재가입 가능). 로그인 수단 · refresh · 푸시 토큰 삭제,
   다른 모듈 데이터는 각 모듈의 `WithdrawalStep`이 정리 (지금은 중복 방지 키 기록). 남아 있는 access 토큰은 `UserGateFilter`가 막는다.
 
-## 게임 API — 3-1 · 3-2단계 (10-18)
+## 게임 API — 3-1 ~ 3-3단계 (10-18 ~ 10-19)
 
 모두 Bearer 필요, 온보딩 전엔 `/categories` · `/measure-types` · `/onboarding`만 (그 밖은 403 `ONBOARDING_REQUIRED`). 응답 모양은 API 명세 v5 그대로이고, 다른 점만 적는다.
 
@@ -92,6 +92,9 @@
 | GET | /inventory | `{items[{itemCode, name, quantity}]}` — 0개는 뺌 (D-39) |
 | GET | /habits?status=ACTIVE,ENDED | 생략하면 ACTIVE · ENDED. 기간 값은 마지막 기간 기준 |
 | GET | /goals | 이번 주 · 이번 달 `{periodStart, slotsTotal, slotsUsed, rewardGold, goals[]}` |
+| GET | /checkins/today | `{businessDate, submitted, revision, partner{userMonsterId, name, imageKey, affectionTier}, tabs[{categoryCode, categoryName, habits[{habitId, name, unit, scoringMode, options, previousValue, filledDays, periodDays}]}]}`. 제출 전엔 오늘 대상 습관, 제출 후엔 제출에 들어간 습관(`previousValue` = 최신 값). `options`는 서버가 만든 선택지 (B3, 수면은 범위 ± 2칸 — D-42) |
+| POST | /checkins/today | **Idempotency-Key 필수**. 201, 명세 예시 그대로 + `categoryExp[]`의 `expInLevel` · `expRequired`(더한 값, D-43). 409 `BUSINESS_DATE_CHANGED` · `ALREADY_SUBMITTED` · `NO_ACTIVE_HABIT`, 400 빠진 · 남의 습관 · 선택지 밖 값 (`errors` 전부) |
+| PUT | /checkins/today | **Idempotency-Key 필수**. 200 `{revision, habits[{habitId, value, score}], overallRate}` — 최신 값 · 점수만 바뀌고 보상은 그대로. 오늘 제출이 없으면 404 `CHECKIN_NOT_FOUND` |
 
 `PATCH /me/onboarding`(예전 임시 API)은 지웠다 — `POST /onboarding`이 완료 시각까지 찍는다.
 
@@ -114,10 +117,10 @@
 
 | `GameRepository` 메서드 | 서버 API (명세 v5) | 돌려주는 모양 |
 | --- | --- | --- |
-| `load` | `GET /me/status` · `/me/today` · `/categories` · `/monsters`(+ 마리마다 `/monsters/{id}`) · `/inventory` · `/habits` · `/goals` | — (GameState를 채움) — **10-18 연결** |
+| `load` | `GET /me/status` · `/me/today` · `/categories` · `/monsters`(+ 마리마다 `/monsters/{id}`) · `/inventory` · `/habits` · `/goals` · `/checkins/today`(10-19) | — (GameState를 채움) — **10-18 연결** |
 | `attend` | `POST /me/attendance` | 처음 출석이면 true — **10-18 연결** |
 | `completeOnboarding` | `POST /onboarding` (측정 항목은 `GET /measure-types`로 id 변환) | — **10-18 연결** |
-| `confirmCheckin` · `resubmitCheckin` | `POST` · `PUT /checkins/today` | `DailyCheckinResult` (`lib/data/results.dart`) |
+| `confirmCheckin` · `resubmitCheckin` | `POST` · `PUT /checkins/today` | `DailyCheckinResult` (`lib/data/results.dart`) — **10-19 연결** |
 | `explore` · `throwBall` | `POST /explores` · `/explores/{id}/capture` | `EncounterResult` · `CatchResult` |
 | `buy` | `POST /shop/purchases` (코드는 `Catalog.serverCodeOf`) | 성공 여부 |
 | `pet` · `play` · `feed` · `moveMonster` · `setPartner` | `/monsters/{id}/affection` · `feed` · `location` · `PUT /me/partner` | |

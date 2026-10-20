@@ -1,18 +1,31 @@
 package kr.habitmonster.habit;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
+import java.util.stream.Collectors;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 
+import kr.habitmonster.common.ApiException;
+import kr.habitmonster.common.ApiExceptionHandler.FieldError;
 import kr.habitmonster.common.BusinessDates;
 import kr.habitmonster.common.Decimals;
+import kr.habitmonster.common.ErrorCode;
 import kr.habitmonster.config.BalanceConfig;
+import kr.habitmonster.habit.HabitRepository.CategoryExpRow;
 import kr.habitmonster.habit.HabitRepository.CategoryRow;
+import kr.habitmonster.habit.HabitRepository.CheckinHabitRow;
+import kr.habitmonster.habit.HabitRepository.DailyCheckinRow;
 import kr.habitmonster.habit.HabitRepository.MeasureTypeRow;
 import kr.habitmonster.habit.HabitRepository.StreakRow;
 
@@ -54,11 +67,13 @@ public class HabitService {
 	private final HabitRepository habits;
 	private final BusinessDates dates;
 	private final BalanceConfig config;
+	private final Scoring scoring;
 
-	HabitService(HabitRepository habits, BusinessDates dates, BalanceConfig config) {
+	HabitService(HabitRepository habits, BusinessDates dates, BalanceConfig config, Scoring scoring) {
 		this.habits = habits;
 		this.dates = dates;
 		this.config = config;
+		this.scoring = scoring;
 	}
 
 	// ---------- 마스터 ----------
@@ -209,6 +224,263 @@ public class HabitService {
 		double hit = config.scoreTargetHit();
 		double sum = counted.stream().mapToDouble(s -> Math.min(s / hit, 1.0) * 100).sum();
 		return (int) Math.round(sum / counted.size());
+	}
+
+	// ---------- 체크인 (3-3, API 명세 v5 "5. 챗봇") ----------
+	/** 체크인 답 하나. {@code done:false}("못했어")면 {@code value}는 보지 않고 0으로 저장한다. */
+	public record Answer(Long habitId, Boolean done, BigDecimal value) {
+	}
+
+	/** {@code GET /checkins/today}의 습관 한 줄. {@code previousValue}는 제출 후의 최신 값 (다시 체크할 때 미리 채움). */
+	public record BoardHabit(long habitId, String name, String unit, String scoringMode, List<Number> options,
+			Number previousValue, int filledDays, int periodDays) {
+	}
+
+	/** 카테고리 탭 하나 (카테고리 순서, 안은 등록 순서). */
+	public record Tab(String categoryCode, String categoryName, List<BoardHabit> habits) {
+	}
+
+	public record Board(boolean submitted, int revision, List<Tab> tabs) {
+	}
+
+	public record ScoredHabit(long habitId, int score, boolean counted) {
+	}
+
+	/**
+	 * 카테고리 경험치 변화. {@code expInLevel} · {@code expRequired}는 명세 예시에 없는 추가 필드 — 지금 레벨에서 모은 경험치와
+	 * 그 레벨에 필요한 총량 (이름은 결정 B2). 최대 레벨이면 {@code expRequired}가 null.
+	 */
+	public record CategoryGain(String categoryCode, int expGained, int levelBefore, int levelAfter, int expInLevel,
+			Integer expRequired) {
+	}
+
+	/** 이번 제출로 채운 기간. {@code bonusGold} = {@code periodScore × (배수 − 1)} 반올림. */
+	public record PeriodBonus(long habitId, long periodId, String periodCode, double multiplier, int periodScore,
+			int bonusGold) {
+	}
+
+	/** 첫 제출 결과 (골드 지급 · 탐색 기회는 부른 쪽이 이 값으로 한다). */
+	public record FirstCheckin(long checkinId, int revision, List<ScoredHabit> habits, int overallRate,
+			int countedScore, List<CategoryGain> categories, List<PeriodBonus> periodBonuses, boolean allMissed) {
+	}
+
+	public record RevisedHabit(long habitId, Number value, int score) {
+	}
+
+	public record Revision(int revision, List<RevisedHabit> habits, int overallRate) {
+	}
+
+	/** 오늘 체크인 화면: 제출 전이면 대상 습관, 제출 후면 제출에 들어간 습관(최신 값과 함께). */
+	@Transactional(readOnly = true)
+	public Board board(long userId) {
+		LocalDate today = dates.today();
+		Optional<DailyCheckinRow> checkin = habits.dailyCheckin(userId, today);
+		List<CheckinHabitRow> rows = checkin.map(c -> habits.submittedHabits(c.id()))
+			.orElseGet(() -> habits.targetHabits(userId, today));
+		Map<String, List<CheckinHabitRow>> byCategory = new LinkedHashMap<>();
+		rows.stream().sorted(Comparator.comparingInt(CheckinHabitRow::categorySort))
+			.forEach(r -> byCategory.computeIfAbsent(r.categoryCode(), k -> new ArrayList<>()).add(r));
+		List<Tab> tabs = byCategory.values().stream()
+			.map(list -> new Tab(list.get(0).categoryCode(), list.get(0).categoryName(), list.stream()
+				.map(r -> new BoardHabit(r.habitId(), r.name(), r.unit(), r.scoringMode(),
+						scoring.options(measure(r)).stream().map(Decimals::plain).toList(), Decimals.plain(r.value()),
+						r.filledDays(), r.periodDays()))
+				.toList()))
+			.toList();
+		return new Board(checkin.isPresent(), checkin.map(DailyCheckinRow::revision).orElse(0), tabs);
+	}
+
+	/**
+	 * 첫 제출 (한 트랜잭션, 습관 프로필 잠금이 처음 — 잠금 순서). 점수 → 반영 습관(점수 상위 N개, 동점은 등록 순서) →
+	 * 기록 → 카테고리 경험치 · 레벨 → 기간 채운 날 · 보너스(B1: 반영 여부와 상관없이 "했어"면 채운 날 +1).
+	 *
+	 * @throws ApiException 409 {@code ALREADY_SUBMITTED} · {@code NO_ACTIVE_HABIT}, 400 빠진 · 남의 습관, 선택지 밖 값
+	 */
+	@Transactional
+	public FirstCheckin submitFirst(long userId, LocalDate today, UUID key, List<Answer> answers) {
+		lockProfile(userId);
+		if (habits.dailyCheckin(userId, today).isPresent()) {
+			throw new ApiException(ErrorCode.ALREADY_SUBMITTED);
+		}
+		List<CheckinHabitRow> targets = habits.targetHabits(userId, today);
+		if (targets.isEmpty()) {
+			throw new ApiException(ErrorCode.NO_ACTIVE_HABIT);
+		}
+		Map<Long, BigDecimal> values = validate(targets, answers);
+
+		// 점수와 반영 습관: 점수 높은 순, 같으면 습관 id(등록 순서)가 작은 쪽
+		Map<Long, Integer> scores = new LinkedHashMap<>();
+		targets.forEach(t -> scores.put(t.habitId(), scoring.score(measure(t), values.get(t.habitId()))));
+		Set<Long> counted = targets.stream()
+			.sorted(Comparator.comparingInt((CheckinHabitRow t) -> -scores.get(t.habitId())).thenComparingLong(CheckinHabitRow::habitId))
+			.limit(config.dailyCountedHabits()).map(CheckinHabitRow::habitId).collect(Collectors.toSet());
+
+		int total = scores.values().stream().mapToInt(Integer::intValue).sum();
+		int countedScore = counted.stream().mapToInt(scores::get).sum();
+		long checkinId = habits.insertDailyCheckin(userId, today, targets.size(), total, countedScore);
+		if (!habits.insertSubmission(key, checkinId, 1)) {
+			throw new ApiException(ErrorCode.IDEMPOTENCY_KEY_REUSED);
+		}
+		for (CheckinHabitRow t : targets) {
+			habits.insertHabitCheckin(checkinId, t.habitId(), t.periodSeq(), values.get(t.habitId()), t.target(),
+					scores.get(t.habitId()), counted.contains(t.habitId()));
+		}
+
+		List<CategoryGain> categories = addCategoryExp(userId, targets, scores, counted);
+		List<PeriodBonus> bonuses = fillPeriods(today, targets, values, scores, counted);
+
+		List<ScoredHabit> scored = targets.stream()
+			.map(t -> new ScoredHabit(t.habitId(), scores.get(t.habitId()), counted.contains(t.habitId()))).toList();
+		int overall = scoring.overallRate(List.copyOf(scores.values()));
+		boolean allMissed = values.values().stream().allMatch(v -> v.signum() == 0);
+		return new FirstCheckin(checkinId, 1, scored, overall, countedScore, categories, bonuses, allMissed);
+	}
+
+	/**
+	 * 다시 체크: 첫 제출에 들어간 습관 전체의 최신 값 · 점수만 바꾼다. 보상 · 경험치 · 채운 날 · 탐색은 첫 제출 그대로
+	 * (DB 트리거가 보상 기준값 수정을 막는다).
+	 *
+	 * @throws ApiException 404 {@code CHECKIN_NOT_FOUND}(오늘 제출 없음), 400 빠진 습관 · 선택지 밖 값
+	 */
+	@Transactional
+	public Revision resubmit(long userId, LocalDate today, UUID key, List<Answer> answers) {
+		lockProfile(userId);
+		DailyCheckinRow checkin = habits.dailyCheckin(userId, today)
+			.orElseThrow(() -> new ApiException(ErrorCode.CHECKIN_NOT_FOUND));
+		List<CheckinHabitRow> rows = habits.submittedHabits(checkin.id());
+		Map<Long, BigDecimal> values = validate(rows, answers);
+
+		List<RevisedHabit> revised = new ArrayList<>();
+		for (CheckinHabitRow r : rows) {
+			BigDecimal v = values.get(r.habitId());
+			int score = scoring.score(measure(r), v);
+			habits.updateHabitCheckin(checkin.id(), r.habitId(), v, score);
+			revised.add(new RevisedHabit(r.habitId(), Decimals.plain(v), score));
+		}
+		int revision = habits.reviseDailyCheckin(checkin.id(), revised.stream().mapToInt(RevisedHabit::score).sum());
+		if (!habits.insertSubmission(key, checkin.id(), revision)) {
+			throw new ApiException(ErrorCode.IDEMPOTENCY_KEY_REUSED);
+		}
+		return new Revision(revision, revised, scoring.overallRate(revised.stream().map(RevisedHabit::score).toList()));
+	}
+
+	private void lockProfile(long userId) {
+		habits.lockHabitUser(userId).orElseThrow(() -> new IllegalStateException("습관 프로필 없음: " + userId));
+	}
+
+	/**
+	 * 답 검사 (400 + 틀린 항목 전부): 대상 습관을 빠짐없이 · 한 번씩, 대상이 아닌 습관(남의 습관 · 없는 습관 포함)은 안 됨,
+	 * {@code done}은 필수, {@code done:true}면 값이 선택지 중 하나. 습관 id → 저장할 값("못했어"는 0).
+	 */
+	private Map<Long, BigDecimal> validate(List<CheckinHabitRow> targets, List<Answer> answers) {
+		Map<Long, CheckinHabitRow> byId = targets.stream().collect(Collectors.toMap(CheckinHabitRow::habitId, t -> t));
+		Map<Long, BigDecimal> values = new LinkedHashMap<>();
+		List<FieldError> errors = new ArrayList<>();
+		List<Answer> list = answers == null ? List.of() : answers;
+		for (int i = 0; i < list.size(); i++) {
+			Answer a = list.get(i);
+			String f = "answers[" + i + "]";
+			if (a == null || a.habitId() == null) {
+				errors.add(new FieldError(f + ".habitId", "습관을 확인해 주세요."));
+				continue;
+			}
+			CheckinHabitRow t = byId.get(a.habitId());
+			if (t == null) {
+				errors.add(new FieldError(f + ".habitId", "오늘 체크인할 습관이 아니에요."));
+				continue;
+			}
+			if (values.containsKey(a.habitId())) {
+				errors.add(new FieldError(f + ".habitId", "같은 습관을 두 번 보냈어요."));
+				continue;
+			}
+			if (a.done() == null) {
+				errors.add(new FieldError(f + ".done", "했는지 알려 주세요."));
+				continue;
+			}
+			if (a.done() && !scoring.accepts(measure(t), a.value())) {
+				errors.add(new FieldError(f + ".value", "선택지 중에서 골라 주세요."));
+				continue;
+			}
+			values.put(a.habitId(), a.done() ? a.value() : BigDecimal.ZERO);
+		}
+		List<Long> missing = targets.stream().map(CheckinHabitRow::habitId)
+			.filter(id -> list.stream().noneMatch(a -> a != null && id.equals(a.habitId()))).toList();
+		if (!missing.isEmpty()) {
+			errors.add(new FieldError("answers", "오늘 체크인할 습관을 모두 보내 주세요. 빠진 습관: " + missing));
+		}
+		if (!errors.isEmpty()) {
+			throw new ApiException(ErrorCode.INVALID_REQUEST, ErrorCode.INVALID_REQUEST.message, errors);
+		}
+		return values;
+	}
+
+	/**
+	 * 반영 습관의 점수를 그 카테고리 경험치에. 레벨 N → N+1에 {@code category_exp_base × N}, 최대 {@code category_max_level},
+	 * 한 번에 여러 레벨이 오를 수 있다. 반영 습관이 있는 카테고리만 돌려준다 (카테고리 순서).
+	 */
+	private List<CategoryGain> addCategoryExp(long userId, List<CheckinHabitRow> targets, Map<Long, Integer> scores,
+			Set<Long> counted) {
+		Map<String, Integer> gained = new LinkedHashMap<>();
+		targets.stream().filter(t -> counted.contains(t.habitId()))
+			.sorted(Comparator.comparingInt(CheckinHabitRow::categorySort))
+			.forEach(t -> gained.merge(t.categoryCode(), scores.get(t.habitId()), Integer::sum));
+		Map<String, CategoryExpRow> rows = habits.categoryExp(userId).stream()
+			.collect(Collectors.toMap(CategoryExpRow::categoryCode, r -> r));
+		List<CategoryGain> result = new ArrayList<>();
+		gained.forEach((code, exp) -> {
+			CategoryExpRow row = rows.get(code);
+			int total = row.expTotal() + exp;
+			int level = Math.max(row.level(), levelFor(total));
+			habits.updateCategoryExp(userId, code, total, level);
+			boolean max = level >= config.categoryMaxLevel();
+			int inLevel = max ? 0 : total - expToReach(level);
+			result.add(new CategoryGain(code, exp, row.level(), level, inLevel, max ? null : config.categoryExpBase() * level));
+		});
+		return result;
+	}
+
+	/** 누적 경험치 → 레벨 (최대 레벨까지). */
+	private int levelFor(int expTotal) {
+		int level = 1;
+		while (level < config.categoryMaxLevel() && expTotal >= expToReach(level + 1)) {
+			level++;
+		}
+		return level;
+	}
+
+	/** 레벨 L에 닿는 데 필요한 누적 경험치 = base × (1 + 2 + … + (L − 1)). */
+	private int expToReach(int level) {
+		return config.categoryExpBase() * level * (level - 1) / 2;
+	}
+
+	/**
+	 * 기간 채운 날 · 반영 점수 합을 더하고, 채운 날이 기간에 닿으면 보너스를 정하고 습관을 ENDED로 (결정 B1).
+	 * "했어"(값 > 0)면 반영 여부와 상관없이 채운 날 +1, 반영 습관이면 점수 합에 더한다.
+	 */
+	private List<PeriodBonus> fillPeriods(LocalDate today, List<CheckinHabitRow> targets, Map<Long, BigDecimal> values,
+			Map<Long, Integer> scores, Set<Long> counted) {
+		Map<String, Double> multipliers = config.periodMultiplier();
+		List<PeriodBonus> bonuses = new ArrayList<>();
+		for (CheckinHabitRow t : targets) {
+			boolean filled = values.get(t.habitId()).signum() > 0;
+			int sum = t.countedScoreSum() + (counted.contains(t.habitId()) ? scores.get(t.habitId()) : 0);
+			int days = t.filledDays() + (filled ? 1 : 0);
+			if (days < t.periodDays()) {
+				habits.updatePeriod(t.periodId(), days, sum, null, null);
+				continue;
+			}
+			double multiplier = multipliers.get(t.periodCode());
+			int bonus = BigDecimal.valueOf(sum).multiply(BigDecimal.valueOf(multiplier).subtract(BigDecimal.ONE))
+				.setScale(0, RoundingMode.HALF_UP).intValueExact();
+			habits.updatePeriod(t.periodId(), days, sum, today, bonus);
+			habits.endHabit(t.habitId());
+			bonuses.add(new PeriodBonus(t.habitId(), t.periodId(), t.periodCode(), multiplier, sum, bonus));
+		}
+		return bonuses;
+	}
+
+	private static Scoring.Measure measure(CheckinHabitRow r) {
+		return new Scoring.Measure(r.scoringMode(), r.target(), r.step(), r.maxValue(), r.rangeBelow(), r.rangeAbove());
 	}
 
 	// ---------- 출석 ----------

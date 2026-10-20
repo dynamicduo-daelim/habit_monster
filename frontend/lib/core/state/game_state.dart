@@ -69,6 +69,16 @@ class GameState extends ChangeNotifier {
   /// (그 전엔 홈 대신 로딩 화면 — 결정 D-40). 서버 없이 쓰는 샘플 상태는 처음부터 true.
   bool loaded = true;
 
+  /// 서버 모드에서 오늘 체크인할 습관 id (서버 순서, `GET /checkins/today`). 로컬 모드는 null → [activeHabits]를 묻는다.
+  /// 제출 후에는 제출에 들어간 습관 (다시 체크 대상 — 기간을 채워 끝난 습관도 들어 있다).
+  List<String>? serverCheckinIds;
+
+  /// 서버 모드에서 습관마다 고를 수 있는 값 (서버 `options`, 오름차순). 로컬 모드는 비어 있다.
+  final Map<String, List<double>> checkinOptions = {};
+
+  /// 서버가 계산한 오늘의 최신 점수 (제출 · 다시 체크 응답). 없으면 [scoreOf]가 앱 공식으로 계산한다.
+  final Map<String, int> serverScores = {};
+
   /// 서버 모드의 시작 상태: 아무것도 없고 [loaded]가 false. 로그아웃하면 다시 이 상태로 (다른 계정의 데이터가 남지 않게).
   factory GameState.empty({math.Random? random}) {
     final s = GameState(
@@ -202,6 +212,28 @@ class GameState extends ChangeNotifier {
   /// 챗봇이 묻는 습관 (활성 습관 전부, 상한 [Economy.maxActiveHabits]).
   List<Habit> get activeHabits => habits.take(Economy.maxActiveHabits).toList();
 
+  /// 오늘 체크인할 습관: 서버 모드면 서버가 정한 대상 ([serverCheckinIds]), 아니면 [activeHabits].
+  List<Habit> get checkinHabits {
+    final ids = serverCheckinIds;
+    if (ids == null) return activeHabits;
+    return [
+      for (final id in ids)
+        if (habits.where((h) => h.id == id).firstOrNull case final h?) h,
+    ];
+  }
+
+  /// 기록할 값: 서버 선택지가 있으면 [raw]에 가장 가까운 선택지 (같은 거리면 작은 쪽), 없으면 그대로 (결정 D-42).
+  /// 직접 입력한 값을 서버가 그대로 받게 되면 이 함수만 `raw`를 돌려주게 바꾸면 된다.
+  double recordableValue(Habit h, double raw) {
+    final options = checkinOptions[h.id];
+    if (options == null || options.isEmpty || raw <= 0) return raw;
+    var best = options.first;
+    for (final o in options) {
+      if ((o - raw).abs() < (best - raw).abs()) best = o;
+    }
+    return best;
+  }
+
   /// 오늘 성실도에 들어간 습관. 확정 전엔 아직 정해지지 않아 앞에서부터 [Economy.dailyHabitCap]개를 보여준다.
   List<Habit> get countedHabits => checkedInToday
       ? activeHabits.where((h) => countedToday.contains(h.id)).toList()
@@ -213,6 +245,8 @@ class GameState extends ChangeNotifier {
   int? scoreOf(Habit h) {
     final v = todayRecords[h.id];
     if (v == null) return null;
+    final server = serverScores[h.id];
+    if (server != null) return server;
     return sincerityScore(measure: measureOf(h), target: h.target, value: v);
   }
 
@@ -619,6 +653,59 @@ class GameState extends ChangeNotifier {
     countedToday
       ..clear()
       ..addAll(counted);
+  }
+
+  /// `GET /checkins/today`: 오늘 체크인 대상 · 선택지. 제출 후면 [latest]에 다시 체크까지 반영한 최신 값.
+  void applyCheckinBoard({
+    required List<String> ids,
+    required Map<String, List<double>> options,
+    required Map<String, double> latest,
+  }) {
+    serverCheckinIds = ids;
+    checkinOptions
+      ..clear()
+      ..addAll(options);
+    serverScores.clear();
+    todayRecords.addAll(latest);
+  }
+
+  /// `POST /checkins/today` 응답: 보상은 서버가 계산한 값 그대로. 탐색 후보는 연 카테고리 전부 (결정 B4).
+  /// [categoryExp]: 카테고리 → 서버의 누적 경험치 (앱 [CategoryLevel.fromPoints]와 같은 공식이라 그대로 넣는다).
+  void applyCheckinResult({
+    required int gold,
+    required Map<String, double> values,
+    required Map<String, int> scores,
+    required Set<String> counted,
+    required int exploreTotal,
+    required Map<String, int> categoryExp,
+  }) {
+    this.gold = gold;
+    todayRecords
+      ..clear()
+      ..addAll(values);
+    rewardedScores
+      ..clear()
+      ..addAll(scores);
+    serverScores
+      ..clear()
+      ..addAll(scores);
+    countedToday
+      ..clear()
+      ..addAll(counted);
+    categoryPoints.addAll(categoryExp);
+    exploreCategoriesToday
+      ..clear()
+      ..addAll(pickedCategories);
+    encountersLeft = exploreTotal;
+    checkedInToday = true;
+    notifyListeners();
+  }
+
+  /// `PUT /checkins/today` 응답: 최신 값 · 점수만 (보상은 첫 제출 그대로).
+  void applyRecheck({required Map<String, double> values, required Map<String, int> scores}) {
+    todayRecords.addAll(values);
+    serverScores.addAll(scores);
+    notifyListeners();
   }
 
   void markLoaded() {

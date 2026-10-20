@@ -91,4 +91,29 @@ class MonsterRepository {
 		return db.sql("select base_count, used_count from monster.daily_explore_quota where user_id = ? and quota_date = ?")
 			.params(userId, day).query(QuotaRow.class).optional();
 	}
+
+	// ---------- 체크인 (3-3) ----------
+	void insertQuota(long userId, LocalDate day, int baseCount, long sourceCheckinId) {
+		db.sql("""
+			insert into monster.daily_explore_quota (user_id, quota_date, base_count, source_checkin_id) values (?, ?, ?, ?)""")
+			.params(userId, day, baseCount, sourceCheckinId).update();
+	}
+
+	void insertQuotaCategory(long userId, LocalDate day, String categoryCode) {
+		db.sql("insert into monster.explore_quota_category (user_id, quota_date, category_code) values (?, ?, ?)")
+			.params(userId, day, categoryCode).update();
+	}
+
+	/** 카테고리 레벨이 {@code from} → {@code to}로 오르며 새로 탐색 후보가 된 종 (출현 레벨이 그 사이). 종 번호 순서. */
+	List<Integer> speciesUnlockedBetween(String categoryCode, int from, int to) {
+		return db.sql("""
+			select id from monster.monster_species where category_code = ? and unlock_level > ? and unlock_level <= ?
+			 order by id""")
+			.params(categoryCode, from, to).query(Integer.class).list();
+	}
+
+	/** 대화 상대 (온보딩 때 정한 한 마리). */
+	Optional<MonsterRow> partner(long userId) {
+		return db.sql(MONSTER + " where m.user_id = ? and m.is_partner").param(userId).query(MonsterRow.class).optional();
+	}
 }

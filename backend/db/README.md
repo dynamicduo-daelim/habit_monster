@@ -41,6 +41,8 @@
   ```
   볼까지 주면 `verify.sql` S-12(가방 수량 = 구매 합 − 소모 합)가 깨진다 → 둘 중 하나: (1) S-12를 "구매 + 시작 지급 − 소모"로 바꾸고 시작 지급을 기록할 곳(예: 새 `shop.item_grant` 테이블, 또는 `shop.purchase`에 가격 0 허용)을 둔다 (2) 볼은 주지 않고 골드만(볼 값 50G보다 넉넉히) 준다.
   판이 나오면 서버는 두 키를 `BalanceConfig.REQUIRED`에 넣고 `OnboardingService`에서 지급한다.
+- **체크인 선택지 수치 (10-19 제안, D-42)**: 선택지 배수 `{0.25, 0.5, 0.75, 1, 1.5, 2}`(B3)와 수면 범위 바깥 칸 수 `2`가 설정 키가 없어 서버 코드(`habit/Scoring.java`) 상수다. 예: `('checkin_option_ratios', '[0.25,0.5,0.75,1,1.5,2]')` · `('checkin_range_extra_steps', '2')`
+- **API 명세 다음 판 제안 (10-19 추가)**: `POST /checkins/today`의 `categoryExp[].expInLevel` · `expRequired`(D-43), 선택지 밖 값을 받을지(D-42 — 지금은 400), 카테고리 레벨 조회(앱이 다시 켜도 레벨을 알게)
 - **API 명세 다음 판 제안 (10-18)**: `POST /onboarding`의 선택 필드 `partnerCategory`(D-36), `GET /me/status`의 `dayCount`(D-37), `GET /monsters` 목록에 `affection` · `expInLevel`(앱이 마리마다 상세를 부르지 않게, D-40)
 
 ---

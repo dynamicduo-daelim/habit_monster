@@ -67,18 +67,19 @@ class ChatController extends ChangeNotifier {
 
   bool _disposed = false;
 
-  List<Habit> get _habits => state.activeHabits;
+  List<Habit> get _habits => state.checkinHabits;
   Habit? get currentHabit => _habitIndex < _habits.length ? _habits[_habitIndex] : null;
   Measure? get currentMeasure => currentHabit == null ? null : state.measureOf(currentHabit!);
 
   /// 수행량 빠른 선택: 점수형은 3·4·5, 나머지는 목표의 50% · 100% · 150%.
+  /// 서버 모드면 각각 가장 가까운 서버 선택지로 맞춘다 (버튼 값 = 기록되는 값).
   List<double> get quickAmounts {
     final h = currentHabit;
     final m = currentMeasure;
     if (h == null || m == null || m.isOX) return const [];
-    if (m.unit == '점') return const [3, 4, 5];
     double r1(double v) => (v * 10).round() / 10;
-    return [r1(h.target * 0.5) < 1 ? 1 : r1(h.target * 0.5), h.target, r1(h.target * 1.5)];
+    final raw = m.unit == '점' ? const [3.0, 4.0, 5.0] : [r1(h.target * 0.5) < 1 ? 1.0 : r1(h.target * 0.5), h.target, r1(h.target * 1.5)];
+    return {for (final v in raw) state.recordableValue(h, v)}.toList();
   }
 
   /// 대화 상대 (몬스터가 하나도 없으면 null).
@@ -161,8 +162,13 @@ class ChatController extends ChangeNotifier {
   }
 
   /// 답 하나를 임시로 적고, 미리 계산한 점수로 반응한다 (골드는 확정 때).
-  Future<void> _record(double v) async {
+  Future<void> _record(double raw) async {
     final h = currentHabit!;
+    // 서버 모드: 서버가 받는 값(선택지) 중 가장 가까운 값으로 기록 (결정 D-42). 바뀌었으면 알려 준다.
+    final v = state.recordableValue(h, raw);
+    if (v != raw) {
+      messages.add(ChatMessage.bot('선택지에 맞춰 ${formatNum(v)}${state.measureOf(h).unit} 기록할게!'));
+    }
     _answers[h.id] = v;
     final preview = sincerityScore(measure: state.measureOf(h), target: h.target, value: v);
     messages.add(ChatMessage.bot(await _think(brain.react(h, preview))));
@@ -202,12 +208,15 @@ class ChatController extends ChangeNotifier {
     final lv = [
       for (final e in r.levelUps.entries) '${Catalog.category(e.key).name} Lv.${e.value} 달성!',
     ];
-    final lvGold = r.goldEarned - r.countedScore * Economy.goldPerSincerity;
+    final lvGold = r.goldEarned - r.countedScore * Economy.goldPerSincerity - r.periodBonusGold;
     messages.add(ChatMessage.bot(
       text,
       reward: r.countedScore > 0 ? '성실도 +${r.countedScore} · +${r.countedScore * Economy.goldPerSincerity}G' : null,
       levelUp: lv.isEmpty ? null : '${lv.join(' · ')} +${lvGold}G',
     ));
+    if (r.periodBonusGold > 0) {
+      messages.add(ChatMessage.bot('습관 기간을 다 채웠어! 기간 보너스 +${r.periodBonusGold}G'));
+    }
     step = ChatStep.done;
     _notify();
   }

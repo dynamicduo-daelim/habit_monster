@@ -94,6 +94,54 @@ Map<String, Object> _server({bool checkedIn = false, String date = '2026-10-18'}
       ],
       'POST /onboarding': {'starters': [], 'partnerMonsterId': 11, 'habitIds': [100], 'goalIds': [200]},
       'POST /me/attendance': {'date': date, 'alreadyAttended': false, 'currentStreak': 3, 'longestStreak': 9},
+      'GET /checkins/today': {
+        'businessDate': date, 'submitted': checkedIn, 'revision': checkedIn ? 1 : 0,
+        'partner': {'userMonsterId': 11, 'name': '찌릿 쥐', 'imageKey': 'mouse', 'affectionTier': 'LOW'},
+        'tabs': [
+          {
+            'categoryCode': 'ex', 'categoryName': '운동',
+            'habits': [
+              {
+                'habitId': 100, 'name': '아침 러닝', 'unit': '분', 'scoringMode': 'TARGET_RATIO',
+                'options': [10, 15, 25, 30, 45, 60], 'previousValue': checkedIn ? 20 : null,
+                'filledDays': checkedIn ? 1 : 0, 'periodDays': 30,
+              },
+            ],
+          },
+          if (!checkedIn)
+            {
+              'categoryCode': 'st', 'categoryName': '공부',
+              'habits': [
+                {
+                  'habitId': 101, 'name': '오늘 복습', 'unit': '점', 'scoringMode': 'TARGET_RATIO',
+                  'options': [1, 2, 3, 4], 'previousValue': null, 'filledDays': 0, 'periodDays': 100,
+                },
+              ],
+            },
+        ],
+      },
+      'POST /checkins/today': {
+        'revision': 1,
+        'habits': [
+          {'habitId': 100, 'score': 17, 'counted': true},
+          {'habitId': 101, 'score': 0, 'counted': true},
+        ],
+        'overallRate': 43, 'goldEarned': 37,
+        'goldBreakdown': {'score': 17, 'levelUp': 20, 'periodBonus': 0},
+        'categoryExp': [
+          {'categoryCode': 'ex', 'expGained': 17, 'levelBefore': 1, 'levelAfter': 2, 'levelUpGold': 20, 'expInLevel': 7, 'expRequired': 20},
+          {'categoryCode': 'st', 'expGained': 0, 'levelBefore': 1, 'levelAfter': 1, 'levelUpGold': 0, 'expInLevel': 0, 'expRequired': 10},
+        ],
+        'periodBonuses': [], 'unlockedSpecies': [], 'exploreTotal': 3, 'gold': 157,
+      },
+      'PUT /checkins/today': {
+        'revision': 2,
+        'habits': [
+          {'habitId': 100, 'value': 45, 'score': 25},
+          {'habitId': 101, 'value': 3, 'score': 15},
+        ],
+        'overallRate': 88,
+      },
     };
 
 void main() {
@@ -109,7 +157,9 @@ void main() {
         requests.add(r);
         final key = '${r.method} ${r.url.path.replaceFirst('/api/v1', '')}';
         final body = routes[key];
-        return body == null ? _json({'code': 'NOT_FOUND', 'message': '없음'}, 404) : _json(body, key == 'POST /onboarding' ? 201 : 200);
+        return body == null
+            ? _json({'code': 'NOT_FOUND', 'message': '없음'}, 404)
+            : _json(body, key.startsWith('POST /onboarding') || key == 'POST /checkins/today' ? 201 : 200);
       }),
     );
     return HttpGameRepository(state, api);
@@ -163,6 +213,67 @@ void main() {
     expect(s.rewardedScores, {'100': 13});
     expect(s.countedToday, {'100'});
     expect(s.todayScore, 13);
+  });
+
+  test('체크인 대상 · 선택지를 불러오고, 입력값은 가장 가까운 선택지로 맞춘다', () async {
+    final s = GameState.empty();
+    await repo(s, _server()).load();
+
+    expect(s.serverCheckinIds, ['100', '101']);
+    expect(s.checkinHabits.map((h) => h.id), ['100', '101']);
+    final run = s.checkinHabits.first;
+    expect(s.checkinOptions['100'], [10, 15, 25, 30, 45, 60]);
+    expect(s.recordableValue(run, 27), 25);
+    expect(s.recordableValue(run, 20), 15); // 15와 25 사이 같은 거리 → 작은 쪽
+    expect(s.recordableValue(run, 500), 60);
+    expect(s.recordableValue(run, 0), 0); // 못 했어는 그대로
+    expect(GameState.sample().recordableValue(run, 27), 27); // 로컬 모드는 입력값 그대로
+  });
+
+  test('체크인 제출: 날짜 · 했는지 · 값을 보내고 서버가 계산한 보상을 그대로 반영한다', () async {
+    final s = GameState.empty();
+    final r = repo(s, _server());
+    await r.load();
+
+    final res = await r.confirmCheckin({'100': 25, '101': 0});
+    final post = requests.last;
+    expect((post.method, post.url.path), ('POST', '/api/v1/checkins/today'));
+    expect(post.headers['Idempotency-Key'], isNotEmpty);
+    expect(jsonDecode(post.body), {
+      'businessDate': '2026-10-18',
+      'answers': [
+        {'habitId': 100, 'done': true, 'value': 25.0},
+        {'habitId': 101, 'done': false},
+      ],
+    });
+
+    expect(res!.goldEarned, 37);
+    expect(res.levelUps, {'ex': 2});
+    expect(res.exploreCount, 3);
+    expect(res.scores.map((x) => (x.habit.id, x.value, x.score, x.counted)), [('100', 25.0, 17, true), ('101', 0.0, 0, true)]);
+    expect(s.gold, 157);
+    expect(s.checkedInToday, isTrue);
+    expect(s.encountersLeft, 3);
+    expect(s.todayRecords, {'100': 25.0, '101': 0.0});
+    expect(s.countedToday, {'100', '101'});
+    expect(s.categoryLevel('ex').level, 2);
+    expect(s.categoryLevel('ex').current, 7);
+    expect(s.exploreCategoriesToday, {'ex', 'st'}); // 연 카테고리 전부 (B4)
+  });
+
+  test('다시 체크: 값 · 점수만 바뀌고 골드는 그대로', () async {
+    final s = GameState.empty();
+    final r = repo(s, _server());
+    await r.load();
+    await r.confirmCheckin({'100': 25, '101': 0});
+
+    final res = await r.resubmitCheckin({'100': 45, '101': 3});
+    expect(requests.last.method, 'PUT');
+    expect(res!.goldEarned, 0);
+    expect(s.gold, 157);
+    expect(s.todayRecords, {'100': 45.0, '101': 3.0});
+    expect(s.scoreOf(s.habits.first), 25);
+    expect(s.rewardedScores['100'], 17); // 보상 기준은 첫 제출
   });
 
   test('온보딩은 측정 항목을 서버 id로 바꿔 한 번에 보내고, 끝나면 다시 불러온다', () async {

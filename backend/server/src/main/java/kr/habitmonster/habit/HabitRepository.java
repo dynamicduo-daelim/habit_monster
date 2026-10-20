@@ -5,6 +5,7 @@ import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
@@ -176,6 +177,128 @@ class HabitRepository {
 			  join habit.habit_period p on p.habit_id = hc.habit_id and p.seq = hc.period_seq
 			 where hc.daily_checkin_id = ? order by hc.habit_id""")
 			.param(checkinId).query(CheckedHabitRow.class).list();
+	}
+
+	// ---------- 체크인 (3-3) ----------
+	/**
+	 * 체크인 한 줄의 습관 정보 + 측정 방식 + 그 기간. 제출 전에는 마지막 기간 · 목표, 제출 후에는 체크인에 기록된 기간 · 목표(snapshot)와
+	 * 최신 값({@code value} · {@code score}).
+	 */
+	record CheckinHabitRow(long habitId, String name, String categoryCode, String categoryName, int categorySort,
+			String unit, String scoringMode, BigDecimal step, BigDecimal maxValue, BigDecimal rangeBelow,
+			BigDecimal rangeAbove, BigDecimal target, long periodId, int periodSeq, String periodCode, int periodDays,
+			int filledDays, int countedScoreSum, BigDecimal value, Integer score, Integer rewardedScore, Boolean isCounted) {
+	}
+
+	private static final String CHECKIN_HABIT_COLUMNS = """
+		select h.id as habit_id, h.name, h.category_code, c.name as category_name, c.sort_order as category_sort, m.unit,
+		       m.scoring_mode, m.step, m.max_value, m.range_below, m.range_above,
+		""";
+
+	private static final String CHECKIN_HABIT_JOINS = """
+		  join habit.category c on c.code = h.category_code
+		  join habit.measure_type m on m.id = h.measure_type_id
+		""";
+
+	/** 오늘 체크인 대상 (제출 전): ACTIVE이고 마지막 기간이 아직 안 찼고 시작일 ≤ 오늘. 습관 id 순서 (= 등록 순서). */
+	List<CheckinHabitRow> targetHabits(long userId, LocalDate today) {
+		return db.sql(CHECKIN_HABIT_COLUMNS + """
+			       p.daily_target as target, p.id as period_id, p.seq as period_seq, p.period_code, p.period_days,
+			       p.filled_days, p.counted_score_sum, null as value, null as score, null as rewarded_score,
+			       null as is_counted
+			  from habit.habit h
+			""" + CHECKIN_HABIT_JOINS + """
+			  join habit.habit_period p on p.habit_id = h.id and p.ended_on is null
+			 where h.user_id = ? and h.status = 'ACTIVE' and p.started_on <= ?
+			 order by h.id""")
+			.params(userId, today).query(CheckinHabitRow.class).list();
+	}
+
+	/** 오늘 제출에 들어간 습관 (다시 체크 대상 — 그 뒤 ENDED · STOPPED여도). 목표는 제출 때의 snapshot. */
+	List<CheckinHabitRow> submittedHabits(long checkinId) {
+		return db.sql(CHECKIN_HABIT_COLUMNS + """
+			       hc.target_snapshot as target, p.id as period_id, p.seq as period_seq, p.period_code, p.period_days,
+			       p.filled_days, p.counted_score_sum, hc.value, hc.score, hc.rewarded_score, hc.is_counted
+			  from habit.habit_checkin hc
+			  join habit.habit h on h.id = hc.habit_id
+			""" + CHECKIN_HABIT_JOINS + """
+			  join habit.habit_period p on p.habit_id = hc.habit_id and p.seq = hc.period_seq
+			 where hc.daily_checkin_id = ?
+			 order by h.id""")
+			.param(checkinId).query(CheckinHabitRow.class).list();
+	}
+
+	record DailyCheckinRow(long id, int revision) {
+	}
+
+	Optional<DailyCheckinRow> dailyCheckin(long userId, LocalDate day) {
+		return db.sql("select id, revision from habit.daily_checkin where user_id = ? and checkin_date = ?")
+			.params(userId, day).query(DailyCheckinRow.class).optional();
+	}
+
+	long insertDailyCheckin(long userId, LocalDate day, int habitCount, int totalScore, int countedScore) {
+		return db.sql("""
+			insert into habit.daily_checkin (user_id, checkin_date, habit_count, total_score, counted_score)
+			values (?, ?, ?, ?, ?) returning id""")
+			.params(userId, day, habitCount, totalScore, countedScore).query(Long.class).single();
+	}
+
+	/** 다시 체크: 최신 합계 · 제출 횟수만 (보상 기준값은 트리거가 막는다). 새 revision. */
+	int reviseDailyCheckin(long checkinId, int totalScore) {
+		return db.sql("""
+			update habit.daily_checkin set total_score = ?, revision = revision + 1, last_submitted_at = now()
+			 where id = ? returning revision""")
+			.params(totalScore, checkinId).query(Integer.class).single();
+	}
+
+	/** 제출 1건 = 1행. 이 키가 이미 다른 제출에 쓰였으면 false. */
+	boolean insertSubmission(UUID key, long checkinId, int revision) {
+		return db.sql("""
+			insert into habit.checkin_submission (idempotency_key, daily_checkin_id, revision) values (?, ?, ?)
+			on conflict (idempotency_key) do nothing""")
+			.params(key, checkinId, revision).update() == 1;
+	}
+
+	void insertHabitCheckin(long checkinId, long habitId, int periodSeq, BigDecimal value, BigDecimal target, int score,
+			boolean counted) {
+		db.sql("""
+			insert into habit.habit_checkin (daily_checkin_id, habit_id, period_seq, value, target_snapshot, score,
+			                                 rewarded_value, rewarded_score, is_counted, is_filled)
+			values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""")
+			.params(checkinId, habitId, periodSeq, value, target, score, value, score, counted, value.signum() > 0)
+			.update();
+	}
+
+	void updateHabitCheckin(long checkinId, long habitId, BigDecimal value, int score) {
+		db.sql("update habit.habit_checkin set value = ?, score = ? where daily_checkin_id = ? and habit_id = ?")
+			.params(value, score, checkinId, habitId).update();
+	}
+
+	/** 기간의 채운 날 · 반영 점수 합. 기간을 채웠으면 {@code endedOn} · {@code bonus}도 같은 문장에서 (DB CHECK가 같이 요구). */
+	void updatePeriod(long periodId, int filledDays, int countedScoreSum, LocalDate endedOn, Integer bonus) {
+		db.sql("""
+			update habit.habit_period set filled_days = ?, counted_score_sum = ?, ended_on = ?, period_bonus = ?
+			 where id = ?""")
+			.params(filledDays, countedScoreSum, endedOn, bonus, periodId).update();
+	}
+
+	void endHabit(long habitId) {
+		db.sql("update habit.habit set status = 'ENDED', updated_at = now() where id = ?").param(habitId).update();
+	}
+
+	record CategoryExpRow(String categoryCode, int expTotal, int level) {
+	}
+
+	List<CategoryExpRow> categoryExp(long userId) {
+		return db.sql("select category_code, exp_total, level from habit.user_category where user_id = ?")
+			.param(userId).query(CategoryExpRow.class).list();
+	}
+
+	void updateCategoryExp(long userId, String categoryCode, int expTotal, int level) {
+		db.sql("""
+			update habit.user_category set exp_total = ?, level = ?, updated_at = now()
+			 where user_id = ? and category_code = ?""")
+			.params(expTotal, level, userId, categoryCode).update();
 	}
 
 	void updateStreak(long userId, int current, int longest, LocalDate lastAttended) {

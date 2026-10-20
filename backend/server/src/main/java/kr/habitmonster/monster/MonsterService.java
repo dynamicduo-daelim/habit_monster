@@ -1,7 +1,9 @@
 package kr.habitmonster.monster;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 import kr.habitmonster.common.ApiException;
@@ -91,6 +93,41 @@ public class MonsterService {
 		return monsters.quota(userId, dates.today())
 			.map(q -> new ExploreQuota(q.baseCount() - q.usedCount(), q.baseCount()))
 			.orElse(new ExploreQuota(0, 0));
+	}
+
+	// ---------- 체크인 (3-3) ----------
+	/** 체크인 화면의 대화 상대 ({@code imageUrl} 대신 {@code imageKey} — 결정 D1). */
+	public record Partner(long userMonsterId, String name, String imageKey, String affectionTier) {
+	}
+
+	/** 레벨업으로 탐색에 새로 나오게 된 종. */
+	public record UnlockedSpecies(int speciesId, String categoryCode) {
+	}
+
+	@Transactional(readOnly = true)
+	public Optional<Partner> partner(long userId) {
+		return monsters.partner(userId)
+			.map(m -> new Partner(m.userMonsterId(), m.name(), m.code(), config.affectionTier(m.affection())));
+	}
+
+	/**
+	 * 체크인 첫 제출로 그날 탐색 기회를 만든다. 탐색 후보 카테고리는 **연 카테고리 전부** (결정 B4).
+	 * 같은 체크인으로 두 번 만들 수 없다 (DB {@code source_checkin_id} UNIQUE).
+	 */
+	@Transactional
+	public void openExploreQuota(long userId, LocalDate day, int baseCount, long checkinId, List<String> categories) {
+		monsters.insertQuota(userId, day, baseCount, checkinId);
+		categories.forEach(code -> monsters.insertQuotaCategory(userId, day, code));
+	}
+
+	/** 카테고리 레벨이 {@code from} → {@code to}로 올라 새로 탐색 후보가 된 종 (출현 레벨 기준). */
+	@Transactional(readOnly = true)
+	public List<UnlockedSpecies> unlockedBetween(String categoryCode, int from, int to) {
+		if (to <= from) {
+			return List.of();
+		}
+		return monsters.speciesUnlockedBetween(categoryCode, from, to).stream()
+			.map(id -> new UnlockedSpecies(id, categoryCode)).toList();
 	}
 
 	/** 카테고리 코드 → 스타터 종. */

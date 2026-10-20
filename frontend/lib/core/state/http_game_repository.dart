@@ -50,7 +50,7 @@ class HttpGameRepository implements GameRepository {
 
   // ---------- 조회 (3-2) ----------
 
-  /// 홈을 그릴 데이터를 모두 불러온다: 상단 바 · 오늘 요약 · 연 카테고리 · 몬스터 · 가방 · 습관 · 목표.
+  /// 홈을 그릴 데이터를 모두 불러온다: 상단 바 · 오늘 요약 · 연 카테고리 · 몬스터 · 가방 · 습관 · 목표 · 오늘 체크인 대상(선택지).
   /// 몬스터 목록엔 호감도 · 경험치가 없어서 마리마다 상세(`GET /monsters/{id}`)를 같이 부른다 (명세 그대로).
   @override
   Future<void> load() async {
@@ -63,6 +63,7 @@ class HttpGameRepository implements GameRepository {
       api.get('/habits'),
       api.get('/goals'),
       _measureTable(),
+      api.get('/checkins/today'),
     ]);
     final status = r[0] as Map<String, dynamic>;
     final today = r[1] as Map<String, dynamic>;
@@ -109,8 +110,27 @@ class HttpGameRepository implements GameRepository {
         counted: {for (final h in hs) if (h['counted'] == true) '${h['habitId']}'},
       );
     }
+    _applyBoard(r[8] as Map<String, dynamic>);
     _businessDate = status['businessDate'] as String;
     state.markLoaded();
+  }
+
+  /// `GET /checkins/today`: 체크인할 습관(탭 순서) · 선택지, 제출 후면 다시 체크까지 반영한 최신 값.
+  void _applyBoard(Map<String, dynamic> board) {
+    final hs = [
+      for (final t in (board['tabs'] as List).cast<Map<String, dynamic>>())
+        ...(t['habits'] as List).cast<Map<String, dynamic>>(),
+    ];
+    state.applyCheckinBoard(
+      ids: [for (final h in hs) '${h['habitId']}'],
+      options: {
+        for (final h in hs) '${h['habitId']}': [for (final o in h['options'] as List) (o as num).toDouble()],
+      },
+      latest: {
+        for (final h in hs)
+          if (h['previousValue'] != null) '${h['habitId']}': (h['previousValue'] as num).toDouble(),
+      },
+    );
   }
 
   static bool _knownSpecies(Object? code) => Catalog.species.any((s) => s.id == code);
@@ -199,19 +219,101 @@ class HttpGameRepository implements GameRepository {
     await load();
   }
 
+  // ---------- 체크인 (3-3) ----------
+
+  /// 오늘 체크인 첫 제출 (`POST /checkins/today`, 중복 방지 키). 점수 · 반영 습관 · 골드 · 레벨 · 탐색 횟수는 서버가 정한다.
+  /// [answers]: 습관 id → 값 (0 = "못 했어"). 값은 챗봇이 이미 서버 선택지로 맞춰 둔 것 ([GameState.recordableValue]).
+  @override
+  Future<DailyCheckinResult?> confirmCheckin(Map<String, double> answers) async {
+    if (answers.isEmpty) return null;
+    final res = await api.send('POST', '/checkins/today', idempotent: true, body: _checkinBody(answers))
+        as Map<String, dynamic>;
+    final hs = (res['habits'] as List).cast<Map<String, dynamic>>();
+    final categories = (res['categoryExp'] as List).cast<Map<String, dynamic>>();
+    final scores = {for (final h in hs) '${h['habitId']}': h['score'] as int};
+    final counted = {for (final h in hs) if (h['counted'] == true) '${h['habitId']}'};
+    state.applyCheckinResult(
+      gold: res['gold'] as int,
+      values: {for (final h in hs) '${h['habitId']}': answers['${h['habitId']}'] ?? 0},
+      scores: scores,
+      counted: counted,
+      exploreTotal: res['exploreTotal'] as int,
+      categoryExp: {
+        for (final c in categories)
+          c['categoryCode'] as String: _expTotal(c['levelAfter'] as int, c['expInLevel'] as int),
+      },
+    );
+    return DailyCheckinResult(
+      scores: [
+        for (final h in hs)
+          if (_habitById('${h['habitId']}') case final habit?)
+            HabitScore(
+              habit: habit,
+              value: answers[habit.id] ?? 0,
+              score: scores[habit.id]!,
+              counted: counted.contains(habit.id),
+            ),
+      ],
+      goldEarned: res['goldEarned'] as int,
+      levelUps: {
+        for (final c in categories)
+          if ((c['levelAfter'] as int) > (c['levelBefore'] as int)) c['categoryCode'] as String: c['levelAfter'] as int,
+      },
+      exploreCount: res['exploreTotal'] as int,
+      periodBonusGold: (res['goldBreakdown'] as Map<String, dynamic>)['periodBonus'] as int,
+    );
+  }
+
+  /// 다시 체크 (`PUT /checkins/today`). 최신 값 · 점수만 바뀌고 보상은 첫 제출 그대로라 `goldEarned`는 0.
+  @override
+  Future<DailyCheckinResult?> resubmitCheckin(Map<String, double> answers) async {
+    if (answers.isEmpty) return null;
+    final res = await api.send('PUT', '/checkins/today', idempotent: true, body: _checkinBody(answers))
+        as Map<String, dynamic>;
+    final hs = (res['habits'] as List).cast<Map<String, dynamic>>();
+    final values = {for (final h in hs) '${h['habitId']}': (h['value'] as num).toDouble()};
+    final scores = {for (final h in hs) '${h['habitId']}': h['score'] as int};
+    state.applyRecheck(values: values, scores: scores);
+    return DailyCheckinResult(
+      scores: [
+        for (final h in hs)
+          if (_habitById('${h['habitId']}') case final habit?)
+            HabitScore(
+              habit: habit,
+              value: values[habit.id]!,
+              score: scores[habit.id]!,
+              counted: state.countedToday.contains(habit.id),
+            ),
+      ],
+      goldEarned: 0,
+      levelUps: const {},
+      exploreCount: 0,
+    );
+  }
+
+  /// 체크인 본문: 화면을 연 업무 날짜 + 습관마다 했는지 · 값. 서버가 정한 대상 순서대로 보낸다.
+  Map<String, dynamic> _checkinBody(Map<String, double> answers) => {
+        'businessDate': _businessDate,
+        'answers': [
+          for (final e in answers.entries)
+            {
+              'habitId': int.parse(e.key),
+              'done': e.value > 0,
+              if (e.value > 0) 'value': e.value,
+            },
+        ],
+      };
+
+  Habit? _habitById(String id) => state.habits.where((h) => h.id == id).firstOrNull;
+
+  /// 레벨 · 그 레벨에서 모은 경험치 → 누적 경험치 (레벨 L까지 10 × (1 + … + (L − 1)), [CategoryLevel.fromPoints]와 같은 공식).
+  static int _expTotal(int level, int expInLevel) => 10 * level * (level - 1) ~/ 2 + expInLevel;
+
   // ---------- 아직 앱 안에서 계산 (서버에 저장되지 않음) ----------
 
   /// 3-5에서 서버로 (`POST /shop/purchases`).
   @override
   Future<bool> buy(ShopItem item, {int count = 1}) => _local.buy(item, count: count);
-
-  /// 3-3에서 서버로 (`POST /checkins/today`).
-  @override
-  Future<DailyCheckinResult?> confirmCheckin(Map<String, double> answers) => _local.confirmCheckin(answers);
-
-  /// 3-3에서 서버로 (`PUT /checkins/today`).
-  @override
-  Future<DailyCheckinResult?> resubmitCheckin(Map<String, double> answers) => _local.resubmitCheckin(answers);
 
   /// 3-4에서 서버로 (`POST /explores`).
   @override

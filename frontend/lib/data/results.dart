@@ -21,6 +21,7 @@ class DailyCheckinResult {
     required this.goldEarned,
     required this.levelUps,
     required this.exploreCount,
+    this.periodBonusGold = 0,
   });
 
   final List<HabitScore> scores;
@@ -33,6 +34,9 @@ class DailyCheckinResult {
 
   /// 오늘 받은 탐색 횟수.
   final int exploreCount;
+
+  /// [goldEarned] 중 습관 기간을 채워 받은 보너스 (서버 `goldBreakdown.periodBonus`). 로컬 모드는 0.
+  final int periodBonusGold;
 
   int get totalScore => scores.fold(0, (a, s) => a + s.score);
   int get countedScore => scores.where((s) => s.counted).fold(0, (a, s) => a + s.score);
