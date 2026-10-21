@@ -308,4 +308,11 @@ class HabitRepository {
 			 where user_id = ?""")
 			.params(current, longest, lastAttended, userId).update();
 	}
+
+	// ---------- 탐색 (3-4) ----------
+	/** 도감 해금권 1장. 같은 기준값이면 이미 받은 것이라 false (DB UNIQUE(user_id, milestone)). */
+	boolean insertUnlockTicket(long userId, int milestone) {
+		return db.sql("insert into habit.category_unlock_ticket (user_id, milestone) values (?, ?) on conflict do nothing")
+			.params(userId, milestone).update() == 1;
+	}
 }

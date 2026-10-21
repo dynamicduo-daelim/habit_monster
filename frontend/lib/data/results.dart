@@ -42,11 +42,19 @@ class DailyCheckinResult {
   int get countedScore => scores.where((s) => s.counted).fold(0, (a, s) => a + s.score);
 }
 
-/// 탐색 1회 결과. 백엔드 `POST /explores` 응답과 같은 모양 (API 명세 v4):
+/// 탐색 1회 결과. 백엔드 `POST /explores` 응답과 같은 모양 (API 명세 v5):
 /// 꽝(`MISS`, species 없음) · 가진 종(`DUPLICATE`, 볼 없이 바로 골드) · 안 가진 종(`ENCOUNTER`, 볼을 던질 수 있음).
 /// 안 가진 종은 아직 잡은 게 아니다. 잡기는 [GameState.throwBall] → [CatchResult].
 class EncounterResult {
-  const EncounterResult({this.species, this.alreadyOwned = false, this.emptyPool = false, this.gold = 0});
+  const EncounterResult({
+    this.species,
+    this.alreadyOwned = false,
+    this.emptyPool = false,
+    this.gold = 0,
+    this.exploreId,
+    this.newlySeen = false,
+    this.captureRate,
+  });
 
   /// 만난 몬스터 종 (아무도 없었으면 null).
   final MonsterSpecies? species;
@@ -59,6 +67,15 @@ class EncounterResult {
 
   /// 아무도 없었던 이유가 "오늘 체크인한 길에 만날 몬스터가 아예 없어서"인지 (아니면 이번에만 안 나온 것).
   final bool emptyPool;
+
+  /// 서버의 탐색 번호 (`exploreId`) — 볼을 던질 때 이 번호로 부른다. 로컬 모드는 null.
+  final String? exploreId;
+
+  /// 처음 만난 종이라 이번에 도감에 새로 등록됐는지 (`newlySeen`, "도감 등록!" 연출).
+  final bool newlySeen;
+
+  /// 서버가 알려 준 포획률 (`captureRate`, 0 ~ 1). 로컬 모드는 null → [GameState.captureRateOf].
+  final double? captureRate;
 
   bool get found => species != null;
 

@@ -104,12 +104,13 @@ class _ExploreViewState extends State<ExploreView> {
     super.dispose();
   }
 
-  String _line() {
+  String _line(GameState s) {
     final sp = _e.species;
     final r = _c.lastCatch;
     switch (_phase) {
       case _Phase.appear:
-        return '야생의 ${sp!.name}${josaIGa(sp.name)} 나타났다! 성실볼을 던져볼까?';
+        final rate = ((_e.captureRate ?? s.captureRateOf(sp!)) * 100).round();
+        return '야생의 ${sp!.name}${josaIGa(sp.name)} 나타났다! 성실볼을 던져볼까?\n잡힐 확률 $rate%';
       case _Phase.throwing:
         return '성실볼을 던졌다! 과연…';
       case _Phase.popup:
@@ -161,7 +162,10 @@ class _ExploreViewState extends State<ExploreView> {
                       ),
                       Positioned(left: 10, top: 10, child: _pips(s)),
                       if (_phase == _Phase.done && r?.kind == CatchKind.newMonster)
-                        Positioned(right: 10, top: 10, child: _newBadge()),
+                        Positioned(right: 10, top: 10, child: _newBadge('NEW!')),
+                      // 처음 만난 종: 잡기 전이어도 도감에 올라간다 (API 명세 v5 newlySeen)
+                      if (_phase == _Phase.appear && _e.newlySeen)
+                        Positioned(right: 10, top: 10, child: _newBadge('도감 등록!')),
                       if (_phase == _Phase.done && _e.alreadyOwned)
                         Positioned(right: 10, top: 10, child: _goldBadge(_e.gold)),
                       Positioned(
@@ -261,7 +265,7 @@ class _ExploreViewState extends State<ExploreView> {
                           border: Border.all(color: AppColors.ink, width: 4),
                           boxShadow: const [BoxShadow(color: AppColors.ink, offset: Offset(4, 4))],
                         ),
-                        child: Text(_line(),
+                        child: Text(_line(s),
                             style: const TextStyle(fontSize: 12.5, height: 1.8, color: AppColors.brownText)),
                       ),
                       Positioned(
@@ -343,13 +347,13 @@ class _ExploreViewState extends State<ExploreView> {
     );
   }
 
-  Widget _newBadge() => Transform.rotate(
+  Widget _newBadge(String text) => Transform.rotate(
         angle: -4 * math.pi / 180,
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
           decoration: BoxDecoration(color: AppColors.red, border: Border.all(color: AppColors.ink, width: 3)),
-          child: const Text('NEW!',
-              style: TextStyle(
+          child: Text(text,
+              style: const TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w700,
                 color: AppColors.white,

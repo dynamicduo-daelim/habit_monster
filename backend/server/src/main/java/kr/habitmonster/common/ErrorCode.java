@@ -33,9 +33,21 @@ public enum ErrorCode {
 	ALREADY_SUBMITTED(HttpStatus.CONFLICT, "오늘 체크인은 이미 했어요"),
 	/** 앱은 습관 추가 · 연장을 안내한다. */
 	NO_ACTIVE_HABIT(HttpStatus.CONFLICT, "오늘 체크인할 습관이 없어요"),
+	CHECKIN_REQUIRED(HttpStatus.CONFLICT, "오늘 체크인을 먼저 해 주세요"),
+	/** 이미 던졌거나, 다시 탐색 · 날짜가 바뀌어 사라진 등장. */
+	ENCOUNTER_CLOSED(HttpStatus.CONFLICT, "몬스터가 이미 떠났어요"),
+	/** 쓰다듬기 · 놀아주기는 몬스터마다 하루 1번. 앱은 실패가 아니라 안내로 보여 준다. */
+	ALREADY_DONE_TODAY(HttpStatus.CONFLICT, "오늘은 이미 했어요. 내일 또 해 주세요"),
 	// 422
 	IDEMPOTENCY_KEY_REUSED(HttpStatus.UNPROCESSABLE_CONTENT, "요청을 확인해 주세요"),
 	NOT_ENOUGH_GOLD(HttpStatus.UNPROCESSABLE_CONTENT, "골드가 모자라요"),
+	/** 앱은 볼 사기 버튼을 보여 준다. */
+	NO_BALL(HttpStatus.UNPROCESSABLE_CONTENT, "성실볼이 없어요"),
+	NO_EXPLORE_LEFT(HttpStatus.UNPROCESSABLE_CONTENT, "오늘 탐색을 다 했어요"),
+	NO_ITEM(HttpStatus.UNPROCESSABLE_CONTENT, "물약이 없어요"),
+	MAX_LEVEL(HttpStatus.UNPROCESSABLE_CONTENT, "이미 최고 레벨이에요"),
+	/** 필드에 1마리일 때 넣기 · 꽉 찼을 때 꺼내기. */
+	FIELD_LIMIT(HttpStatus.UNPROCESSABLE_CONTENT, "필드 자리를 확인해 주세요"),
 	// 503
 	SOCIAL_NOT_CONFIGURED(HttpStatus.SERVICE_UNAVAILABLE, "아직 준비 중인 로그인 방식이에요");
 

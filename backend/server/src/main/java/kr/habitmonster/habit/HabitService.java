@@ -364,10 +364,6 @@ public class HabitService {
 		return new Revision(revision, revised, scoring.overallRate(revised.stream().map(RevisedHabit::score).toList()));
 	}
 
-	private void lockProfile(long userId) {
-		habits.lockHabitUser(userId).orElseThrow(() -> new IllegalStateException("습관 프로필 없음: " + userId));
-	}
-
 	/**
 	 * 답 검사 (400 + 틀린 항목 전부): 대상 습관을 빠짐없이 · 한 번씩, 대상이 아닌 습관(남의 습관 · 없는 습관 포함)은 안 됨,
 	 * {@code done}은 필수, {@code done:true}면 값이 선택지 중 하나. 습관 id → 저장할 값("못했어"는 0).
@@ -511,5 +507,30 @@ public class HabitService {
 	private static int displayStreak(StreakRow r, LocalDate today) {
 		LocalDate last = r.lastAttendedDate();
 		return last != null && !last.isBefore(today.minusDays(1)) ? r.currentStreak() : 0;
+	}
+
+	// ---------- 탐색 (3-4) ----------
+	/**
+	 * 사용자 잠금 (잠금 순서의 처음). 탐색 · 포획처럼 다른 모듈에 쓰는 요청도 먼저 이걸 잡아서,
+	 * 같은 사람의 요청이 한 줄로 서고 모듈끼리 잠금 순서가 엇갈리지 않게 한다.
+	 */
+	@Transactional
+	public void lockProfile(long userId) {
+		habits.lockHabitUser(userId).orElseThrow(() -> new IllegalStateException("습관 프로필 없음: " + userId));
+	}
+
+	/** 연 카테고리 → 레벨 (탐색 후보 = 출현 레벨이 이 레벨 이하인 종). */
+	@Transactional(readOnly = true)
+	public Map<String, Integer> categoryLevels(long userId) {
+		return habits.categoryExp(userId).stream().collect(Collectors.toMap(CategoryExpRow::categoryCode, CategoryExpRow::level));
+	}
+
+	/**
+	 * 가진 종 수가 도감 기준값({@code dex_unlock_thresholds}, 5 · 10 · 15)에 닿았으면 카테고리 해금권 1장.
+	 * 이번에 새로 줬으면 true — 같은 기준값은 DB가 한 번만 받게 한다.
+	 */
+	@Transactional
+	public boolean grantUnlockTicket(long userId, int dexCount) {
+		return config.dexUnlockThresholds().contains(dexCount) && habits.insertUnlockTicket(userId, dexCount);
 	}
 }

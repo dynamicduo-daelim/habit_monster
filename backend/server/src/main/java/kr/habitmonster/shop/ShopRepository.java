@@ -1,6 +1,8 @@
 package kr.habitmonster.shop;
 
 import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
@@ -40,5 +42,48 @@ class ShopRepository {
 	int quantity(long userId, String itemCode) {
 		return db.sql("select quantity from shop.inventory where user_id = ? and item_code = ?")
 			.params(userId, itemCode).query(Integer.class).optional().orElse(0);
+	}
+
+	// ---------- 소모 (3-4 포획) ----------
+	/** 조건부 차감: 1개 이상 있을 때만 1 줄이고 남은 개수. 없거나 0개면 비어 있다 (음수가 되지 않는다). */
+	Optional<Integer> takeOne(long userId, String itemCode) {
+		return db.sql("""
+			update shop.inventory set quantity = quantity - 1, version = version + 1, updated_at = now()
+			 where user_id = ? and item_code = ? and quantity >= 1 returning quantity""")
+			.params(userId, itemCode).query(Integer.class).optional();
+	}
+
+	/** 소모 기록 1행 ({@code consumer_key}가 유일 — 같은 소모를 두 번 쓰지 않는다). 새 행 id. */
+	long insertConsumption(long userId, String itemCode, String consumerKey) {
+		return db.sql("""
+			insert into shop.item_consumption (user_id, item_code, quantity, consumer_key) values (?, ?, 1, ?) returning id""")
+			.params(userId, itemCode, consumerKey).query(Long.class).single();
+	}
+
+	// ---------- 구매 (3-5) ----------
+	/** 파는 아이템 하나 (판매 중인 것만). */
+	Optional<ItemRow> activeItem(String code) {
+		return db.sql("""
+			select code, name, short_name, price, effect_type, effect_value from shop.shop_item where code = ? and is_active""")
+			.param(code).query(ItemRow.class).optional();
+	}
+
+	/** 구매 기록 (가격 스냅샷). 새 행 id = 원장 ref. */
+	long insertPurchase(long userId, String itemCode, int quantity, int unitPrice, UUID key) {
+		return db.sql("""
+			insert into shop.purchase (user_id, item_code, quantity, unit_price, total_price, idempotency_key)
+			values (?, ?, ?, ?, ?, ?) returning id""")
+			.params(userId, itemCode, quantity, unitPrice, unitPrice * quantity, key).query(Long.class).single();
+	}
+
+	/** 가방에 더한다 (행은 처음 살 때 생긴다). 더한 뒤 개수. */
+	int addToInventory(long userId, String itemCode, int quantity) {
+		return db.sql("""
+			insert into shop.inventory (user_id, item_code, quantity) values (?, ?, ?)
+			on conflict (user_id, item_code)
+			do update set quantity = shop.inventory.quantity + excluded.quantity, version = shop.inventory.version + 1,
+			              updated_at = now()
+			returning quantity""")
+			.params(userId, itemCode, quantity).query(Integer.class).single();
 	}
 }

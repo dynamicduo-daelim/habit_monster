@@ -2,6 +2,8 @@ import '../../data/catalog.dart';
 import '../../data/models.dart';
 import '../../data/results.dart';
 import '../api/api_client.dart';
+import '../api/api_exception.dart';
+import '../constants/economy.dart';
 import 'game_repository.dart';
 import 'game_state.dart';
 import 'local_game_repository.dart';
@@ -309,43 +311,144 @@ class HttpGameRepository implements GameRepository {
   /// 레벨 · 그 레벨에서 모은 경험치 → 누적 경험치 (레벨 L까지 10 × (1 + … + (L − 1)), [CategoryLevel.fromPoints]와 같은 공식).
   static int _expTotal(int level, int expInLevel) => 10 * level * (level - 1) ~/ 2 + expInLevel;
 
+  // ---------- 탐색 · 포획 (3-4) ----------
+
+  /// 탐색 1회 (`POST /explores`, 중복 방지 키). 꽝 · 가진 종(골드) · 안 가진 종(등장)은 서버가 정한다.
+  /// 남은 등장이 있었으면 서버가 닫는다 (`skippedExploreId`) — 앱은 새 결과로 바꿔 보여 주기만 한다.
+  @override
+  Future<EncounterResult?> explore() async {
+    if (state.encountersLeft <= 0) return null;
+    final res = await api.send('POST', '/explores', idempotent: true, body: {'businessDate': _businessDate})
+        as Map<String, dynamic>;
+    final e = _encounter(res);
+    state.applyExplore(
+      gold: res['gold'] as int,
+      exploreRemaining: res['exploreRemaining'] as int,
+      seenSpeciesId: e.catchable ? e.species!.id : null,
+    );
+    return e;
+  }
+
+  /// 챗봇에 들어올 때 오늘 처리하지 않은 등장 (`GET /explores/pending`, 없으면 204).
+  @override
+  Future<EncounterResult?> pendingEncounter() async {
+    final res = await api.get('/explores/pending') as Map<String, dynamic>?;
+    if (res == null) return null;
+    final e = _encounter(res);
+    return e.catchable ? e : null;
+  }
+
+  /// 볼 던지기 (`POST /explores/{exploreId}/capture`, 중복 방지 키). 볼 1개를 쓰고 희귀도별 확률로 잡거나 놓친다.
+  @override
+  Future<CatchResult?> throwBall(EncounterResult encounter) async {
+    final id = encounter.exploreId;
+    final sp = encounter.species;
+    if (id == null || sp == null || state.balls <= 0) return null;
+    final res = await api.send('POST', '/explores/$id/capture', idempotent: true, body: {'businessDate': _businessDate})
+        as Map<String, dynamic>;
+    final m = res['monster'] as Map<String, dynamic>?;
+    final caught = m == null
+        ? null
+        : OwnedMonster(uid: '${m['userMonsterId']}', speciesId: sp.id, inField: m['location'] == 'FIELD');
+    state.applyCapture(balls: res['ballCount'] as int, caught: caught);
+    return caught == null
+        ? CatchResult(kind: CatchKind.escaped, species: sp)
+        : CatchResult(kind: CatchKind.newMonster, species: sp, monster: caught, toField: caught.inField);
+  }
+
+  /// `POST /explores` · `GET /explores/pending` 응답 → [EncounterResult]. 앱이 모르는 종이면 꽝처럼 보여 준다.
+  static EncounterResult _encounter(Map<String, dynamic> res) {
+    final sp = res['species'] as Map<String, dynamic>?;
+    final species = sp == null ? null : Catalog.species.where((s) => s.id == sp['imageKey']).firstOrNull;
+    if (species == null) return EncounterResult(exploreId: '${res['exploreId']}');
+    return EncounterResult(
+      species: species,
+      alreadyOwned: res['result'] == 'DUPLICATE',
+      gold: res['goldAwarded'] as int,
+      exploreId: '${res['exploreId']}',
+      newlySeen: res['newlySeen'] as bool,
+      captureRate: (sp!['captureRate'] as num?)?.toDouble(),
+    );
+  }
+
+  // ---------- 성장 · 교감 (3-5) ----------
+
+  /// 구매 (`POST /shop/purchases`, 중복 방지 키). 가격은 서버가 상점 가격으로 계산하고, 골드가 모자라면 422 `NOT_ENOUGH_GOLD`.
+  @override
+  Future<bool> buy(ShopItem item, {int count = 1}) async {
+    if (count < 1) return false;
+    final res = await api.send('POST', '/shop/purchases',
+        idempotent: true, body: {'itemCode': Catalog.serverCodeOf(item), 'quantity': count}) as Map<String, dynamic>;
+    state.applyPurchase(gold: res['gold'] as int, item: item, quantity: res['quantity'] as int);
+    return true;
+  }
+
+  /// 물약 먹이기 (`POST /monsters/{id}/feed`, 중복 방지 키). 오른 레벨 수, 물약이 없으면 -1 (서버를 부르지 않음).
+  @override
+  Future<int> feed(OwnedMonster m, ShopItem potion) async {
+    if ((state.inventory[potion.id] ?? 0) <= 0) return -1;
+    final res = await api.send('POST', '/monsters/${m.uid}/feed',
+        idempotent: true, body: {'itemCode': Catalog.serverCodeOf(potion)}) as Map<String, dynamic>;
+    state.applyFeed(m,
+        potion: potion,
+        expGained: res['expGained'] as int,
+        levelAfter: res['levelAfter'] as int,
+        remaining: res['remainingQuantity'] as int);
+    return (res['levelAfter'] as int) - (res['levelBefore'] as int);
+  }
+
+  /// 쓰다듬기 (`POST /monsters/{id}/affection` PET). 오른 호감도.
+  @override
+  Future<int> pet(OwnedMonster m) => _affection(m, pet: true);
+
+  /// 놀아주기 (`POST /monsters/{id}/affection` PLAY). 오른 호감도.
+  @override
+  Future<int> play(OwnedMonster m) => _affection(m, pet: false);
+
+  /// 명세대로 중복 방지 키 없음. 오늘 이미 했으면 서버가 409 `ALREADY_DONE_TODAY` — 앱도 "오늘 한 것"으로 표시하고
+  /// 오류를 그대로 올려 "오늘은 이미 했어요" 토스트가 뜨게 한다 (실패가 아니라 안내).
+  Future<int> _affection(OwnedMonster m, {required bool pet}) async {
+    try {
+      final res = await api.send('POST', '/monsters/${m.uid}/affection', body: {'action': pet ? 'PET' : 'PLAY'})
+          as Map<String, dynamic>;
+      state.applyAffection(m, pet: pet, affection: res['affection'] as int);
+      return res['gain'] as int;
+    } on ApiException catch (e) {
+      if (e.code == 'ALREADY_DONE_TODAY') state.applyAffection(m, pet: pet);
+      rethrow;
+    }
+  }
+
+  /// 필드 끌기 호감도(D-20)는 명세 · DB에 없어 **서버 모드에서는 오르지 않는다** (결정 D-46). 끌기 자체는 화면에서 그대로 된다.
+  @override
+  Future<int> dragMonster(OwnedMonster m) async => 0;
+
+  /// 가방에 넣기 · 꺼내기 (`PATCH /monsters/{id}/location`). 필드 1마리 넣기 · 꽉 찼을 때 꺼내기는 서버를 부르지 않고 false.
+  @override
+  Future<bool> moveMonster(OwnedMonster m, {required bool toField}) async {
+    if (toField && state.fieldMonsters.length >= Economy.fieldCapacity) return false;
+    if (!toField && state.fieldMonsters.length <= 1) return false;
+    final res = await api.send('PATCH', '/monsters/${m.uid}/location', body: {'location': toField ? 'FIELD' : 'BAG'})
+        as Map<String, dynamic>;
+    state.applyLocation(m, inField: res['location'] == 'FIELD');
+    return true;
+  }
+
+  /// 대화 상대 (`PUT /me/partner`). 가방에 있어도 된다.
+  @override
+  Future<void> setPartner(OwnedMonster m) async {
+    final res = await api.send('PUT', '/me/partner', body: {'userMonsterId': int.parse(m.uid)}) as Map<String, dynamic>;
+    state.applyPartner('${res['partnerMonsterId']}');
+  }
+
+  /// 말 걸기 (`GET /monsters/{id}/line`) — 호감도 단계에 맞는 서버 대사.
+  @override
+  Future<String?> talk(OwnedMonster m) async {
+    final res = await api.get('/monsters/${m.uid}/line') as Map<String, dynamic>;
+    return res['line'] as String?;
+  }
+
   // ---------- 아직 앱 안에서 계산 (서버에 저장되지 않음) ----------
-
-  /// 3-5에서 서버로 (`POST /shop/purchases`).
-  @override
-  Future<bool> buy(ShopItem item, {int count = 1}) => _local.buy(item, count: count);
-
-  /// 3-4에서 서버로 (`POST /explores`).
-  @override
-  Future<EncounterResult?> explore() => _local.explore();
-
-  /// 3-4에서 서버로 (`POST /explores/{id}/capture`).
-  @override
-  Future<CatchResult?> throwBall(MonsterSpecies species) => _local.throwBall(species);
-
-  /// 3-5에서 서버로 (`POST /monsters/{id}/affection` PET).
-  @override
-  Future<int> pet(OwnedMonster m) => _local.pet(m);
-
-  /// 3-5에서 서버로 (`POST /monsters/{id}/affection` PLAY).
-  @override
-  Future<int> play(OwnedMonster m) => _local.play(m);
-
-  /// 3-5에서 서버로 (`POST /monsters/{id}/feed`).
-  @override
-  Future<int> feed(OwnedMonster m, ShopItem potion) => _local.feed(m, potion);
-
-  /// 명세 v5 · DB v1.7에 없음 (D-20) — 3-5에서 명세 · DB 다음 판과 함께 정한다.
-  @override
-  Future<int> dragMonster(OwnedMonster m) => _local.dragMonster(m);
-
-  /// 3-5에서 서버로 (`PATCH /monsters/{id}/location`).
-  @override
-  Future<bool> moveMonster(OwnedMonster m, {required bool toField}) => _local.moveMonster(m, toField: toField);
-
-  /// 3-5에서 서버로 (`PUT /me/partner`).
-  @override
-  Future<void> setPartner(OwnedMonster m) => _local.setPartner(m);
 
   /// 4단계에서 서버로 (`POST /categories/{code}/unlock`).
   @override

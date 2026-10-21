@@ -4,9 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:habit_monster/core/state/game_state.dart';
+import 'package:habit_monster/core/state/local_game_repository.dart';
 import 'package:habit_monster/data/catalog.dart';
 import 'package:habit_monster/data/models.dart';
 import 'package:habit_monster/data/results.dart';
+import 'package:habit_monster/features/chat/chat_controller.dart';
 import 'package:habit_monster/features/shell/main_shell.dart';
 import 'game_harness.dart';
 
@@ -31,7 +33,26 @@ class FixedRandom implements Random {
   bool nextBool() => false;
 }
 
+/// 서버에 오늘 처리하지 않은 등장이 남아 있는 것처럼 (`GET /explores/pending`).
+class _PendingRepo extends LocalGameRepository {
+  _PendingRepo(super.state);
+
+  @override
+  Future<EncounterResult?> pendingEncounter() async =>
+      EncounterResult(species: Catalog.speciesById('chicken'), exploreId: '9', captureRate: 0.6);
+}
+
 void main() {
+  test('체크인한 날 챗봇을 열면 남은 등장을 되살린다 (서버 모드)', () async {
+    final s = _checkedIn(GameState.sample(gold: 1240, balls: 1));
+    final c = ChatController(state: s, repository: _PendingRepo(s));
+    await c.start();
+    expect(c.step, ChatStep.explore);
+    expect(c.encounter!.exploreId, '9');
+    expect(c.canThrow, isTrue);
+    expect(c.messages.last.text, contains('아까 만난 횃불 닭이'));
+  });
+
   group('체크인 규칙 (하루 1번 일괄 확정)', () {
     test('점수 상위 3개만 골드 · 카테고리 포인트에 반영', () {
       final s = GameState.sample(gold: 1240, balls: 1);

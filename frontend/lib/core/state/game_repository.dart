@@ -38,12 +38,15 @@ abstract class GameRepository {
   /// 다시 체크 (기록만 바뀌고 보상은 그대로). 아직 안 냈으면 null.
   Future<DailyCheckinResult?> resubmitCheckin(Map<String, double> answers);
 
-  // ---------- 탐색 · 포획 (POST /explores · /explores/{id}/capture) ----------
+  // ---------- 탐색 · 포획 (POST /explores · GET /explores/pending · POST /explores/{id}/capture) ----------
   /// 탐색 1회. 남은 횟수가 없으면 null.
   Future<EncounterResult?> explore();
 
-  /// 나타난 몬스터에게 성실볼 1개. 볼이 없으면 null.
-  Future<CatchResult?> throwBall(MonsterSpecies species);
+  /// 오늘 처리하지 않은 등장 ("그만"을 눌렀거나 앱이 꺼졌을 때). 없으면 null. 로컬 모드는 늘 null.
+  Future<EncounterResult?> pendingEncounter();
+
+  /// [encounter]에서 나타난 몬스터에게 성실볼 1개. 볼이 없으면 null.
+  Future<CatchResult?> throwBall(EncounterResult encounter);
 
   // ---------- 몬스터 (POST /monsters/{id}/… · PATCH location · PUT /me/partner) ----------
   /// 쓰다듬기 (하루 1회). 오른 호감도.
@@ -64,6 +67,9 @@ abstract class GameRepository {
 
   /// 챗봇 대화 상대 바꾸기.
   Future<void> setPartner(OwnedMonster m);
+
+  /// "말 걸기" 대사 (서버: `GET /monsters/{id}/line`, 호감도 단계별). null이면 화면이 앱 대사(`Catalog`)를 쓴다.
+  Future<String?> talk(OwnedMonster m);
 
   // ---------- 도감 · 카테고리 (POST /categories/{code}/unlock) ----------
   Future<bool> openCategory(String categoryId);

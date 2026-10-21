@@ -38,7 +38,10 @@ class LocalGameRepository implements GameRepository {
   Future<EncounterResult?> explore() async => state.explore();
 
   @override
-  Future<CatchResult?> throwBall(MonsterSpecies species) async => state.throwBall(species);
+  Future<EncounterResult?> pendingEncounter() async => null;
+
+  @override
+  Future<CatchResult?> throwBall(EncounterResult encounter) async => state.throwBall(encounter.species!);
 
   @override
   Future<int> pet(OwnedMonster m) async => state.pet(m);
@@ -60,6 +63,9 @@ class LocalGameRepository implements GameRepository {
     state.chatPartnerUid = m.uid;
     state.touch();
   }
+
+  @override
+  Future<String?> talk(OwnedMonster m) async => null;
 
   @override
   Future<bool> openCategory(String categoryId) async => state.openCategory(categoryId);

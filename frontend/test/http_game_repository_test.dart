@@ -11,7 +11,9 @@ import 'package:habit_monster/core/state/game_repository.dart';
 import 'package:habit_monster/core/state/game_state.dart';
 import 'package:habit_monster/core/state/http_game_repository.dart';
 import 'package:habit_monster/core/state/local_game_repository.dart';
+import 'package:habit_monster/data/catalog.dart';
 import 'package:habit_monster/data/models.dart';
+import 'package:habit_monster/data/results.dart';
 import 'package:habit_monster/features/shell/game_loader.dart';
 
 class _Tokens implements TokenSource {
@@ -144,6 +146,16 @@ Map<String, Object> _server({bool checkedIn = false, String date = '2026-10-18'}
       },
     };
 
+/// 라우트 값이 이것이면 204 (본문 없음).
+const _noContent = 'NO_CONTENT';
+
+/// 탐색에서 깡총 불토끼(안 가진 종)가 처음 나온 응답 — 명세 v5 모양, 그림은 `imageKey`.
+const _rabbit = {
+  'exploreId': 500, 'result': 'ENCOUNTER',
+  'species': {'speciesId': 2, 'name': '깡총 불토끼', 'imageKey': 'rabbit', 'categoryCode': 'ex', 'rarity': 1, 'captureRate': 0.8},
+  'newlySeen': true, 'goldAwarded': 0, 'gold': 157, 'skippedExploreId': null, 'exploreRemaining': 1,
+};
+
 void main() {
   late List<http.Request> requests;
 
@@ -157,6 +169,8 @@ void main() {
         requests.add(r);
         final key = '${r.method} ${r.url.path.replaceFirst('/api/v1', '')}';
         final body = routes[key];
+        if (body == _noContent) return http.Response('', 204);
+        if (body is http.Response) return body; // 오류 응답을 그대로
         return body == null
             ? _json({'code': 'NOT_FOUND', 'message': '없음'}, 404)
             : _json(body, key.startsWith('POST /onboarding') || key == 'POST /checkins/today' ? 201 : 200);
@@ -323,12 +337,172 @@ void main() {
     expect(s.currentStreak, 4);
   });
 
-  test('아직 서버 API가 없는 동작은 앱 안에서 계산한다 (3-5 전)', () async {
-    final s = GameState.empty()..gold = 100;
-    final r = repo(s, _server());
-    expect(await r.buy(const ShopItem(id: 's', name: '하급', short: '하급', price: 20, exp: 20, asset: '')), isTrue);
-    expect(s.gold, 80);
-    expect(requests, isEmpty);
+  group('탐색 · 포획 (3-4)', () {
+    Future<(GameState, HttpGameRepository, Map<String, Object>)> checkedIn() async {
+      final s = GameState.empty();
+      final routes = _server(checkedIn: true);
+      final r = repo(s, routes);
+      await r.load();
+      return (s, r, routes);
+    }
+
+    test('안 가진 종이 나오면 서버 번호 · 처음 본 종 · 포획률을 담고 도감에 "본 종"으로', () async {
+      final (s, r, routes) = await checkedIn();
+      routes['POST /explores'] = _rabbit;
+      final e = await r.explore();
+      final post = requests.last;
+      expect((post.method, post.url.path), ('POST', '/api/v1/explores'));
+      expect(post.headers['Idempotency-Key'], isNotEmpty);
+      expect(jsonDecode(post.body), {'businessDate': '2026-10-18'});
+      expect(e!.species!.id, 'rabbit');
+      expect((e.exploreId, e.newlySeen, e.captureRate, e.catchable), ('500', true, 0.8, true));
+      expect(s.encountersLeft, 1);
+      expect(s.discoveredSpecies, contains('rabbit'));
+      expect(s.caughtSpecies, isNot(contains('rabbit')));
+    });
+
+    test('가진 종은 볼 없이 골드, 꽝은 아무도 없음', () async {
+      final (s, r, routes) = await checkedIn();
+      routes['POST /explores'] = {
+        'exploreId': 501, 'result': 'DUPLICATE',
+        'species': {'speciesId': 1, 'name': '불씨 원숭이', 'imageKey': 'monkey', 'categoryCode': 'ex', 'rarity': 1, 'captureRate': null},
+        'newlySeen': false, 'goldAwarded': 15, 'gold': 135, 'skippedExploreId': null, 'exploreRemaining': 1,
+      };
+      final dup = await r.explore();
+      expect((dup!.alreadyOwned, dup.gold, dup.catchable), (true, 15, false));
+      expect(s.gold, 135);
+
+      routes['POST /explores'] = {
+        'exploreId': 502, 'result': 'MISS', 'species': null, 'newlySeen': false, 'goldAwarded': 0, 'gold': 135,
+        'skippedExploreId': null, 'exploreRemaining': 0,
+      };
+      final miss = await r.explore();
+      expect(miss!.found, isFalse);
+      expect(s.encountersLeft, 0);
+      expect(await r.explore(), isNull); // 남은 횟수가 없으면 서버를 부르지 않는다
+      expect(requests.where((q) => q.url.path.endsWith('/explores')), hasLength(2));
+    });
+
+    test('볼 던지기: 등장 번호로 부르고, 잡으면 새 몬스터 · 남은 볼을 반영', () async {
+      final (s, r, routes) = await checkedIn();
+      routes['POST /explores'] = _rabbit;
+      routes['POST /explores/500/capture'] = {
+        'outcome': 'CAPTURED',
+        'monster': {'userMonsterId': 15, 'name': '깡총 불토끼', 'imageKey': 'rabbit', 'location': 'BAG'},
+        'ballCount': 1, 'dex': {'dexCount': 3, 'newSlotAvailable': false},
+      };
+      final e = await r.explore();
+      final c = await r.throwBall(e!);
+      expect(requests.last.url.path, '/api/v1/explores/500/capture');
+      expect(requests.last.headers['Idempotency-Key'], isNotEmpty);
+      expect((c!.caught, c.toField, c.monster!.uid), (true, false, '15'));
+      expect(s.balls, 1);
+      expect(s.monsterByUid('15')!.inField, isFalse);
+      expect(s.caughtSpecies, contains('rabbit'));
+    });
+
+    test('놓치면 볼만 줄고 몬스터는 그대로', () async {
+      final (s, r, routes) = await checkedIn();
+      routes['POST /explores'] = _rabbit;
+      routes['POST /explores/500/capture'] = {
+        'outcome': 'ESCAPED', 'monster': null, 'ballCount': 1, 'dex': {'dexCount': 2, 'newSlotAvailable': false},
+      };
+      final before = s.monsters.length;
+      final c = await r.throwBall((await r.explore())!);
+      expect(c!.kind, CatchKind.escaped);
+      expect(s.balls, 1);
+      expect(s.monsters, hasLength(before));
+    });
+
+    test('남은 등장: 있으면 되살리고(처음 본 게 아님), 없으면 204 → null', () async {
+      final (_, r, routes) = await checkedIn();
+      routes['GET /explores/pending'] = _noContent;
+      expect(await r.pendingEncounter(), isNull);
+
+      routes['GET /explores/pending'] = {..._rabbit, 'newlySeen': false};
+      final e = await r.pendingEncounter();
+      expect((e!.exploreId, e.species!.id, e.newlySeen), ('500', 'rabbit', false));
+    });
+  });
+
+  group('성장 · 교감 (3-5)', () {
+    Future<(GameState, HttpGameRepository, Map<String, Object>)> loaded() async {
+      final s = GameState.empty();
+      final routes = _server();
+      final r = repo(s, routes);
+      await r.load();
+      return (s, r, routes);
+    }
+
+    test('구매: 서버 아이템 코드 · 수량을 보내고 골드 · 가방 개수를 서버 값으로', () async {
+      final (s, r, routes) = await loaded();
+      routes['POST /shop/purchases'] = {'purchaseId': 300, 'totalPrice': 100, 'gold': 20, 'itemCode': 'BALL', 'quantity': 4};
+      expect(await r.buy(Catalog.seongsilBall, count: 2), isTrue);
+      final post = requests.last;
+      expect(post.headers['Idempotency-Key'], isNotEmpty);
+      expect(jsonDecode(post.body), {'itemCode': 'BALL', 'quantity': 2});
+      expect((s.gold, s.balls), (20, 4));
+    });
+
+    test('물약: 레벨은 서버 값, 남은 물약 반영', () async {
+      final (s, r, routes) = await loaded();
+      final potion = Catalog.itemByServerCode('POTION_M')!;
+      routes['POST /monsters/10/feed'] = {
+        'expGained': 100, 'levelBefore': 7, 'levelAfter': 8, 'stageBefore': 0, 'stageAfter': 0, 'evolved': false,
+        'remainingQuantity': 1,
+      };
+      final m = s.monsterByUid('10')!;
+      expect(await r.feed(m, potion), 1);
+      expect(jsonDecode(requests.last.body), {'itemCode': 'POTION_M'});
+      expect(requests.last.headers['Idempotency-Key'], isNotEmpty);
+      expect((m.level, s.inventory[potion.id]), (8, 1));
+    });
+
+    test('교감: 오른 호감도 반영, 오늘 이미 했으면 표시하고 안내 문구를 올린다', () async {
+      final (s, r, routes) = await loaded();
+      routes['POST /monsters/10/affection'] = {'gain': 1, 'affection': 7, 'affectionTier': 'HIGH'};
+      final monkey = s.monsterByUid('10')!;
+      expect(await r.play(monkey), 1);
+      expect(jsonDecode(requests.last.body), {'action': 'PLAY'});
+      expect((monkey.affection, monkey.playedToday), (7, true));
+
+      routes['POST /monsters/11/affection'] =
+          _json({'code': 'ALREADY_DONE_TODAY', 'message': '오늘은 이미 했어요. 내일 또 해 주세요'}, 409);
+      final mouse = s.monsterByUid('11')!;
+      await expectLater(r.pet(mouse), throwsA(isA<ApiException>().having((e) => e.code, 'code', 'ALREADY_DONE_TODAY')));
+      expect(mouse.pettedToday, isTrue);
+    });
+
+    test('필드/가방: 서버로 옮기고, 필드 마지막 1마리는 서버를 부르지 않고 false', () async {
+      final (s, r, routes) = await loaded();
+      final monkey = s.monsterByUid('10')!; // 필드에 혼자
+      final before = requests.length;
+      expect(await r.moveMonster(monkey, toField: false), isFalse);
+      expect(requests, hasLength(before));
+
+      routes['PATCH /monsters/11/location'] = {'userMonsterId': 11, 'location': 'FIELD', 'fieldCount': 2};
+      final mouse = s.monsterByUid('11')!;
+      expect(await r.moveMonster(mouse, toField: true), isTrue);
+      expect(jsonDecode(requests.last.body), {'location': 'FIELD'});
+      expect(mouse.inField, isTrue);
+    });
+
+    test('대화 상대 · 말 걸기는 서버, 필드 끌기 호감도는 서버 모드에서 0 (D-46)', () async {
+      final (s, r, routes) = await loaded();
+      routes['PUT /me/partner'] = {'partnerMonsterId': 10};
+      await r.setPartner(s.monsterByUid('10')!);
+      expect(jsonDecode(requests.last.body), {'userMonsterId': 10});
+      expect(s.chatPartnerUid, '10');
+
+      routes['GET /monsters/10/line'] = {'affectionTier': 'MID', 'line': '오늘도 뛸 거지?'};
+      expect(await r.talk(s.monsterByUid('10')!), '오늘도 뛸 거지?');
+
+      final before = requests.length;
+      final monkey = s.monsterByUid('10')!;
+      final affection = monkey.affection;
+      expect(await r.dragMonster(monkey), 0);
+      expect((monkey.affection, requests.length), (affection, before));
+    });
   });
 
   group('GameLoader', () {

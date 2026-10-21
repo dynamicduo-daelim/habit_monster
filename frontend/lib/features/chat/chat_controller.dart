@@ -114,6 +114,7 @@ class ChatController extends ChangeNotifier {
     if (state.checkedInToday) {
       messages.add(ChatMessage.bot(await _think(brain.alreadyCheckedIn())));
       step = ChatStep.done;
+      await _restoreEncounter();
       _notify();
       return;
     }
@@ -232,6 +233,17 @@ class ChatController extends ChangeNotifier {
     _notify();
   }
 
+  /// "그만"을 눌렀거나 앱이 꺼져서 남아 있는 오늘의 등장을 되살린다 (서버 `GET /explores/pending`). 로컬 모드는 없음.
+  Future<void> _restoreEncounter() async {
+    final e = await _call(repository.pendingEncounter);
+    if (e == null) return;
+    final n = e.species!.name;
+    encounter = e;
+    lastCatch = null;
+    messages.add(ChatMessage.bot('아까 만난 $n${josaIGa(n)} 아직 근처에 있어! 성실볼을 던져 볼까?'));
+    step = ChatStep.explore;
+  }
+
   /// 지금 나타난 몬스터에게 성실볼을 던질 수 있는지 (이미 던졌으면 끝).
   bool get canThrow => encounter?.catchable == true && lastCatch == null;
 
@@ -239,7 +251,7 @@ class ChatController extends ChangeNotifier {
   /// 잡았으면 대화창에도 남긴다 (놓치면 남기지 않음).
   Future<CatchResult?> throwBall() async {
     if (!canThrow) return null;
-    final r = await _call(() => repository.throwBall(encounter!.species!));
+    final r = await _call(() => repository.throwBall(encounter!));
     if (r == null) return null;
     lastCatch = r;
     hiddenMonsterUid = r.monster?.uid;

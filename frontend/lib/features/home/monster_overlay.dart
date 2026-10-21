@@ -144,15 +144,20 @@ class _MonsterOverlayState extends State<MonsterOverlay> {
     setState(() => _line = _randomLine());
   }
 
-  void _talk() {
-    var line = _randomLine();
-    if (line == _line) line = _randomLine();
-    _showEmote(tierOf(m.affection) == AffectionTier.low ? 'dots' : 'spark');
+  /// 말 걸기: 서버 모드면 서버 대사(`GET /monsters/{id}/line`), 아니거나 실패하면 앱 대사.
+  Future<void> _talk() async {
     setState(() {
-      _line = line;
       _petMode = false;
       _feedOpen = false;
     });
+    var line = await runGameAction(context, (r) => r.talk(m), onError: (_) {});
+    if (!mounted) return;
+    if (line == null) {
+      line = _randomLine();
+      if (line == _line) line = _randomLine();
+    }
+    _showEmote(tierOf(m.affection) == AffectionTier.low ? 'dots' : 'spark');
+    setState(() => _line = line!);
   }
 
   Future<void> _play() async {

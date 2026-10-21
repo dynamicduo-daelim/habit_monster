@@ -375,11 +375,17 @@ class GameState extends ChangeNotifier {
     if (pool.isEmpty) return const EncounterResult(emptyPool: true);
     if (_rand.nextDouble() < Economy.exploreMissRate) return const EncounterResult();
     final sp = pool[_rand.nextInt(pool.length)];
-    discoveredSpecies.add(sp.id); // 만나기만 해도 도감에 등록 (잡는 건 별개)
     final owned = monsters.any((m) => m.speciesId == sp.id);
+    final newlySeen = !owned && !discoveredSpecies.contains(sp.id);
+    discoveredSpecies.add(sp.id); // 만나기만 해도 도감에 등록 (잡는 건 별개)
     if (owned) gold += Economy.duplicateMonsterGold;
     notifyListeners();
-    return EncounterResult(species: sp, alreadyOwned: owned, gold: owned ? Economy.duplicateMonsterGold : 0);
+    return EncounterResult(
+      species: sp,
+      alreadyOwned: owned,
+      gold: owned ? Economy.duplicateMonsterGold : 0,
+      newlySeen: newlySeen,
+    );
   }
 
   /// 성실볼을 던졌을 때 [sp]가 잡힐 확률 (희귀할수록 낮다).
@@ -698,6 +704,67 @@ class GameState extends ChangeNotifier {
       ..addAll(pickedCategories);
     encountersLeft = exploreTotal;
     checkedInToday = true;
+    notifyListeners();
+  }
+
+  /// `POST /explores` 응답: 골드 · 남은 횟수, 안 가진 종이 나왔으면 도감에 "본 종"으로.
+  /// 본 종은 지금 서버에서 다시 불러오지 않는다 (도감 API는 4단계) — 앱을 다시 켜면 가진 종만 남는다.
+  void applyExplore({required int gold, required int exploreRemaining, String? seenSpeciesId}) {
+    this.gold = gold;
+    encountersLeft = exploreRemaining;
+    if (seenSpeciesId != null) discoveredSpecies.add(seenSpeciesId);
+    notifyListeners();
+  }
+
+  /// `POST /explores/{id}/capture` 응답: 남은 볼, 잡았으면 새 몬스터 (도감 = 가진 종).
+  void applyCapture({required int balls, OwnedMonster? caught}) {
+    this.balls = balls;
+    if (caught != null) {
+      monsters.add(caught);
+      discoveredSpecies.add(caught.speciesId);
+      caughtSpecies.add(caught.speciesId);
+    }
+    notifyListeners();
+  }
+
+  /// `POST /shop/purchases` 응답: 골드 · 산 뒤 가방 개수 (성실볼은 [balls]).
+  void applyPurchase({required int gold, required ShopItem item, required int quantity}) {
+    this.gold = gold;
+    if (item.id == Catalog.seongsilBall.id) {
+      balls = quantity;
+    } else {
+      inventory[item.id] = quantity;
+    }
+    notifyListeners();
+  }
+
+  /// `POST /monsters/{id}/feed` 응답: 경험치를 앱 공식으로 더한 뒤 레벨은 서버 값으로 맞춘다 (둘 다 레벨당 125).
+  void applyFeed(OwnedMonster m, {required ShopItem potion, required int expGained, required int levelAfter, required int remaining}) {
+    m.addExp(expGained);
+    m.level = levelAfter;
+    inventory[potion.id] = remaining;
+    notifyListeners();
+  }
+
+  /// `POST /monsters/{id}/affection` 응답 (또는 409 "오늘 이미" — [affection] 없이 오늘 한 것만 표시).
+  void applyAffection(OwnedMonster m, {required bool pet, int? affection}) {
+    if (affection != null) m.affection = affection;
+    if (pet) {
+      m.pettedToday = true;
+    } else {
+      m.playedToday = true;
+    }
+    notifyListeners();
+  }
+
+  /// `PATCH /monsters/{id}/location` · `PUT /me/partner` 응답.
+  void applyLocation(OwnedMonster m, {required bool inField}) {
+    m.inField = inField;
+    notifyListeners();
+  }
+
+  void applyPartner(String uid) {
+    chatPartnerUid = uid;
     notifyListeners();
   }
 
