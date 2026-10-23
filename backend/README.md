@@ -97,6 +97,9 @@
 | PATCH | /monsters/{id}/location | `{location: FIELD \| BAG}` → `{userMonsterId, location, fieldCount}`. 422 `FIELD_LIMIT` (필드 1마리 넣기 · 5마리 꺼내기) |
 | PUT | /me/partner | `{userMonsterId}` → `{partnerMonsterId}`. 가방에 있어도 됨 |
 | GET | /habits?status=ACTIVE,ENDED | 생략하면 ACTIVE · ENDED. 기간 값은 마지막 기간 기준 |
+| POST | /habits | **Idempotency-Key 필수**. `{categoryCode, measureTypeId, name, dailyTarget, periodCode}` → 201 (`GET /habits`의 한 줄). 시작일 = 오늘 체크인 전이면 오늘, 후면 내일. 400 값 형식, 422 `CATEGORY_LOCKED` · `HABIT_LIMIT`(진행 중 + 기간 완료 5개) (10-23, D-47) |
+| POST | /habits/{id}/renew | **Idempotency-Key 필수**. `{periodCode, dailyTarget?}` → 200 (새 기간, `filledDays` 0). 404 남의 습관, 400, 409 `HABIT_NOT_ENDED` (10-23) |
+| POST | /habits/{id}/stop | 키 없음. 200 `{habitId, status: STOPPED}`. 404, 409 `HABIT_ALREADY_STOPPED`, 422 `LAST_HABIT`(마지막 1개) (10-23) |
 | GET | /goals | 이번 주 · 이번 달 `{periodStart, slotsTotal, slotsUsed, rewardGold, goals[]}` |
 | GET | /checkins/today | `{businessDate, submitted, revision, partner{userMonsterId, name, imageKey, affectionTier}, tabs[{categoryCode, categoryName, habits[{habitId, name, unit, scoringMode, options, previousValue, filledDays, periodDays}]}]}`. 제출 전엔 오늘 대상 습관, 제출 후엔 제출에 들어간 습관(`previousValue` = 최신 값). `options`는 서버가 만든 선택지 (B3, 수면은 범위 ± 2칸 — D-42) |
 | POST | /checkins/today | **Idempotency-Key 필수**. 201, 명세 예시 그대로 + `categoryExp[]`의 `expInLevel` · `expRequired`(더한 값, D-43). 409 `BUSINESS_DATE_CHANGED` · `ALREADY_SUBMITTED` · `NO_ACTIVE_HABIT`, 400 빠진 · 남의 습관 · 선택지 밖 값 (`errors` 전부) |

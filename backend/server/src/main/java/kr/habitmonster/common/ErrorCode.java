@@ -38,6 +38,9 @@ public enum ErrorCode {
 	ENCOUNTER_CLOSED(HttpStatus.CONFLICT, "몬스터가 이미 떠났어요"),
 	/** 쓰다듬기 · 놀아주기는 몬스터마다 하루 1번. 앱은 실패가 아니라 안내로 보여 준다. */
 	ALREADY_DONE_TODAY(HttpStatus.CONFLICT, "오늘은 이미 했어요. 내일 또 해 주세요"),
+	/** 기간 연장은 기간을 채운(ENDED) 습관만. */
+	HABIT_NOT_ENDED(HttpStatus.CONFLICT, "기간을 다 채운 습관만 연장할 수 있어요"),
+	HABIT_ALREADY_STOPPED(HttpStatus.CONFLICT, "이미 그만둔 습관이에요"),
 	// 422
 	IDEMPOTENCY_KEY_REUSED(HttpStatus.UNPROCESSABLE_CONTENT, "요청을 확인해 주세요"),
 	NOT_ENOUGH_GOLD(HttpStatus.UNPROCESSABLE_CONTENT, "골드가 모자라요"),
@@ -48,6 +51,11 @@ public enum ErrorCode {
 	MAX_LEVEL(HttpStatus.UNPROCESSABLE_CONTENT, "이미 최고 레벨이에요"),
 	/** 필드에 1마리일 때 넣기 · 꽉 찼을 때 꺼내기. */
 	FIELD_LIMIT(HttpStatus.UNPROCESSABLE_CONTENT, "필드 자리를 확인해 주세요"),
+	CATEGORY_LOCKED(HttpStatus.UNPROCESSABLE_CONTENT, "아직 열지 않은 카테고리예요"),
+	/** 진행 중 + 기간 완료가 이미 {@code max_active_habits}(5)개. 기간 완료 습관을 연장하거나 그만두면 자리가 생긴다. */
+	HABIT_LIMIT(HttpStatus.UNPROCESSABLE_CONTENT, "습관 칸이 꽉 찼어요"),
+	/** 진행 중 + 기간 완료가 1개뿐이면 그만둘 수 없다 (D-14 · 사용자 결정 10-21). 명세 v5에 사용자 요청으로 추가. */
+	LAST_HABIT(HttpStatus.UNPROCESSABLE_CONTENT, "습관은 1개 이상 있어야 해요"),
 	// 503
 	SOCIAL_NOT_CONFIGURED(HttpStatus.SERVICE_UNAVAILABLE, "아직 준비 중인 로그인 방식이에요");
 

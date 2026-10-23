@@ -9,3 +9,8 @@ Thumbs.db
 _to_delete/
 .claude/
 .cc-history/
+
+# 서버 담당만 보는 문서 (10-23 사용자 요청 — 원격에서는 빼고 각자 PC에만)
+docs/로컬-테스트-계정.md
+docs/handoff/
+backend/db/제안-*.md

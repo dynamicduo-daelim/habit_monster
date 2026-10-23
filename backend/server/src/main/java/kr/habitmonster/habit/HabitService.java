@@ -26,6 +26,7 @@ import kr.habitmonster.habit.HabitRepository.CategoryExpRow;
 import kr.habitmonster.habit.HabitRepository.CategoryRow;
 import kr.habitmonster.habit.HabitRepository.CheckinHabitRow;
 import kr.habitmonster.habit.HabitRepository.DailyCheckinRow;
+import kr.habitmonster.habit.HabitRepository.HabitRow;
 import kr.habitmonster.habit.HabitRepository.MeasureTypeRow;
 import kr.habitmonster.habit.HabitRepository.StreakRow;
 
@@ -174,10 +175,130 @@ public class HabitService {
 
 	@Transactional(readOnly = true)
 	public List<HabitView> habits(long userId, Set<String> statuses) {
-		return habits.habits(userId, statuses).stream()
-			.map(h -> new HabitView(h.habitId(), h.categoryCode(), h.name(), h.measureTypeId(), h.unit(),
-					Decimals.plain(h.dailyTarget()), h.periodCode(), h.startDate(), h.filledDays(), h.periodDays(), h.status()))
-			.toList();
+		return habits.habits(userId, statuses).stream().map(HabitService::view).toList();
+	}
+
+	private static HabitView view(HabitRow h) {
+		return new HabitView(h.habitId(), h.categoryCode(), h.name(), h.measureTypeId(), h.unit(),
+				Decimals.plain(h.dailyTarget()), h.periodCode(), h.startDate(), h.filledDays(), h.periodDays(), h.status());
+	}
+
+	// ---------- 추가 · 연장 · 그만두기 (4-1, API 명세 v5 4장) ----------
+	/** {@code POST /habits} 요청. */
+	public record NewHabit(String categoryCode, Integer measureTypeId, String name, BigDecimal dailyTarget,
+			String periodCode) {
+	}
+
+	/** {@code POST /habits/{id}/renew} 요청. {@code dailyTarget}을 생략하면 이전 기간의 값. */
+	public record Renewal(String periodCode, BigDecimal dailyTarget) {
+	}
+
+	/** {@code POST /habits/{id}/stop} 응답. */
+	public record Stopped(long habitId, String status) {
+	}
+
+	static final int NAME_MAX = 30;
+
+	/**
+	 * 습관 추가 (홈 "내 습관"). 시작일은 오늘 체크인을 냈으면 내일, 아니면 오늘.
+	 * 검사 순서: 값 형식 400 → 열지 않은 카테고리 422 {@code CATEGORY_LOCKED} → 칸이 꽉 참 422 {@code HABIT_LIMIT}.
+	 * 칸 = 진행 중 + 기간 완료 (사용자 결정 10-23: 기간 완료도 칸을 차지해 연장 · 그만두기를 고르게 한다).
+	 */
+	@Transactional
+	public HabitView create(long userId, NewHabit req) {
+		lockProfile(userId); // 같은 사람의 추가 · 그만두기가 동시에 와도 칸 수를 한 줄로 센다
+		Optional<MeasureTypeRow> measure = req.measureTypeId() == null ? Optional.empty()
+				: habits.measureType(req.measureTypeId());
+		List<FieldError> errors = new ArrayList<>();
+		if (measure.isEmpty() || !measure.get().categoryCode().equals(req.categoryCode())) {
+			errors.add(new FieldError("measureTypeId", "그 카테고리의 측정 항목이 아니에요."));
+		}
+		String name = req.name() == null ? "" : req.name().strip();
+		int length = name.codePointCount(0, name.length());
+		if (length < 1 || length > NAME_MAX) {
+			errors.add(new FieldError("name", "이름은 1~" + NAME_MAX + "자예요."));
+		}
+		checkTarget(req.dailyTarget(), measure.map(MeasureTypeRow::maxValue).orElse(null), errors);
+		checkPeriod(req.periodCode(), errors);
+		throwIfAny(errors);
+
+		if (!habits.isOpened(userId, req.categoryCode())) {
+			throw new ApiException(ErrorCode.CATEGORY_LOCKED);
+		}
+		if (habits.countOpen(userId) >= config.maxActiveHabits()) {
+			throw new ApiException(ErrorCode.HABIT_LIMIT);
+		}
+		long id = addHabit(userId, req.categoryCode(), req.measureTypeId(), name, req.dailyTarget(), req.periodCode(),
+				startDate(userId));
+		return view(habits.habit(userId, id).orElseThrow());
+	}
+
+	/**
+	 * 기간 연장: 기간 완료(ENDED) 습관에 새 기간(seq + 1)을 붙이고 진행 중으로. 채운 날은 0부터, 이전 기간 기록은 그대로.
+	 * 칸 수는 그대로라 상한 검사가 없다. 남의 습관 404 → 값 형식 400 → 기간 완료가 아님 409 {@code HABIT_NOT_ENDED}.
+	 */
+	@Transactional
+	public HabitView renew(long userId, long habitId, Renewal req) {
+		lockProfile(userId);
+		HabitRow h = habits.habit(userId, habitId).orElseThrow(() -> new ApiException(ErrorCode.NOT_FOUND));
+		List<FieldError> errors = new ArrayList<>();
+		checkPeriod(req.periodCode(), errors);
+		if (req.dailyTarget() != null) {
+			checkTarget(req.dailyTarget(), habits.measureType(h.measureTypeId()).orElseThrow().maxValue(), errors);
+		}
+		throwIfAny(errors);
+		if (!"ENDED".equals(h.status())) {
+			throw new ApiException(ErrorCode.HABIT_NOT_ENDED);
+		}
+		BigDecimal target = req.dailyTarget() == null ? h.dailyTarget() : req.dailyTarget();
+		habits.insertPeriod(habitId, habits.lastSeq(habitId) + 1, req.periodCode(),
+				config.periodDays().get(req.periodCode()), target, startDate(userId));
+		habits.reopenHabit(habitId);
+		return view(habits.habit(userId, habitId).orElseThrow());
+	}
+
+	/**
+	 * 그만두기 (진행 중 · 기간 완료 모두). 이미 그만둠 409 {@code HABIT_ALREADY_STOPPED},
+	 * 칸을 차지한 습관이 이것 하나면 422 {@code LAST_HABIT} (D-14 — 체크할 습관이 없으면 앱의 흐름이 끊긴다).
+	 * 오늘 체크인을 낸 뒤라면 오늘의 다시 체크에는 남는다 (다시 체크 대상 = 첫 제출의 습관).
+	 */
+	@Transactional
+	public Stopped stop(long userId, long habitId) {
+		lockProfile(userId);
+		HabitRow h = habits.habit(userId, habitId).orElseThrow(() -> new ApiException(ErrorCode.NOT_FOUND));
+		if ("STOPPED".equals(h.status())) {
+			throw new ApiException(ErrorCode.HABIT_ALREADY_STOPPED);
+		}
+		if (habits.countOpen(userId) <= 1) {
+			throw new ApiException(ErrorCode.LAST_HABIT);
+		}
+		habits.stopHabit(habitId);
+		return new Stopped(habitId, "STOPPED");
+	}
+
+	/** 시작일 규칙 (명세 4-2): 오늘 체크인을 냈으면 내일 — 제출한 체크인에 새 습관이 끼어들지 않게. */
+	private LocalDate startDate(long userId) {
+		LocalDate today = dates.today();
+		return habits.checkin(userId, today).isPresent() ? today.plusDays(1) : today;
+	}
+
+	private static void checkTarget(BigDecimal target, BigDecimal max, List<FieldError> errors) {
+		if (target == null || target.signum() <= 0 || (max != null && target.compareTo(max) > 0)) {
+			errors.add(new FieldError("dailyTarget",
+					max == null ? "0보다 커야 해요." : "0보다 크고 " + max.stripTrailingZeros().toPlainString() + " 이하여야 해요."));
+		}
+	}
+
+	private void checkPeriod(String periodCode, List<FieldError> errors) {
+		if (!isPeriodCode(periodCode)) {
+			errors.add(new FieldError("periodCode", "D7 · D30 · D100 중 하나예요."));
+		}
+	}
+
+	private static void throwIfAny(List<FieldError> errors) {
+		if (!errors.isEmpty()) {
+			throw new ApiException(ErrorCode.INVALID_REQUEST, ErrorCode.INVALID_REQUEST.message, errors);
+		}
 	}
 
 	/** 기간을 채워 연장 · 그만두기를 기다리는 습관 수. */

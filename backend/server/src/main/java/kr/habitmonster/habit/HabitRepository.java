@@ -153,6 +153,40 @@ class HabitRepository {
 			.params(userId, status).query(Integer.class).single();
 	}
 
+	// ---------- 추가 · 연장 · 그만두기 (4-1) ----------
+	/** 습관 칸을 차지하는 습관 수 = 진행 중 + 기간 완료 (상한 5 · 하한 1의 기준). */
+	int countOpen(long userId) {
+		return db.sql("select count(*) from habit.habit where user_id = ? and status in ('ACTIVE','ENDED')")
+			.param(userId).query(Integer.class).single();
+	}
+
+	boolean isOpened(long userId, String categoryCode) {
+		return db.sql("select count(*) from habit.user_category where user_id = ? and category_code = ?")
+			.params(userId, categoryCode).query(Integer.class).single() > 0;
+	}
+
+	/** 내 습관 하나 (+ 마지막 기간). 남의 습관이면 비어 있다. */
+	Optional<HabitRow> habit(long userId, long habitId) {
+		return db.sql(HABIT_WITH_LAST_PERIOD + " where h.user_id = ? and h.id = ?")
+			.params(userId, habitId).query(HabitRow.class).optional();
+	}
+
+	int lastSeq(long habitId) {
+		return db.sql("select max(seq) from habit.habit_period where habit_id = ?").param(habitId).query(Integer.class).single();
+	}
+
+	/** 연장: 기간 완료 → 진행 중. 상태가 ENDED일 때만 바꾼다 (바뀐 행 수). */
+	int reopenHabit(long habitId) {
+		return db.sql("update habit.habit set status = 'ACTIVE', updated_at = now() where id = ? and status = 'ENDED'")
+			.param(habitId).update();
+	}
+
+	/** 그만두기. 진행 중이던 기간은 채우지 못한 채 남는다 (schema 주석). */
+	void stopHabit(long habitId) {
+		db.sql("update habit.habit set status = 'STOPPED', stopped_at = now(), updated_at = now() where id = ?")
+			.param(habitId).update();
+	}
+
 	record CheckinRow(long id, int countedScore) {
 	}
 
