@@ -66,6 +66,8 @@ class HttpGameRepository implements GameRepository {
       api.get('/goals'),
       _measureTable(),
       api.get('/checkins/today'),
+      api.get('/dex'),
+      for (final c in Catalog.categories) api.get('/dex/categories/${c.id}'),
     ]);
     final status = r[0] as Map<String, dynamic>;
     final today = r[1] as Map<String, dynamic>;
@@ -103,7 +105,12 @@ class HttpGameRepository implements GameRepository {
         for (final h in (r[5] as List).cast<Map<String, dynamic>>())
           if (measures.containsKey(h['measureTypeId'])) _habit(h, measures),
       ])
-      ..applyGoals(_goals(r[6] as Map<String, dynamic>));
+      ..applyGoals(_goals(r[6] as Map<String, dynamic>))
+      ..applyDex(
+        seen: {for (final m in _dexMonsters(r.skip(10))) if (m['status'] != 'UNKNOWN') m['imageKey'] as String},
+        owned: {for (final m in _dexMonsters(r.skip(10))) if (m['status'] == 'OWNED') m['imageKey'] as String},
+        tickets: ((r[9] as Map<String, dynamic>)['slot'] as Map<String, dynamic>)['availableTickets'] as int,
+      );
     if (today['checkedIn'] == true) {
       final hs = (today['habits'] as List).cast<Map<String, dynamic>>();
       state.applyToday(
@@ -136,6 +143,13 @@ class HttpGameRepository implements GameRepository {
   }
 
   static bool _knownSpecies(Object? code) => Catalog.species.any((s) => s.id == code);
+
+  /// `GET /dex/categories/{code}` 응답들의 종 (그림 이름 = 앱 종 id, D1). 앱에 그림이 없는 종은 뺀다.
+  static Iterable<Map<String, dynamic>> _dexMonsters(Iterable<Object?> responses) => [
+        for (final res in responses.cast<Map<String, dynamic>>())
+          for (final m in (res['monsters'] as List).cast<Map<String, dynamic>>())
+            if (_knownSpecies(m['imageKey'])) m,
+      ];
 
   static OwnedMonster _monster(Map<String, dynamic> d) {
     final actions = d['todayActions'] as Map<String, dynamic>;
@@ -496,9 +510,27 @@ class HttpGameRepository implements GameRepository {
 
   // ---------- 아직 앱 안에서 계산 (서버에 저장되지 않음) ----------
 
-  /// 4단계에서 서버로 (`POST /categories/{code}/unlock`).
+  /// 카테고리 열기 (`POST /categories/{code}/unlock`, 중복 방지 키, 4-3). 해금권이 없거나 이미 연 길이면 서버를 부르지 않고 false.
+  /// 시작 몬스터는 서버가 정한 자리(필드가 꽉 찼으면 가방)로 온다.
   @override
-  Future<bool> openCategory(String categoryId) => _local.openCategory(categoryId);
+  Future<bool> openCategory(String categoryId) async {
+    if (!state.canOpenCategory || state.pickedCategories.contains(categoryId)) return false;
+    final res = await api.send('POST', '/categories/$categoryId/unlock', idempotent: true) as Map<String, dynamic>;
+    final s = res['starter'] as Map<String, dynamic>?;
+    state.applyCategoryOpened(
+      categoryId,
+      starter: s == null || !_knownSpecies(s['imageKey'])
+          ? null
+          : OwnedMonster(
+              uid: '${s['userMonsterId']}',
+              speciesId: s['imageKey'] as String,
+              affection: Economy.starterAffection,
+              inField: s['location'] == 'FIELD',
+            ),
+      tickets: res['availableTickets'] as int,
+    );
+    return true;
+  }
 
   /// 4단계에서 서버로 (`POST /habits`).
   @override

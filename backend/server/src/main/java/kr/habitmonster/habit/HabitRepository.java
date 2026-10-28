@@ -349,4 +349,22 @@ class HabitRepository {
 		return db.sql("insert into habit.category_unlock_ticket (user_id, milestone) values (?, ?) on conflict do nothing")
 			.params(userId, milestone).update() == 1;
 	}
+
+	// ---------- 카테고리 열기 (4-3) ----------
+	int countUnusedTickets(long userId) {
+		return db.sql("select count(*) from habit.category_unlock_ticket where user_id = ? and used_at is null")
+			.param(userId).query(Integer.class).single();
+	}
+
+	/** 가장 먼저 받은 안 쓴 해금권. */
+	Optional<Long> firstUnusedTicket(long userId) {
+		return db.sql("""
+			select id from habit.category_unlock_ticket where user_id = ? and used_at is null order by milestone limit 1""")
+			.param(userId).query(Long.class).optional();
+	}
+
+	void useTicket(long ticketId, String categoryCode) {
+		db.sql("update habit.category_unlock_ticket set used_category_code = ?, used_at = now() where id = ?")
+			.params(categoryCode, ticketId).update();
+	}
 }

@@ -97,6 +97,26 @@ Map<String, Object> _server({bool checkedIn = false, String date = '2026-10-18'}
         {'categoryCode': 'st', 'measureTypes': [{'id': 4}, {'id': 5}, {'id': 6}], 'presets': []},
         {'categoryCode': 'fd', 'measureTypes': [{'id': 7}, {'id': 8}, {'id': 9}, {'id': 10}, {'id': 11}], 'presets': []},
       ],
+      // 도감 (4-3): 원숭이 · 쥐는 가진 종, 깡총 불토끼는 본 종, 나머지는 모르는 종. 해금권 0장
+      'GET /dex': {
+        'slot': {'dexCount': 2, 'nextMilestone': 5, 'availableTickets': 0},
+        'categories': [],
+      },
+      for (final (code, monsters) in [
+        ('ex', [
+          {'dexNo': 1, 'status': 'OWNED', 'speciesId': 1, 'name': '불씨 원숭이', 'imageKey': 'monkey', 'level': 7},
+          {'dexNo': 2, 'status': 'SEEN', 'speciesId': 2, 'name': '깡총 불토끼', 'imageKey': 'rabbit'},
+          {'dexNo': 3, 'status': 'UNKNOWN', 'imageKey': 'chicken', 'unlockLevel': 6, 'unlocked': false},
+        ]),
+        ('st', [
+          {'dexNo': 7, 'status': 'OWNED', 'speciesId': 6, 'name': '찌릿 쥐', 'imageKey': 'mouse', 'level': 1},
+        ]),
+        ('fd', <Map<String, Object>>[]),
+        ('md', <Map<String, Object>>[]),
+        ('sl', <Map<String, Object>>[]),
+        ('mn', <Map<String, Object>>[]),
+      ])
+        'GET /dex/categories/$code': {'code': code, 'monsters': monsters},
       'POST /onboarding': {'starters': [], 'partnerMonsterId': 11, 'habitIds': [100], 'goalIds': [200]},
       'POST /me/attendance': {'date': date, 'alreadyAttended': false, 'currentStreak': 3, 'longestStreak': 9},
       'GET /checkins/today': {
@@ -176,7 +196,8 @@ void main() {
         if (body is http.Response) return body; // 오류 응답을 그대로
         return body == null
             ? _json({'code': 'NOT_FOUND', 'message': '없음'}, 404)
-            : _json(body, key.startsWith('POST /onboarding') || key == 'POST /checkins/today' ? 201 : 200);
+            : _json(body,
+                key.startsWith('POST /onboarding') || key == 'POST /checkins/today' || key.endsWith('/unlock') ? 201 : 200);
       }),
     );
     return HttpGameRepository(state, api);
@@ -506,6 +527,51 @@ void main() {
       final affection = monkey.affection;
       expect(await r.dragMonster(monkey), 0);
       expect((monkey.affection, requests.length), (affection, before));
+    });
+  });
+
+  group('도감 · 카테고리 열기 (4-3)', () {
+    Future<(GameState, HttpGameRepository, Map<String, Object>)> loaded({int tickets = 0}) async {
+      final s = GameState.empty();
+      final routes = _server();
+      (routes['GET /dex'] as Map<String, Object>)['slot'] = {'dexCount': 2, 'nextMilestone': 5, 'availableTickets': tickets};
+      final r = repo(s, routes);
+      await r.load();
+      return (s, r, routes);
+    }
+
+    test('불러오면 본 종이 도감에 남고(다시 켜도), 칸은 서버 해금권 기준', () async {
+      final (s, _, _) = await loaded();
+      expect(s.discoveredSpecies, containsAll(['monkey', 'mouse', 'rabbit']));
+      expect(s.discoveredSpecies, isNot(contains('chicken')));
+      expect(s.caughtSpecies, isNot(contains('rabbit')));
+      expect(s.serverTickets, 0);
+      expect(s.categorySlotCount, 2); // 연 2 + 해금권 0
+      expect(s.canOpenCategory, isFalse);
+    });
+
+    test('열기: 해금권이 없으면 서버를 부르지 않고 false', () async {
+      final (_, r, _) = await loaded();
+      final before = requests.length;
+      expect(await r.openCategory('md'), isFalse);
+      expect(requests, hasLength(before));
+    });
+
+    test('열기: 키와 함께 부르고 연 카테고리 · 시작 몬스터(서버 자리) · 남은 해금권을 반영', () async {
+      final (s, r, routes) = await loaded(tickets: 1);
+      expect(s.canOpenCategory, isTrue);
+      routes['POST /categories/sl/unlock'] = {
+        'categoryCode': 'sl',
+        'starter': {'userMonsterId': 30, 'name': '달밤 다람쥐', 'imageKey': 'squirrel', 'location': 'BAG'},
+        'availableTickets': 0,
+      };
+      expect(await r.openCategory('sl'), isTrue);
+      expect(requests.last.headers['Idempotency-Key'], isNotEmpty);
+      expect(s.pickedCategories, contains('sl'));
+      final m = s.monsterByUid('30')!;
+      expect((m.speciesId, m.inField), ('squirrel', false));
+      expect(s.caughtSpecies, contains('squirrel'));
+      expect((s.serverTickets, s.canOpenCategory), (0, false));
     });
   });
 

@@ -14,6 +14,7 @@ import kr.habitmonster.common.ErrorCode;
 import kr.habitmonster.config.BalanceConfig;
 import kr.habitmonster.monster.MonsterRepository.CandidateRow;
 import kr.habitmonster.monster.MonsterRepository.ClosedRow;
+import kr.habitmonster.monster.MonsterRepository.DexRow;
 import kr.habitmonster.monster.MonsterRepository.EncounterRow;
 import kr.habitmonster.monster.MonsterRepository.MonsterRow;
 import kr.habitmonster.shop.ShopService;
@@ -441,5 +442,39 @@ public class MonsterService {
 			monsters.markPartner(m.userMonsterId());
 		}
 		return new PartnerChanged(m.userMonsterId());
+	}
+
+	// ---------- 도감 (4-3) ----------
+	/**
+	 * 도감의 종 하나. {@code status} = OWNED(가진 종) · SEEN(탐색에서 만난 종) · UNKNOWN(아직 모름).
+	 * {@code level}은 가진 종일 때 내 몬스터 중 가장 높은 레벨, {@code stage}는 그 레벨의 진화 단계.
+	 */
+	public record DexSpecies(int speciesId, String code, String name, String categoryCode, int rarity, int unlockLevel,
+			int dexNo, String description, String status, Integer level, Integer stage) {
+	}
+
+	/** 도감 (도감 번호 순서). {@code categoryCode}가 null이면 전체. */
+	@Transactional(readOnly = true)
+	public List<DexSpecies> dex(long userId, String categoryCode) {
+		return monsters.dex(userId, categoryCode).stream().map(this::dexView).toList();
+	}
+
+	private DexSpecies dexView(DexRow r) {
+		String status = r.owned() ? "OWNED" : r.seen() ? "SEEN" : "UNKNOWN";
+		Integer level = r.owned() ? r.level() : null;
+		return new DexSpecies(r.id(), r.code(), r.name(), r.categoryCode(), r.rarity(), r.unlockLevel(), r.dexNo(),
+				r.description(), status, level, level == null ? null : config.stageOf(level));
+	}
+
+	/** 필드에 있는 몬스터 수 (시작 몬스터를 필드에 둘지 정할 때). */
+	@Transactional(readOnly = true)
+	public int fieldCount(long userId) {
+		return monsters.fieldCount(userId);
+	}
+
+	/** 가진 종 수 (도감 수). */
+	@Transactional(readOnly = true)
+	public int dexCount(long userId) {
+		return monsters.dexCount(userId);
 	}
 }

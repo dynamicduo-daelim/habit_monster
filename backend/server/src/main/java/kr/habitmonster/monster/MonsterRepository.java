@@ -269,4 +269,27 @@ class MonsterRepository {
 		return db.sql("select line_text from monster.species_line where species_id = ? and affection_tier = ? order by id")
 			.params(speciesId, affectionTier).query(String.class).list();
 	}
+
+	// ---------- 도감 (4-3) ----------
+	/**
+	 * 종마다 도감 상태 재료: 가졌는지(도감 기록) · 본 적 있는지(탐색 등장 기록, D-30) · 내 몬스터 중 가장 높은 레벨.
+	 * {@code categoryCode}가 null이면 전체. 도감 번호 순서.
+	 */
+	record DexRow(int id, String code, String name, String categoryCode, int rarity, int unlockLevel, int dexNo,
+			String description, boolean owned, boolean seen, Integer level) {
+	}
+
+	List<DexRow> dex(long userId, String categoryCode) {
+		return db.sql("""
+			select s.id, s.code, s.name, s.category_code, s.rarity, s.unlock_level, s.dex_no, s.description,
+			       (d.species_id is not null) as owned,
+			       (d.species_id is not null or exists (select 1 from monster.explore_log e
+			          where e.user_id = :user and e.species_id = s.id and e.result = 'ENCOUNTER')) as seen,
+			       (select max(m.level) from monster.user_monster m where m.user_id = :user and m.species_id = s.id) as level
+			  from monster.monster_species s
+			  left join monster.dex_entry d on d.user_id = :user and d.species_id = s.id
+			 where cast(:category as text) is null or s.category_code = :category
+			 order by s.dex_no""")
+			.param("user", userId).param("category", categoryCode).query(DexRow.class).list();
+	}
 }

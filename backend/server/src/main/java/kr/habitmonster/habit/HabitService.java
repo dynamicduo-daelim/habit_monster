@@ -654,4 +654,28 @@ public class HabitService {
 	public boolean grantUnlockTicket(long userId, int dexCount) {
 		return config.dexUnlockThresholds().contains(dexCount) && habits.insertUnlockTicket(userId, dexCount);
 	}
+
+	/** 안 쓴 카테고리 해금권 수. */
+	@Transactional(readOnly = true)
+	public int availableTickets(long userId) {
+		return habits.countUnusedTickets(userId);
+	}
+
+	/**
+	 * 해금권 1장으로 카테고리를 연다 (4-3, Lv.1). 사용자 잠금 뒤: 없는 카테고리 404 → 이미 연 카테고리 409 → 해금권 없음 422.
+	 * 부르는 쪽(조율 서비스)이 이어서 시작 몬스터를 준다.
+	 */
+	@Transactional
+	public void openWithTicket(long userId, String categoryCode) {
+		lockProfile(userId);
+		if (habits.categories().stream().noneMatch(c -> c.code().equals(categoryCode))) {
+			throw new ApiException(ErrorCode.NOT_FOUND);
+		}
+		if (habits.isOpened(userId, categoryCode)) {
+			throw new ApiException(ErrorCode.ALREADY_OPENED);
+		}
+		long ticket = habits.firstUnusedTicket(userId).orElseThrow(() -> new ApiException(ErrorCode.NO_TICKET));
+		habits.openCategory(userId, categoryCode, "TICKET"); // 해금권이 이 행을 외래키로 가리키므로 먼저
+		habits.useTicket(ticket, categoryCode);
+	}
 }

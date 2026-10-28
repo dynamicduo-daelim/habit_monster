@@ -23,6 +23,8 @@ public enum ErrorCode {
 	NOT_FOUND(HttpStatus.NOT_FOUND, "찾을 수 없어요"),
 	UNSUPPORTED_PROVIDER(HttpStatus.NOT_FOUND, "지원하지 않는 로그인 방식이에요"),
 	CHECKIN_NOT_FOUND(HttpStatus.NOT_FOUND, "오늘 체크인을 먼저 해 주세요"),
+	/** 도감 상세: 본 적 없는 종 (이름 · 그림을 알려 주지 않는다). */
+	NOT_DISCOVERED(HttpStatus.NOT_FOUND, "아직 만나지 못한 몬스터예요"),
 	// 409
 	EMAIL_TAKEN(HttpStatus.CONFLICT, "이미 가입된 이메일이에요"),
 	/** 응답에 {@code provider}(원래 가입 방법, 소문자)가 같이 간다. */
@@ -41,6 +43,7 @@ public enum ErrorCode {
 	/** 기간 연장은 기간을 채운(ENDED) 습관만. */
 	HABIT_NOT_ENDED(HttpStatus.CONFLICT, "기간을 다 채운 습관만 연장할 수 있어요"),
 	HABIT_ALREADY_STOPPED(HttpStatus.CONFLICT, "이미 그만둔 습관이에요"),
+	ALREADY_OPENED(HttpStatus.CONFLICT, "이미 연 카테고리예요"),
 	/** 완료한 목표는 수정 · 삭제 · 다시 완료할 수 없다 (완료는 되돌릴 수 없음). */
 	GOAL_COMPLETED(HttpStatus.CONFLICT, "이미 완료한 목표예요"),
 	/** 기간(등록한 날부터 7일 · 30일)이 끝난 목표. */
@@ -58,6 +61,8 @@ public enum ErrorCode {
 	/** 필드에 1마리일 때 넣기 · 꽉 찼을 때 꺼내기. */
 	FIELD_LIMIT(HttpStatus.UNPROCESSABLE_CONTENT, "필드 자리를 확인해 주세요"),
 	CATEGORY_LOCKED(HttpStatus.UNPROCESSABLE_CONTENT, "아직 열지 않은 카테고리예요"),
+	/** 카테고리 해금권 없음 — 가진 종이 5 · 10 · 15마리가 될 때 1장씩. */
+	NO_TICKET(HttpStatus.UNPROCESSABLE_CONTENT, "카테고리를 열 해금권이 없어요"),
 	/** 진행 중 + 기간 완료가 이미 {@code max_active_habits}(5)개. 기간 완료 습관을 연장하거나 그만두면 자리가 생긴다. */
 	HABIT_LIMIT(HttpStatus.UNPROCESSABLE_CONTENT, "습관 칸이 꽉 찼어요"),
 	/** 진행 중 + 기간 완료가 1개뿐이면 그만둘 수 없다 (D-14 · 사용자 결정 10-21). 명세 v5에 사용자 요청으로 추가. */

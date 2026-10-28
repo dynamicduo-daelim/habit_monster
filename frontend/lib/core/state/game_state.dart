@@ -161,9 +161,15 @@ class GameState extends ChangeNotifier {
   /// 가진 적 있는 종 수 (`dexCount`). 카테고리 칸은 이 수로 연다.
   int get caughtCount => caughtSpecies.length;
 
+  /// 서버 모드에서 안 쓴 카테고리 해금권 수 (`GET /dex`의 `availableTickets`). 시연 모드는 null.
+  int? serverTickets;
+
   /// 열 수 있는 카테고리 칸 수: 기본 3, 가진 종 5 · 10 · 15마리마다 +1 (카테고리 수를 넘지 않음).
-  int get categorySlotCount =>
-      Economy.categorySlots(caughtCount).clamp(0, Catalog.categories.length);
+  /// 서버 모드는 서버가 준 해금권 기준 = 연 카테고리 + 안 쓴 해금권 (4-3).
+  int get categorySlotCount => (serverTickets != null
+          ? pickedCategories.length + serverTickets!
+          : Economy.categorySlots(caughtCount))
+      .clamp(0, Catalog.categories.length);
 
   bool get canOpenCategory => pickedCategories.length < categorySlotCount;
 
@@ -640,6 +646,25 @@ class GameState extends ChangeNotifier {
     goals
       ..clear()
       ..addAll(list);
+  }
+
+  /// `GET /dex` · `GET /dex/categories/{code}`: 본 종(가진 종 포함) · 가진 종 · 안 쓴 해금권. 앱을 다시 켜도 본 종이 남는다 (4-3).
+  void applyDex({required Set<String> seen, required Set<String> owned, required int tickets}) {
+    discoveredSpecies.addAll(seen);
+    caughtSpecies.addAll(owned);
+    serverTickets = tickets;
+  }
+
+  /// `POST /categories/{code}/unlock` 응답: 연 카테고리 · 시작 몬스터 · 남은 해금권.
+  void applyCategoryOpened(String categoryId, {OwnedMonster? starter, required int tickets}) {
+    pickedCategories.add(categoryId);
+    if (starter != null) {
+      monsters.add(starter);
+      discoveredSpecies.add(starter.speciesId);
+      caughtSpecies.add(starter.speciesId);
+    }
+    serverTickets = tickets;
+    notifyListeners();
   }
 
   /// `POST /goals` 응답.

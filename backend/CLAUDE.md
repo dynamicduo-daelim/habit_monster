@@ -29,7 +29,7 @@
 ## 실행 · 테스트
 - 로컬 DB: `backend/`에서 `docker compose up -d` — `backend/.env`(커밋 금지, `.env.example` 참고)의 `HM_DB_DIR`가 공식 SQL 폴더(`…/docs/데이터베이스`), 이 PC는 `DB_PORT=5435`. 다시 적용: `docker compose down -v && docker compose up -d`
 - 테스트: `server/`에서 PowerShell로 `.\gradlew.bat test` — **Docker가 켜져 있어야 한다.** 테스트가 postgres:16 컨테이너를 스스로 띄우고 `docs/데이터베이스/schema.sql` · `seed.sql`을 적용해 그 위에서 돈다 (Testcontainers, D-33). 새 테스트는 `support/PostgresTest`를 상속 (가입 · 기본 온보딩 도우미, 테스트마다 사용자 데이터 비움). H2는 없다 (D-41)
-- 게임 모듈 저장소는 `JdbcClient` SQL, package-private (D-34). 여러 모듈을 모으는 일은 테이블 없는 조율 서비스(`onboarding/` · `home/` · `checkin/` · `explore/`)가 각 모듈 서비스를 부른다. 수치는 `config/BalanceConfig`, 골드는 `wallet/WalletService`로만. 규칙은 `ArchitectureTest`가 검사
+- 게임 모듈 저장소는 `JdbcClient` SQL, package-private (D-34). 여러 모듈을 모으는 일은 테이블 없는 조율 서비스(`onboarding/` · `home/` · `checkin/` · `explore/` · `dex/`)가 각 모듈 서비스를 부른다. 수치는 `config/BalanceConfig`, 골드는 `wallet/WalletService`로만. 규칙은 `ArchitectureTest`가 검사
 - 실행 (간단히): Docker DB를 띄운 뒤 `.\gradlew.bat bootRun --args='--spring.profiles.active=local'` — `local` 프로필 = 5435 DB + **8081 포트** + 로컬 JWT 키 + 카카오 · 구글 공개 값 (D-41)
 - 실행 (환경변수로): `$env:DB_URL='jdbc:postgresql://localhost:5435/habit_monster'; $env:DB_USER='habit'; $env:DB_PASSWORD='habit'; $env:JWT_SECRET='local-dev-secret-change-me-0123456789abcdef'; .\gradlew.bat bootRun --args='--server.port=8081'` (8080은 다른 서버가 떠 있을 수 있음)
 - 랜덤은 `monster/Dice` 하나로만 (테스트는 `@MockitoBean Dice`로 고정, D-45)
