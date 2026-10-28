@@ -100,7 +100,4 @@ class LocalGameRepository implements GameRepository {
 
   @override
   Future<bool> completeGoal(Goal g) async => state.toggleGoal(g);
-
-  @override
-  Future<void> unlockExtraWeeklySlot() async => state.unlockExtraWeeklySlot();
 }

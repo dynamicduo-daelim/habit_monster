@@ -12,7 +12,7 @@ import 'local_game_repository.dart';
 ///
 /// 서버가 규칙을 계산하고, 이 클래스는 응답을 [GameState]의 `apply…` 메서드로 옮긴다.
 /// 아직 서버 API가 없는 동작은 [LocalGameRepository]에 넘긴다 — 그 결과는 앱 안에만 있고 서버에 저장되지 않는다.
-/// 넘기는 메서드에는 "3-x에서 서버로"라고 적어 두고, 단계마다 하나씩 서버로 옮긴다 (`docs/handoff/`).
+/// 넘기는 메서드에는 "3-x에서 서버로"라고 적어 두고, 단계마다 하나씩 서버로 옮긴다 (남은 것은 `frontend/서버연동-메모.md`).
 ///
 /// 서버 id ↔ 앱 모델 (결정 D2 · D-38):
 /// - 몬스터 `uid` = 서버 `userMonsterId` 문자열, 종 = `imageKey`(= 종 코드 = 앱 종 id)
@@ -166,14 +166,18 @@ class HttpGameRepository implements GameRepository {
   static List<Goal> _goals(Map<String, dynamic> json) => [
         for (final (key, tier) in [('weekly', GoalTier.weekly), ('monthly', GoalTier.monthly)])
           for (final g in ((json[key] as Map<String, dynamic>)['goals'] as List).cast<Map<String, dynamic>>())
-            Goal(
-              id: '${g['goalId']}',
-              tier: tier,
-              title: g['title'] as String? ?? '',
-              detail: g['detail'] as String? ?? '',
-              done: g['status'] == 'COMPLETED',
-            ),
+            _goal(g, tier),
       ];
+
+  /// 목표 한 줄. 기간 마지막 날(`periodEnd`)은 카드의 "10/29까지" (명세 v5 보충 10-28).
+  static Goal _goal(Map<String, dynamic> g, GoalTier tier) => Goal(
+        id: '${g['goalId']}',
+        tier: tier,
+        title: g['title'] as String? ?? '',
+        detail: g['detail'] as String? ?? '',
+        done: g['status'] == 'COMPLETED',
+        due: switch (g['periodEnd']) { final String d => DateTime.parse(d), _ => null },
+      );
 
   // ---------- 출석 · 온보딩 (3-1) ----------
 
@@ -448,6 +452,48 @@ class HttpGameRepository implements GameRepository {
     return res['line'] as String?;
   }
 
+  // ---------- 목표 (4-2) ----------
+  // 기간은 등록한 날부터 주간 7일 · 월간 30일, 칸 · 등록 당일 완료 불가 · 기간 끝은 서버가 판단한다 (D-48).
+  // 실패는 서버 문구를 그대로 올린다 — 예: 409 GOAL_TOO_EARLY "목표는 다음 날부터 완료할 수 있어요".
+
+  /// 목표 등록 (`POST /goals`, 중복 방지 키). 상세가 비었으면 서버가 "없음"으로 저장한다.
+  @override
+  Future<Goal> addGoal(GoalTier tier, String title, String detail) async {
+    final res = await api.send('POST', '/goals',
+        idempotent: true,
+        body: {'goalType': tier == GoalTier.weekly ? 'WEEKLY' : 'MONTHLY', 'title': title, 'detail': detail})
+        as Map<String, dynamic>;
+    final g = _goal(res, tier);
+    state.applyGoalAdded(g);
+    return g;
+  }
+
+  /// 목표 수정 (`PATCH /goals/{id}`). 상세를 비우면 `null`(지우기)로 보낸다.
+  @override
+  Future<void> updateGoal(Goal g, String title, String detail) async {
+    final res = await api.send('PATCH', '/goals/${g.id}', body: {'title': title, 'detail': detail.isEmpty ? null : detail})
+        as Map<String, dynamic>;
+    state.applyGoalUpdated(g, title: res['title'] as String? ?? title, detail: res['detail'] as String? ?? '');
+  }
+
+  /// 목표 삭제 (`DELETE /goals/{id}`). 완료한 목표는 서버를 부르지 않고 false.
+  @override
+  Future<bool> deleteGoal(Goal g) async {
+    if (g.done) return false;
+    await api.send('DELETE', '/goals/${g.id}');
+    state.applyGoalDeleted(g);
+    return true;
+  }
+
+  /// 목표 완료 (`POST /goals/{id}/complete`, 중복 방지 키). 이미 완료면 서버를 부르지 않고 false.
+  @override
+  Future<bool> completeGoal(Goal g) async {
+    if (g.done) return false;
+    final res = await api.send('POST', '/goals/${g.id}/complete', idempotent: true) as Map<String, dynamic>;
+    state.applyGoalCompleted(g, gold: res['gold'] as int);
+    return true;
+  }
+
   // ---------- 아직 앱 안에서 계산 (서버에 저장되지 않음) ----------
 
   /// 4단계에서 서버로 (`POST /categories/{code}/unlock`).
@@ -470,23 +516,4 @@ class HttpGameRepository implements GameRepository {
   @override
   Future<bool> removeHabit(Habit h) => _local.removeHabit(h);
 
-  /// 4단계에서 서버로 (`POST /goals`).
-  @override
-  Future<Goal> addGoal(GoalTier tier, String title, String detail) => _local.addGoal(tier, title, detail);
-
-  /// 4단계에서 서버로 (`PATCH /goals/{id}`).
-  @override
-  Future<void> updateGoal(Goal g, String title, String detail) => _local.updateGoal(g, title, detail);
-
-  /// 4단계에서 서버로 (`DELETE /goals/{id}`).
-  @override
-  Future<bool> deleteGoal(Goal g) => _local.deleteGoal(g);
-
-  /// 4단계에서 서버로 (`POST /goals/{id}/complete`).
-  @override
-  Future<bool> completeGoal(Goal g) => _local.completeGoal(g);
-
-  /// 결제는 MVP 밖 — 앱 안에서만.
-  @override
-  Future<void> unlockExtraWeeklySlot() => _local.unlockExtraWeeklySlot();
 }

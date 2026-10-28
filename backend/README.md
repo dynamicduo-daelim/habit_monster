@@ -100,7 +100,11 @@
 | POST | /habits | **Idempotency-Key 필수**. `{categoryCode, measureTypeId, name, dailyTarget, periodCode}` → 201 (`GET /habits`의 한 줄). 시작일 = 오늘 체크인 전이면 오늘, 후면 내일. 400 값 형식, 422 `CATEGORY_LOCKED` · `HABIT_LIMIT`(진행 중 + 기간 완료 5개) (10-23, D-47) |
 | POST | /habits/{id}/renew | **Idempotency-Key 필수**. `{periodCode, dailyTarget?}` → 200 (새 기간, `filledDays` 0). 404 남의 습관, 400, 409 `HABIT_NOT_ENDED` (10-23) |
 | POST | /habits/{id}/stop | 키 없음. 200 `{habitId, status: STOPPED}`. 404, 409 `HABIT_ALREADY_STOPPED`, 422 `LAST_HABIT`(마지막 1개) (10-23) |
-| GET | /goals | 이번 주 · 이번 달 `{periodStart, slotsTotal, slotsUsed, rewardGold, goals[]}` |
+| GET | /goals | `{weekly, monthly}` 각각 `{slotsTotal, slotsUsed, rewardGold, goals[{goalId, goalType, periodStart, periodEnd, title, detail, status}]}` — 기간이 남은 목표만 (등록한 날부터 7 · 30일, 명세 v5 보충 10-28, D-48) |
+| POST | /goals | **Idempotency-Key 필수**. `{goalType, title, detail?}` → 201 (목록의 한 줄). 400 값 형식, 422 `GOAL_SLOT_FULL` (기간이 남은 목표 = 진행 중 + 완료) (10-28) |
+| PATCH | /goals/{id} | 보낸 필드만. `detail: null` = 지우기, `title: null` · `goalType` = 400. 404 · 409 `GOAL_COMPLETED` · `GOAL_PERIOD_ENDED` (10-28) |
+| DELETE | /goals/{id} | 204. 404 · 409 `GOAL_COMPLETED` · `GOAL_PERIOD_ENDED` (10-28) |
+| POST | /goals/{id}/complete | **Idempotency-Key 필수**. 200 `{goalId, status, goldAwarded, gold}` (원장 `GOAL_WEEKLY` · `GOAL_MONTHLY`). 404 · 409 `GOAL_COMPLETED` · `GOAL_PERIOD_ENDED` · `GOAL_TOO_EARLY`(등록한 날) (10-28) |
 | GET | /checkins/today | `{businessDate, submitted, revision, partner{userMonsterId, name, imageKey, affectionTier}, tabs[{categoryCode, categoryName, habits[{habitId, name, unit, scoringMode, options, previousValue, filledDays, periodDays}]}]}`. 제출 전엔 오늘 대상 습관, 제출 후엔 제출에 들어간 습관(`previousValue` = 최신 값). `options`는 서버가 만든 선택지 (B3, 수면은 범위 ± 2칸 — D-42) |
 | POST | /checkins/today | **Idempotency-Key 필수**. 201, 명세 예시 그대로 + `categoryExp[]`의 `expInLevel` · `expRequired`(더한 값, D-43). 409 `BUSINESS_DATE_CHANGED` · `ALREADY_SUBMITTED` · `NO_ACTIVE_HABIT`, 400 빠진 · 남의 습관 · 선택지 밖 값 (`errors` 전부) |
 | PUT | /checkins/today | **Idempotency-Key 필수**. 200 `{revision, habits[{habitId, value, score}], overallRate}` — 최신 값 · 점수만 바뀌고 보상은 그대로. 오늘 제출이 없으면 404 `CHECKIN_NOT_FOUND` |
@@ -138,7 +142,7 @@
 | `pet` · `play` · `feed` · `moveMonster` · `setPartner` · `talk` | `/monsters/{id}/affection` · `feed` · `location` · `PUT /me/partner` · `GET /monsters/{id}/line` | — **10-21 연결**. `dragMonster`는 서버 모드에서 0 (D-46) |
 | `openCategory` | `POST /categories/{code}/unlock` | |
 | `addHabit` · `removeHabit` | `POST /habits` · `/habits/{id}/stop` | |
-| `addGoal` · `updateGoal` · `deleteGoal` · `completeGoal` | `/goals` | |
+| `addGoal` · `updateGoal` · `deleteGoal` · `completeGoal` | `POST /goals` · `PATCH` · `DELETE /goals/{id}` · `POST /goals/{id}/complete` | — **10-28 연결** |
 
 - `ApiClient`(`lib/core/api/`)가 공통 규칙을 맡는다: Bearer 토큰, `Idempotency-Key`(다시 보낼 땐 같은 키), `TOKEN_EXPIRED`면 재발급 1번(로그인과 공유),
   연결 끊김 · `REQUEST_IN_PROGRESS`면 같은 키로 재시도, `BUSINESS_DATE_CHANGED`면 화면 새로 불러오기 알림.

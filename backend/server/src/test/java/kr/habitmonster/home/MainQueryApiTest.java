@@ -233,13 +233,13 @@ class MainQueryApiTest extends PostgresTest {
 		as(access, get("/habits").param("status", "DONE")).andExpect(status().isBadRequest());
 
 		as(access, get("/goals")).andExpect(status().isOk())
-			.andExpect(jsonPath("$.weekly.periodStart").value(dates.weekStart().toString()))
 			.andExpect(jsonPath("$.weekly.slotsTotal").value(3))
 			.andExpect(jsonPath("$.weekly.slotsUsed").value(1))
 			.andExpect(jsonPath("$.weekly.rewardGold").value(40))
 			.andExpect(jsonPath("$.weekly.goals[0].title").value("헬스장 3번 가기"))
 			.andExpect(jsonPath("$.weekly.goals[0].status").value("ACTIVE"))
-			.andExpect(jsonPath("$.monthly.periodStart").value(dates.monthStart().toString()))
+			.andExpect(jsonPath("$.weekly.goals[0].periodStart").value(dates.today().toString()))
+			.andExpect(jsonPath("$.weekly.goals[0].periodEnd").value(dates.today().plusDays(6).toString()))
 			.andExpect(jsonPath("$.monthly.slotsTotal").value(1))
 			.andExpect(jsonPath("$.monthly.slotsUsed").value(0))
 			.andExpect(jsonPath("$.monthly.rewardGold").value(150));

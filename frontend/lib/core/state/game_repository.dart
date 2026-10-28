@@ -92,9 +92,6 @@ abstract class GameRepository {
 
   /// 목표 완료 → 보상. 이미 완료면 false.
   Future<bool> completeGoal(Goal g);
-
-  /// 유료 주간 목표 칸 (결제는 MVP 밖 — 지금은 앱 안에서만).
-  Future<void> unlockExtraWeeklySlot();
 }
 
 /// 위젯 트리 어디서든 `GameRepositoryScope.of(context)`로 꺼내 쓴다.

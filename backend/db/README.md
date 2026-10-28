@@ -27,6 +27,18 @@
 - 중복 방지 키를 공식 `api.idempotency_record`로 옮기고, 우리 쪽 제안이던 `server_additions.sql`(`identity.idempotency_record`)은 지웠어요 (D-27).
 - 로그인: `users.email` 사용, `auth_credential.email` 제거 (1단계 인증).
 
+**목표 기간 변경 — 반영함 (2026-10-28, 사용자 요청으로 Claude가 직접, D-48)**: 목표 기간을 달력 주 · 달에서 "등록한 날부터 7일 · 30일"로.
+`schema.sql`에서 제약 `ck_goal_period_start`(주간 = 월요일 · 월간 = 1일) 삭제, `seed.sql`에 `weekly_goal_days` 7 · `monthly_goal_days` 30, `verify.sql` 검사 2개.
+새로 만드는 DB(서버 테스트 · `docker compose down -v` 뒤)에는 자동으로 들어간다. **이미 있는 로컬 DB**에는 아래를 한 번 실행한다 (데이터는 그대로):
+```sql
+ALTER TABLE goal.goal DROP CONSTRAINT IF EXISTS ck_goal_period_start;
+INSERT INTO config.balance_config (key, value, description) VALUES
+ ('weekly_goal_days',  '7',  '주간 목표 기간 (등록한 날부터 일수, v1.8 보충 10-28)'),
+ ('monthly_goal_days', '30', '월간 목표 기간 (등록한 날부터 일수, v1.8 보충 10-28)')
+ON CONFLICT (key) DO NOTHING;
+```
+(서버는 두 설정 키가 없으면 시작하지 않는다 — `BalanceConfig.REQUIRED`.)
+
 **DB에 더할 것 (다음 판에서 결정 — DB · API 명세는 윤서 작성)**
 - 도감 "본 종"(API 명세 v5): `monster.dex_entry`에 처음 본 시각 (지금은 잡은 시각만)
 - (해결 — v1.8) ~~몬스터 종이 5마리뿐~~
@@ -42,7 +54,7 @@
   볼까지 주면 `verify.sql` S-12(가방 수량 = 구매 합 − 소모 합)가 깨진다 → 둘 중 하나: (1) S-12를 "구매 + 시작 지급 − 소모"로 바꾸고 시작 지급을 기록할 곳(예: 새 `shop.item_grant` 테이블, 또는 `shop.purchase`에 가격 0 허용)을 둔다 (2) 볼은 주지 않고 골드만(볼 값 50G보다 넉넉히) 준다.
   판이 나오면 서버는 두 키를 `BalanceConfig.REQUIRED`에 넣고 `OnboardingService`에서 지급한다.
 - **체크인 선택지 수치 (10-19 제안, D-42)**: 선택지 배수 `{0.25, 0.5, 0.75, 1, 1.5, 2}`(B3)와 수면 범위 바깥 칸 수 `2`가 설정 키가 없어 서버 코드(`habit/Scoring.java`) 상수다. 예: `('checkin_option_ratios', '[0.25,0.5,0.75,1,1.5,2]')` · `('checkin_range_extra_steps', '2')`
-- **필드 끌기 호감도 DRAG (10-21 제안, D-46)**: 앱의 끌기 호감도(D-20)를 저장하려면 `affection_action.action_type`에 `DRAG`, 설정 `affection_drag_gain`, 명세 `action: DRAG` · `todayActions.drag`. 고칠 곳 전체 목록은 **`backend/db/제안-필드-끌기-호감도.md`**. 그때까지 서버 모드에선 끌어도 호감도가 안 오름
+- **필드 끌기 호감도 DRAG (10-21 제안, D-46)**: 앱의 끌기 호감도(D-20)를 저장하려면 `affection_action.action_type`에 `DRAG`, 설정 `affection_drag_gain`, 명세 `action: DRAG` · `todayActions.drag`. 고칠 곳 전체 목록은 **`backend/db/제안-필드-끌기-호감도.md`** (서버 담당 PC에만 있음 — 원격 저장소에서 뺌, 10-23). 그때까지 서버 모드에선 끌어도 호감도가 안 오름
 - **탐색 첫날 (10-20 제안, D-45)**: 시드 출현 레벨이 1/3/6/9…라 카테고리 Lv.1 ~ 2에는 후보가 시작 몬스터(가진 종)뿐 → 처음 며칠은 탐색 결과가 꽝 아니면 15G. 옛 결정 B5("Lv.1에 시작 몬스터 + 1종", 1/1/3/6…)를 쓰려면 카테고리마다 두 번째 종의 `unlock_level`을 1로 (앱 `Catalog.species`의 `unlockLevel`도 같이). 이번엔 명세 그대로 두기로 함
 - **탐색 "본 종" 인덱스 (10-20, D-30)**: `newlySeen` 판단이 `explore_log (user_id, species_id, result)`를 찾는다. 지금은 사용자당 하루 최대 3줄이라 괜찮지만, 느려지면 `CREATE INDEX ix_explore_user_species ON monster.explore_log (user_id, species_id) WHERE result = 'ENCOUNTER'`
 - **API 명세 다음 판 제안 (10-20 추가)**: 남의 탐색에 던지기 403 → **404**(C3와 맞춤), 응답의 `imageUrl` → `imageKey`(D1), `dex.newSlotAvailable`의 뜻 = "이번 포획으로 해금권을 받음"

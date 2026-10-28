@@ -27,7 +27,7 @@
 - **상태를 바꿀 땐 `GameRepository`**(`core/state/game_repository.dart`)로: 화면에서는 `runGameAction(context, (repo) => repo.buy(…))`.
   `GameState`의 규칙 메서드를 화면에서 직접 부르지 않는다 (서버 모드에서 서버를 거치지 않게 됨). 게임 API 통신은 `core/api/ApiClient`
   (Bearer · `Idempotency-Key` · 만료 시 재발급 · 같은 키 재시도). 새 동작을 만들면 `GameRepository`에 메서드를 추가하고 `LocalGameRepository`에서 `GameState` 규칙을 부른다.
-  서버 구현 `HttpGameRepository`(10-18~): `load` · `attend` · `completeOnboarding` · 체크인(`confirmCheckin` · `resubmitCheckin`, 10-19) · 탐색(`explore` · `throwBall(EncounterResult)` · `pendingEncounter`, 10-20) · 성장(`buy` · `feed` · `pet` · `play` · `moveMonster` · `setPartner` · `talk`, 10-21)은 서버로, 나머지(습관 · 목표 · 카테고리 열기)는 `LocalGameRepository`에 넘기며 단계마다 옮긴다 (`docs/handoff/`). `dragMonster`(필드 끌기 호감도)는 서버 모드에서 0 (D-46).
+  서버 구현 `HttpGameRepository`(10-18~): `load` · `attend` · `completeOnboarding` · 체크인(`confirmCheckin` · `resubmitCheckin`, 10-19) · 탐색(`explore` · `throwBall(EncounterResult)` · `pendingEncounter`, 10-20) · 성장(`buy` · `feed` · `pet` · `play` · `moveMonster` · `setPartner` · `talk`, 10-21) · 목표(`addGoal` · `updateGoal` · `deleteGoal` · `completeGoal`, 10-28)는 서버로, 나머지(습관 · 카테고리 열기)는 `LocalGameRepository`에 넘기며 단계마다 옮긴다 (남은 것은 `frontend/서버연동-메모.md`). `dragMonster`(필드 끌기 호감도)는 서버 모드에서 0 (D-46).
   서버 모드 챗봇은 `GameState.checkinHabits`(서버가 정한 오늘 대상)를 묻고, 입력값은 `GameState.recordableValue`로 서버 선택지 중 가장 가까운 값에 맞춘다 (D-42 — 나중에 입력값 그대로 받으려면 이 함수만).
   서버 모드는 `GameState.empty()`로 시작해 `GameLoader`가 `load()` 뒤 홈을 그린다. 서버 응답은 `GameState.apply…`로 옮긴다 (규칙 메서드에 서버 값을 넣지 않기).
   위젯 테스트는 `test/game_harness.dart`의 `withGame(state, child)`로 감싼다. 서버 연동은 `test/http_game_repository_test.dart`처럼 MockClient로.

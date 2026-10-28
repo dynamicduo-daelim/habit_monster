@@ -172,6 +172,7 @@ class Goal {
     this.detail = '',
     this.done = false,
     this.paidSlot = false,
+    this.due,
   });
   final String id;
   final GoalTier tier;
@@ -179,6 +180,9 @@ class Goal {
   String detail;
   bool done;
   bool paidSlot; // 유료 슬롯은 기록용 (골드 없음)
+
+  /// 기간 마지막 날 — 이날까지 완료할 수 있다 (서버 모드만. 기간은 등록한 날부터 주간 7일 · 월간 30일, D-48).
+  final DateTime? due;
 
   int get reward {
     if (paidSlot) return 0;

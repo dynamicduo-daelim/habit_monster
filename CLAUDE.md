@@ -12,7 +12,7 @@
 | 앱 코드를 고칠 때 | `frontend/CLAUDE.md` (프론트 규칙 — 색 · 폰트 · 수치 · 디자인 기준) |
 | 서버 · DB를 고칠 때 | **`backend/CLAUDE.md`** (서버 규칙 · 이미 있는 기반 · DB 원칙) · `backend/README.md` · `backend/server/README.md` · `backend/db/README.md` |
 | API · DB 계약을 볼 때 | `docs/api/습관몬스터_API명세_v5.md` · `docs/데이터베이스/` (스키마 v1.7 + 시드 v1.8) — **둘 다 사용자(윤서)가 썼다. Claude가 고치지 않고, 바꿔야 하면 제안한다** |
-| 남은 단계를 이어서 할 때 | `docs/handoff/README.md` → `00-공통.md` + 그 단계 파일 (3-0 ~ 6) |
+| 남은 단계를 이어서 할 때 | `docs/handoff/README.md` → `00-공통.md` + 그 단계 파일 (3-0 ~ 6) (서버 담당 PC에만 있음 — 원격 저장소에서 뺌, 10-23). 남은 일 전체는 `docs/할-일.md`, 프론트가 따라갈 일은 `frontend/서버연동-메모.md` |
 
 문서 전체 지도는 `docs/README.md`.
 

@@ -491,7 +491,7 @@ class GameState extends ChangeNotifier {
   }
 
   // ---------- 목표 ----------
-  /// 유료로 연 주간 목표 슬롯 (기록용, 골드 보상 없음).
+  /// 유료로 연 주간 목표 슬롯 (기록용, 골드 보상 없음). 결제가 없어 화면에서는 열 수 없다 (D-48 — 누르면 "결제가 필요해요" 창).
   bool extraWeeklySlot = false;
   int _goalSeq = 0;
 
@@ -635,11 +635,38 @@ class GameState extends ChangeNotifier {
       ..addAll(list);
   }
 
-  /// `GET /goals` (이번 주 · 이번 달).
+  /// `GET /goals` (기간이 남은 목표).
   void applyGoals(List<Goal> list) {
     goals
       ..clear()
       ..addAll(list);
+  }
+
+  /// `POST /goals` 응답.
+  void applyGoalAdded(Goal g) {
+    goals.add(g);
+    notifyListeners();
+  }
+
+  /// `PATCH /goals/{id}` 응답.
+  void applyGoalUpdated(Goal g, {required String title, required String detail}) {
+    g
+      ..title = title
+      ..detail = detail;
+    notifyListeners();
+  }
+
+  /// `DELETE /goals/{id}`.
+  void applyGoalDeleted(Goal g) {
+    goals.remove(g);
+    notifyListeners();
+  }
+
+  /// `POST /goals/{id}/complete` 응답: 완료 표시 + 받은 뒤 잔액(서버 값).
+  void applyGoalCompleted(Goal g, {required int gold}) {
+    g.done = true;
+    this.gold = gold;
+    notifyListeners();
   }
 
   /// `GET /inventory`의 물약 (앱 아이템 id → 개수). 없는 물약은 0.

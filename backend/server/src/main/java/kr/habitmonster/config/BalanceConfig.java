@@ -31,7 +31,7 @@ public class BalanceConfig {
 		"dex_unlock_thresholds", "max_active_habits", "daily_counted_habits",
 		"score_target_hit", "score_max", "score_over_slope", "score_binary_done", "score_binary_miss", "gold_per_score",
 		"period_multiplier", "period_days",
-		"weekly_goal_slots", "monthly_goal_slots", "weekly_goal_gold", "monthly_goal_gold",
+		"weekly_goal_slots", "monthly_goal_slots", "weekly_goal_gold", "monthly_goal_gold", "weekly_goal_days", "monthly_goal_days",
 		"explore_daily_free", "explore_daily_all_missed", "explore_miss_rate", "explore_rarity_weight",
 		"explore_unowned_multiplier", "duplicate_gold", "capture_rate",
 		"monster_exp_per_level", "monster_max_level", "evolve_levels", "field_max", "field_min",
@@ -103,6 +103,9 @@ public class BalanceConfig {
 	public int monthlyGoalSlots() { return integer("monthly_goal_slots"); }
 	public int weeklyGoalGold() { return integer("weekly_goal_gold"); }
 	public int monthlyGoalGold() { return integer("monthly_goal_gold"); }
+	/** 목표 기간 — 등록한 날부터 센 일수 (명세 v5 보충 10-28). */
+	public int weeklyGoalDays() { return integer("weekly_goal_days"); }
+	public int monthlyGoalDays() { return integer("monthly_goal_days"); }
 
 	// ---------- 탐색 · 포획 ----------
 	public int exploreDailyFree() { return integer("explore_daily_free"); }

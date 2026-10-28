@@ -92,7 +92,7 @@ class OnboardingApiTest extends PostgresTest {
 			  from habit.habit h join habit.habit_period p on p.habit_id = h.id where h.user_id = ?""", String.class, user))
 			.isEqualTo("ACTIVE 1 D30 30.00 " + dates.today());
 		assertThat(jdbc.queryForObject("select period_start from goal.goal where user_id = ?", LocalDate.class, user))
-			.isEqualTo(dates.weekStart());
+			.isEqualTo(dates.today()); // 목표 기간은 등록한 날부터 (명세 v5 보충 10-28)
 		assertThat(count("select dex_count from monster.monster_user where user_id = ?", user)).isEqualTo(2);
 		assertThat(count("select count(*) from monster.user_monster where user_id = ? and affection = 3 and acquired_via = 'STARTER'",
 				user)).isEqualTo(2);

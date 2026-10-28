@@ -4,6 +4,7 @@
 --                  완주율·60일 리셋 삭제, 가진 종 등장은 볼 없이 골드)
 -- v1.8 2026-10-17: 몬스터를 앱의 새 픽셀 그림 28종으로 교체 (옛 5종 삭제), id는 카테고리 순서,
 --                  6개 카테고리 모두 스타터, 대사 전부 적재
+-- v1.8 보충 2026-10-28: 목표 기간 일수 weekly_goal_days 7 · monthly_goal_days 30 (등록한 날부터, API 명세 v5 보충 10-28)
 -- =====================================================================
 
 -- 카테고리 (HTML CATS)
@@ -380,6 +381,8 @@ INSERT INTO config.balance_config (key, value, description) VALUES
  ('monthly_goal_slots',         '1',          '월간 목표 슬롯'),
  ('weekly_goal_gold',           '40',         '주간 목표 보상'),
  ('monthly_goal_gold',          '150',        '월간 목표 보상'),
+ ('weekly_goal_days',           '7',          '주간 목표 기간 (등록한 날부터 일수, v1.8 보충 10-28)'),
+ ('monthly_goal_days',          '30',         '월간 목표 기간 (등록한 날부터 일수, v1.8 보충 10-28)'),
  ('explore_daily_free',         '3',          '하루 기본 탐색'),
  ('explore_daily_all_missed',   '1',          '첫 제출이 전부 "못했어"인 날의 탐색 횟수 (v1.7)'),
  ('explore_miss_rate',          '0.35',       '탐색 꽝 확률 (v1.7 확정, 베타에서 튜닝)'),

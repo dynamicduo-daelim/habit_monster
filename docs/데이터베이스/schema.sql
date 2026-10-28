@@ -18,6 +18,9 @@
 --   * 체크인 대사 저장 테이블(ai.checkin_dialogue): 제출 차수(revision)당 1개
 --   * 중복 요청 방지 키 저장(api.idempotency_record): 사용자 + 메서드 + 경로, 24시간 보관
 --   * 탈퇴 시 습관명·목표 제목을 비우므로 두 컬럼은 NULL 허용
+-- v1.7 보충 2026-10-28 (API 명세 v5 보충 10-28): 목표 기간 = 등록한 날부터 주간 7일 · 월간 30일
+--   * goal.goal.period_start = 등록한 날 (월요일 · 1일 제약 ck_goal_period_start 삭제). 끝 날은 시작 + 기간 − 1 (컬럼 없음)
+--   * 기간 일수는 config weekly_goal_days · monthly_goal_days
 -- 설계 문서: 04_논리물리모델.md (v1.7 반영 전)
 -- MVP 밖 구성요소(결제, 수치 변경 이력, AI 기억·호출 로그)는 schema_later.sql (이 파일 다음에 적용)
 --
@@ -45,6 +48,7 @@
 --     애플리케이션이 검증한다. 수치를 바꿀 때 마이그레이션이 필요 없게 하기 위함.
 --  5) 업무 날짜(checkin_date, quota_date, attended_on 등)는 서버가 Asia/Seoul 고정, 00:00 경계로 계산해 저장한다.
 --     주는 월요일 00:00, 월은 1일 00:00에 시작한다. (사용자별 시간대 없음 — v1.1 결정 C, v1.7 경계 변경)
+--     단, 목표 기간은 달력 주·달이 아니라 등록한 날부터 센다 (v1.7 보충 10-28).
 --  6) 레벨은 누적 EXP(exp_total)가 기준값. level 컬럼은 캐시이며 "내려가지 않는다" (v1.1 결정 B).
 --     수치 변경 시 level = GREATEST(level, f(exp_total))로만 재계산.
 --  7) 행을 물리 삭제하지 않는다(소프트 삭제·상태값). 그래서 모든 FK는 의도적으로 ON DELETE 미지정(NO ACTION).
@@ -363,7 +367,8 @@ CREATE TRIGGER tg_habit_checkin_reward_fixed BEFORE UPDATE ON habit.habit_checki
   FOR EACH ROW EXECUTE FUNCTION habit.forbid_reward_change();
 
 -- =====================================================================
--- goal (목표) — 주는 월요일 00:00, 월은 1일 00:00 시작 (v1.7)
+-- goal (목표) — 기간은 등록한 날부터 주간 7일 · 월간 30일 (v1.7 보충 10-28, config *_goal_days)
+-- 기간이 남은 목표(ACTIVE·COMPLETED)가 칸을 차지한다. 기간이 끝난 ACTIVE 목표는 상태를 바꾸지 않고 날짜로 거른다.
 -- =====================================================================
 CREATE TABLE goal.goal_user (
   user_id             BIGINT       PRIMARY KEY REFERENCES identity.users(id),
@@ -376,7 +381,7 @@ CREATE TABLE goal.goal (
   id            BIGINT       GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   user_id       BIGINT       NOT NULL REFERENCES goal.goal_user(user_id),
   goal_type     TEXT         NOT NULL CHECK (goal_type IN ('WEEKLY','MONTHLY')),
-  period_start  DATE         NOT NULL,
+  period_start  DATE         NOT NULL,                -- 등록한 날 (업무 날짜). 끝 날 = 시작 + 기간 − 1
   title         VARCHAR(50)  NULL CHECK (length(btrim(title)) > 0),   -- 탈퇴 시 NULL (원칙 7), 그 외 필수는 앱 검사
   detail        VARCHAR(500) NULL,
   is_paid_slot  BOOLEAN      NOT NULL DEFAULT false,   -- 결제 도입 전에는 항상 false
@@ -385,9 +390,6 @@ CREATE TABLE goal.goal (
   deleted_at    TIMESTAMPTZ  NULL,
   created_at    TIMESTAMPTZ  NOT NULL DEFAULT now(),
   updated_at    TIMESTAMPTZ  NOT NULL DEFAULT now(),
-  CONSTRAINT ck_goal_period_start CHECK (
-    (goal_type = 'WEEKLY'  AND EXTRACT(ISODOW FROM period_start) = 1) OR
-    (goal_type = 'MONTHLY' AND EXTRACT(DAY    FROM period_start) = 1)),
   CONSTRAINT ck_goal_status_time CHECK (
     (status = 'ACTIVE'    AND completed_at IS NULL     AND deleted_at IS NULL) OR
     (status = 'COMPLETED' AND completed_at IS NOT NULL AND deleted_at IS NULL) OR

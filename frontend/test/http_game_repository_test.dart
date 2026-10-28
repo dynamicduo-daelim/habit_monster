@@ -79,14 +79,17 @@ Map<String, Object> _server({bool checkedIn = false, String date = '2026-10-18'}
         },
       ],
       'GET /goals': {
+        // 명세 v5 보충 10-28: 기간은 목표마다 (등록한 날부터 주간 7일)
         'weekly': {
-          'periodStart': '2026-10-12', 'slotsTotal': 3, 'slotsUsed': 2, 'rewardGold': 40,
+          'slotsTotal': 3, 'slotsUsed': 2, 'rewardGold': 40,
           'goals': [
-            {'goalId': 200, 'title': '헬스장 3번 가기', 'detail': null, 'status': 'ACTIVE'},
-            {'goalId': 201, 'title': '책 1권', 'detail': '소설', 'status': 'COMPLETED'},
+            {'goalId': 200, 'goalType': 'WEEKLY', 'title': '헬스장 3번 가기', 'detail': null, 'status': 'ACTIVE',
+             'periodStart': '2026-10-16', 'periodEnd': '2026-10-22'},
+            {'goalId': 201, 'goalType': 'WEEKLY', 'title': '책 1권', 'detail': '소설', 'status': 'COMPLETED',
+             'periodStart': '2026-10-13', 'periodEnd': '2026-10-19'},
           ],
         },
-        'monthly': {'periodStart': '2026-10-01', 'slotsTotal': 1, 'slotsUsed': 0, 'rewardGold': 150, 'goals': []},
+        'monthly': {'slotsTotal': 1, 'slotsUsed': 0, 'rewardGold': 150, 'goals': []},
       },
       // 실제 시드와 같은 id: 카테고리 안 순서대로
       'GET /measure-types': [
@@ -209,6 +212,7 @@ void main() {
       ('200', GoalTier.weekly, '헬스장 3번 가기', '', false),
       ('201', GoalTier.weekly, '책 1권', '소설', true),
     ]);
+    expect(s.goals.first.due, DateTime(2026, 10, 22));
 
     // 몬스터 상세는 마리마다, 측정 항목 표는 한 번
     final paths = requests.map((r) => r.url.path).toList();
@@ -502,6 +506,68 @@ void main() {
       final affection = monkey.affection;
       expect(await r.dragMonster(monkey), 0);
       expect((monkey.affection, requests.length), (affection, before));
+    });
+  });
+
+  group('목표 (4-2)', () {
+    Future<(GameState, HttpGameRepository, Map<String, Object>)> loaded() async {
+      final s = GameState.empty();
+      final routes = _server();
+      final r = repo(s, routes);
+      await r.load();
+      return (s, r, routes);
+    }
+
+    test('등록: 종류 · 제목 · 상세를 키와 함께 보내고, 서버가 준 id · 마감일로 추가', () async {
+      final (s, r, routes) = await loaded();
+      routes['POST /goals'] = {
+        'goalId': 202, 'goalType': 'MONTHLY', 'periodStart': '2026-10-18', 'periodEnd': '2026-11-16',
+        'title': '책 2권', 'detail': null, 'status': 'ACTIVE',
+      };
+      final g = await r.addGoal(GoalTier.monthly, '책 2권', '');
+      final post = requests.last;
+      expect(post.headers['Idempotency-Key'], isNotEmpty);
+      expect(jsonDecode(post.body), {'goalType': 'MONTHLY', 'title': '책 2권', 'detail': ''});
+      expect((g.id, g.tier, g.detail, g.due), ('202', GoalTier.monthly, '', DateTime(2026, 11, 16)));
+      expect(s.goalsOf(GoalTier.monthly), [g]);
+    });
+
+    test('수정: 상세를 비우면 null(지우기)로 보낸다', () async {
+      final (s, r, routes) = await loaded();
+      routes['PATCH /goals/201'] = {'goalId': 201, 'title': '책 2권', 'detail': null, 'status': 'ACTIVE'};
+      final g = s.goals.firstWhere((g) => g.id == '201');
+      await r.updateGoal(g, '책 2권', '');
+      expect(jsonDecode(requests.last.body), {'title': '책 2권', 'detail': null});
+      expect((g.title, g.detail), ('책 2권', ''));
+    });
+
+    test('삭제: 서버에서 지우고 목록에서 빼기, 완료한 목표는 서버를 부르지 않고 false', () async {
+      final (s, r, routes) = await loaded();
+      routes['DELETE /goals/200'] = _noContent;
+      expect(await r.deleteGoal(s.goals.firstWhere((g) => g.id == '200')), isTrue);
+      expect(requests.last.method, 'DELETE');
+      expect(s.goals.map((g) => g.id), ['201']);
+
+      final before = requests.length;
+      expect(await r.deleteGoal(s.goals.single), isFalse); // 201은 완료
+      expect(requests, hasLength(before));
+    });
+
+    test('완료: 키와 함께 부르고 골드는 서버 잔액, 등록 당일이면 서버 문구를 올린다', () async {
+      final (s, r, routes) = await loaded();
+      final g = s.goals.firstWhere((g) => g.id == '200');
+      routes['POST /goals/200/complete'] =
+          _json({'code': 'GOAL_TOO_EARLY', 'message': '목표는 다음 날부터 완료할 수 있어요'}, 409);
+      await expectLater(r.completeGoal(g), throwsA(isA<ApiException>().having((e) => e.code, 'code', 'GOAL_TOO_EARLY')));
+      expect((g.done, s.gold), (false, 120));
+
+      routes['POST /goals/200/complete'] = {'goalId': 200, 'status': 'COMPLETED', 'goldAwarded': 40, 'gold': 160};
+      expect(await r.completeGoal(g), isTrue);
+      expect(requests.last.headers['Idempotency-Key'], isNotEmpty);
+      expect((g.done, s.gold), (true, 160));
+      final before = requests.length;
+      expect(await r.completeGoal(g), isFalse);
+      expect(requests, hasLength(before));
     });
   });
 

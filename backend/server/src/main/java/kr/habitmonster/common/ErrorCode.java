@@ -41,6 +41,12 @@ public enum ErrorCode {
 	/** 기간 연장은 기간을 채운(ENDED) 습관만. */
 	HABIT_NOT_ENDED(HttpStatus.CONFLICT, "기간을 다 채운 습관만 연장할 수 있어요"),
 	HABIT_ALREADY_STOPPED(HttpStatus.CONFLICT, "이미 그만둔 습관이에요"),
+	/** 완료한 목표는 수정 · 삭제 · 다시 완료할 수 없다 (완료는 되돌릴 수 없음). */
+	GOAL_COMPLETED(HttpStatus.CONFLICT, "이미 완료한 목표예요"),
+	/** 기간(등록한 날부터 7일 · 30일)이 끝난 목표. */
+	GOAL_PERIOD_ENDED(HttpStatus.CONFLICT, "기간이 끝난 목표예요"),
+	/** 등록한 날에는 완료할 수 없다 (C1 — 등록 → 바로 완료로 골드 벌기 방지). 명세 v5 보충 10-28에 사용자 요청으로 추가. */
+	GOAL_TOO_EARLY(HttpStatus.CONFLICT, "목표는 다음 날부터 완료할 수 있어요"),
 	// 422
 	IDEMPOTENCY_KEY_REUSED(HttpStatus.UNPROCESSABLE_CONTENT, "요청을 확인해 주세요"),
 	NOT_ENOUGH_GOLD(HttpStatus.UNPROCESSABLE_CONTENT, "골드가 모자라요"),
@@ -56,6 +62,8 @@ public enum ErrorCode {
 	HABIT_LIMIT(HttpStatus.UNPROCESSABLE_CONTENT, "습관 칸이 꽉 찼어요"),
 	/** 진행 중 + 기간 완료가 1개뿐이면 그만둘 수 없다 (D-14 · 사용자 결정 10-21). 명세 v5에 사용자 요청으로 추가. */
 	LAST_HABIT(HttpStatus.UNPROCESSABLE_CONTENT, "습관은 1개 이상 있어야 해요"),
+	/** 기간이 남은 목표(진행 중 · 완료)가 칸을 다 차지함. 기간이 끝나거나 삭제하면 빈다. */
+	GOAL_SLOT_FULL(HttpStatus.UNPROCESSABLE_CONTENT, "목표 칸이 꽉 찼어요"),
 	// 503
 	SOCIAL_NOT_CONFIGURED(HttpStatus.SERVICE_UNAVAILABLE, "아직 준비 중인 로그인 방식이에요");
 

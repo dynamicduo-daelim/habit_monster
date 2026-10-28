@@ -5,6 +5,7 @@
 -- 각 검사는 PASS/FAIL을 결과 표로 출력하고, FAIL이 하나라도 있으면 마지막에 예외
 -- v1.7: 이메일 고유·Apple 제외, 출석, 습관 기간(habit_period)·채운 날, 탐색 DUPLICATE/EXPIRED,
 --       체크인 대사, 중복 요청 방지 키, 설정값 변경 검사 추가
+-- v1.8 보충 10-28: 목표 기간은 등록한 날부터 (월요일 시작 검사 → 아무 요일이나 시작 가능 검사) · 목표 기간 일수 설정
 -- v1.8: 시드 몬스터 28종 (id = 카테고리 순서). 검사가 쓰는 종 id를 새 번호로 —
 --       1 운동 스타터(그대로) · 6 공부 스타터(옛 2) · 7 공부 비스타터(옛 3) · 10 식습관 스타터(옛 4) · 19 수면 스타터(옛 5).
 --       S-2를 "스타터 없는 카테고리 0개" 검사로 (6개 카테고리 모두 스타터)
@@ -116,6 +117,12 @@ SELECT 'S-21 설정값 v1.7 (경계 0시, 최대 레벨 20, 꽝 0.35, 완주율�
    AND NOT EXISTS (SELECT 1 FROM config.balance_config WHERE key IN ('period_completion_rate','period_reset_days'))
    AND (SELECT count(*) FROM config.balance_config
         WHERE key IN ('explore_rarity_weight','explore_unowned_multiplier','explore_daily_all_missed','idempotency_ttl_hours')) = 4,
+       '';
+-- S-21b (v1.8 보충 10-28) 목표 기간 일수
+INSERT INTO _result
+SELECT 'S-21b 목표 기간 일수 (주간 7 · 월간 30)',
+       (SELECT value FROM config.balance_config WHERE key = 'weekly_goal_days') = '7'::jsonb
+   AND (SELECT value FROM config.balance_config WHERE key = 'monthly_goal_days') = '30'::jsonb,
        '';
 -- S-22 (v1.7) 탐색 가중치·포획률 키가 희귀도 1~3과 일치
 INSERT INTO _result
@@ -320,8 +327,9 @@ SELECT pg_temp.expect_fail('해금권: 사용 카테고리는 열린 카테고�
     VALUES (1,10,'md',now())$$);
 
 -- ---------- goal ----------
-SELECT pg_temp.expect_fail('주간 목표 기간 시작은 월요일',
-  $$INSERT INTO goal.goal (user_id, goal_type, period_start, title) VALUES (1,'WEEKLY','2026-10-07','러닝')$$);
+SELECT pg_temp.expect_ok  ('v1.8 보충 목표 기간은 등록한 날부터 (수요일 시작 가능)',
+  $$INSERT INTO goal.goal (user_id, goal_type, period_start, title) VALUES (1,'WEEKLY','2026-10-07','러닝');
+    INSERT INTO goal.goal (user_id, goal_type, period_start, title) VALUES (1,'MONTHLY','2026-10-23','책')$$);
 SELECT pg_temp.expect_fail('BR-22 제목 공백 불가',
   $$INSERT INTO goal.goal (user_id, goal_type, period_start, title) VALUES (1,'WEEKLY','2026-10-05','   ')$$);
 SELECT pg_temp.expect_ok  ('목표 등록·완료',

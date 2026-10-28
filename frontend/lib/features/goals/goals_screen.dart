@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/constants/economy.dart';
 import '../../core/state/game_state.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/widgets/help_button.dart';
 import '../../core/widgets/pixel_icon.dart';
 import '../../core/widgets/pixel_widgets.dart';
 import '../../data/models.dart';
@@ -12,7 +13,8 @@ import '../shell/game_action.dart';
 import '../shell/main_shell.dart';
 
 /// 목표 체크리스트: 주간(3칸 · +40G) · 월간(1칸 · +150G).
-/// 카드를 누르면 달성 체크, 연필로 수정 · 삭제, 4번째 주간 칸은 유료 · 기록용.
+/// 카드를 누르면 달성 체크, 연필로 수정 · 삭제. 칸이 차면 "슬롯 추가 열기 (유료)" — 결제가 없어 안내 창만 (D-48).
+/// 서버 모드에서는 목표마다 기간 마지막 날("10/29까지")이 보인다 (기간 = 등록한 날부터 7일 · 30일).
 class GoalsScreen extends StatefulWidget {
   const GoalsScreen({super.key});
 
@@ -130,7 +132,7 @@ class _GoalsScreenState extends State<GoalsScreen> {
     final drafting = _draftTier == tier;
     final colors = _TierColors.of(tier);
     final canAdd = _draftTier == null && list.length < cap;
-    final locked = weekly && !s.extraWeeklySlot && list.length >= Economy.weeklyGoalSlots && _draftTier == null;
+    final locked = list.length >= cap && _draftTier == null;
 
     final children = <Widget>[
       Row(
@@ -181,10 +183,9 @@ class _GoalsScreenState extends State<GoalsScreen> {
         Semantics(
           button: true,
           child: GestureDetector(
-            onTap: () async {
-              await runGameAction(context, (r) => r.unlockExtraWeeklySlot());
-              if (mounted) MainShell.of(context).toast('결제 화면 자리 · 슬롯 +1');
-            },
+            onTap: () => showInfoPopup(context, title: '목표 칸 추가', items: const [
+              ('목표 칸을 더 열려면 결제가 필요해요.', '(결제는 준비 중이에요)'),
+            ]),
             child: Container(
               constraints: const BoxConstraints(minHeight: 44),
               alignment: Alignment.center,
@@ -193,7 +194,7 @@ class _GoalsScreenState extends State<GoalsScreen> {
                 color: AppColors.introFloor,
                 border: Border.all(color: AppColors.gold, width: 3),
               ),
-              child: const Text('슬롯 추가 열기 (유료 · 기록용)',
+              child: const Text('슬롯 추가 열기 (유료)',
                   style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.goldLight)),
             ),
           ),
@@ -386,6 +387,9 @@ class _GoalCard extends StatelessWidget {
                               const SizedBox(height: 5),
                               Text(g.detail.isEmpty ? '상세 내용 없음 · 연필을 눌러 적어보세요' : g.detail,
                                   style: const TextStyle(fontSize: 10, height: 1.7, color: AppColors.brownMuted)),
+                              if (g.due case final due?)
+                                Text('${due.month}/${due.day}까지',
+                                    style: const TextStyle(fontSize: 9.5, color: AppColors.textMuted)),
                             ],
                           ),
                         ),
