@@ -1,5 +1,6 @@
 import '../../data/models.dart';
 import '../../data/results.dart';
+import '../constants/economy.dart';
 import 'game_repository.dart';
 import 'game_state.dart';
 
@@ -88,6 +89,35 @@ class LocalGameRepository implements GameRepository {
 
   @override
   Future<bool> removeHabit(Habit h) async => state.removeHabit(h);
+
+  /// 시연 모드 통계: 연속 출석 · 카테고리 레벨은 앱 값, 지난 6일 성실도는 시안의 샘플 값 (기록이 없어서).
+  @override
+  Future<StatsData> loadStats() async {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final todayRate = state.countedToday.isEmpty
+        ? null
+        : (state.countedToday.map((id) => ((state.rewardedScores[id] ?? 0) / Economy.targetHitScore).clamp(0, 1) * 100)
+                    .reduce((a, b) => a + b) /
+                state.countedToday.length)
+            .round();
+    final rates = <int?>[..._sampleRates, todayRate];
+    final week = [
+      for (var i = 0; i < 7; i++) (weekdayLabel(today.subtract(Duration(days: 6 - i))), rates[i]),
+    ];
+    final done = rates.whereType<int>().toList();
+    return StatsData(
+      currentStreak: state.currentStreak,
+      longestStreak: state.currentStreak,
+      last14Days: [for (var i = 13; i >= 0; i--) state.attendedOn(today.subtract(Duration(days: i)), today: today)],
+      last7Days: week,
+      averageRate: done.isEmpty ? null : (done.reduce((a, b) => a + b) / done.length).round(),
+      categories: {for (final c in state.pickedCategories) c: state.categoryLevel(c)},
+    );
+  }
+
+  /// 시안의 지난 6일 점수(42 · 55 · 30 · 61 · 48 · 52 / 75)를 달성률 %로.
+  static const _sampleRates = [56, 73, 40, 81, 64, 69];
 
   @override
   Future<Goal> addGoal(GoalTier tier, String title, String detail) async => state.addGoal(tier, title, detail);

@@ -575,6 +575,38 @@ void main() {
     });
   });
 
+  test('통계 (4-4): 서버 값 그대로, 최대 레벨 필요량 null → 0, 잠긴 카테고리는 빠짐', () async {
+    final s = GameState.empty();
+    final routes = _server()
+      ..['GET /stats'] = {
+        'attendance': {
+          'currentStreak': 2, 'longestStreak': 9,
+          'last14Days': [for (var i = 0; i < 14; i++) {'date': '2026-10-${(5 + i).toString().padLeft(2, '0')}', 'attended': i >= 12}],
+        },
+        'sincerity': {
+          'last7Days': [
+            for (var i = 0; i < 7; i++)
+              {'date': '2026-10-${12 + i}', 'dayOfWeek': 'X', 'rate': i == 6 ? 80 : (i == 5 ? 50 : null)},
+          ],
+          'averageRate': 65,
+        },
+        'categories': [
+          {'code': 'ex', 'name': '운동', 'opened': true, 'level': 2, 'maxLevel': 20, 'expInLevel': 10, 'expRequired': 20, 'levelUpGold': 20},
+          {'code': 'st', 'name': '공부', 'opened': true, 'level': 20, 'maxLevel': 20, 'expInLevel': 0, 'expRequired': null, 'levelUpGold': 20},
+          {'code': 'md', 'name': '명상', 'opened': false},
+        ],
+      };
+    final st = await repo(s, routes).loadStats();
+    expect((st.currentStreak, st.longestStreak, st.averageRate), (2, 9, 65));
+    expect(st.last14Days.where((a) => a).length, 2);
+    expect(st.last14Days.last, isTrue);
+    expect(st.last7Days.last, ('일', 80)); // 2026-10-18 = 일요일
+    expect(st.last7Days.first.$2, isNull);
+    expect(st.categories.keys, ['ex', 'st']);
+    expect((st.categories['ex']!.level, st.categories['ex']!.current, st.categories['ex']!.needed), (2, 10, 20));
+    expect(st.categories['st']!.isMax, isTrue);
+  });
+
   group('목표 (4-2)', () {
     Future<(GameState, HttpGameRepository, Map<String, Object>)> loaded() async {
       final s = GameState.empty();

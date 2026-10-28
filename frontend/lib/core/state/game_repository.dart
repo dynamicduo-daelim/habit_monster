@@ -85,6 +85,10 @@ abstract class GameRepository {
 
   Future<bool> removeHabit(Habit h);
 
+  // ---------- 통계 (/stats, 4-4) ----------
+  /// 통계 화면 값. 탭을 열 때마다 부른다 (서버: `GET /stats`, 시연: 앱 값 + 샘플 7일).
+  Future<StatsData> loadStats();
+
   // ---------- 목표 (/goals) ----------
   Future<Goal> addGoal(GoalTier tier, String title, String detail);
   Future<void> updateGoal(Goal g, String title, String detail);

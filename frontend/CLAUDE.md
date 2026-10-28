@@ -21,13 +21,13 @@
 - `core/widgets/pixel_icon.dart` 시안의 픽셀 SVG path를 그리는 PixelIcon (path 데이터는 `data/pixel_icons.dart`)
 - `features/` onboarding(인트로 + 1~3단계) · shell(상단 바 + 탭 5개 + `MainShell.of(context)`로 탭 이동/토스트)
   · home(필드 · 말풍선 · 슬라이드 시트 · 상점/가방/교감 창) · dex(도감) · goals(목표)
-  · chat(대본형 습관 체크 + 탐색, 대사는 `ChatBrain`) · 통계는 준비 중
+  · chat(대본형 습관 체크 + 탐색, 대사는 `ChatBrain`) · stats(통계 — 탭을 열 때마다 `GameRepository.loadStats`)
   · tutorial(온보딩 직후 홈을 짚어 주는 `TutorialOverlay`, 설정에서 다시 보기) · home의 출석부(`attendance_popup.dart`)
 - `core/widgets/help_button.dart` 낯선 말 옆 ? 버튼 `HelpButton` + 설명 창 `showInfoPopup` (시안에 없는 추가 기능)
 - **상태를 바꿀 땐 `GameRepository`**(`core/state/game_repository.dart`)로: 화면에서는 `runGameAction(context, (repo) => repo.buy(…))`.
   `GameState`의 규칙 메서드를 화면에서 직접 부르지 않는다 (서버 모드에서 서버를 거치지 않게 됨). 게임 API 통신은 `core/api/ApiClient`
   (Bearer · `Idempotency-Key` · 만료 시 재발급 · 같은 키 재시도). 새 동작을 만들면 `GameRepository`에 메서드를 추가하고 `LocalGameRepository`에서 `GameState` 규칙을 부른다.
-  서버 구현 `HttpGameRepository`(10-18~): `load` · `attend` · `completeOnboarding` · 체크인(`confirmCheckin` · `resubmitCheckin`, 10-19) · 탐색(`explore` · `throwBall(EncounterResult)` · `pendingEncounter`, 10-20) · 성장(`buy` · `feed` · `pet` · `play` · `moveMonster` · `setPartner` · `talk`, 10-21) · 목표(`addGoal` · `updateGoal` · `deleteGoal` · `completeGoal`, 10-28) · 도감 · 카테고리 열기(`load`의 도감 · `openCategory`, 10-28)는 서버로, 나머지(습관)는 `LocalGameRepository`에 넘기며 단계마다 옮긴다 (남은 것은 `frontend/서버연동-메모.md`). `dragMonster`(필드 끌기 호감도)는 서버 모드에서 0 (D-46).
+  서버 구현 `HttpGameRepository`(10-18~): `load` · `attend` · `completeOnboarding` · 체크인(`confirmCheckin` · `resubmitCheckin`, 10-19) · 탐색(`explore` · `throwBall(EncounterResult)` · `pendingEncounter`, 10-20) · 성장(`buy` · `feed` · `pet` · `play` · `moveMonster` · `setPartner` · `talk`, 10-21) · 목표(`addGoal` · `updateGoal` · `deleteGoal` · `completeGoal`, 10-28) · 도감 · 카테고리 열기(`load`의 도감 · `openCategory`, 10-28) · 통계(`loadStats`, 10-28)는 서버로, 나머지(습관)는 `LocalGameRepository`에 넘기며 단계마다 옮긴다 (남은 것은 `frontend/서버연동-메모.md`). `dragMonster`(필드 끌기 호감도)는 서버 모드에서 0 (D-46).
   서버 모드 챗봇은 `GameState.checkinHabits`(서버가 정한 오늘 대상)를 묻고, 입력값은 `GameState.recordableValue`로 서버 선택지 중 가장 가까운 값에 맞춘다 (D-42 — 나중에 입력값 그대로 받으려면 이 함수만).
   서버 모드는 `GameState.empty()`로 시작해 `GameLoader`가 `load()` 뒤 홈을 그린다. 서버 응답은 `GameState.apply…`로 옮긴다 (규칙 메서드에 서버 값을 넣지 않기).
   위젯 테스트는 `test/game_harness.dart`의 `withGame(state, child)`로 감싼다. 서버 연동은 `test/http_game_repository_test.dart`처럼 MockClient로.

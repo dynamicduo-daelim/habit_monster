@@ -115,6 +115,25 @@ class HabitRepository {
 			.param(userId).query(StreakRow.class).optional();
 	}
 
+	/** {@code from} ~ {@code to}(포함) 사이 출석한 날 (통계, 4-4). */
+	List<LocalDate> attendedDays(long userId, LocalDate from, LocalDate to) {
+		return db.sql("""
+			select attended_on from habit.attendance where user_id = ? and attended_on between ? and ? order by attended_on""")
+			.params(userId, from, to).query(LocalDate.class).list();
+	}
+
+	record DayScoreRow(LocalDate checkinDate, int score) {
+	}
+
+	/** {@code from} ~ {@code to} 체크인의 습관별 최신 점수 (다시 체크 반영, 통계 4-4). */
+	List<DayScoreRow> dayScores(long userId, LocalDate from, LocalDate to) {
+		return db.sql("""
+			select c.checkin_date, h.score from habit.daily_checkin c
+			  join habit.habit_checkin h on h.daily_checkin_id = c.id
+			 where c.user_id = ? and c.checkin_date between ? and ?""")
+			.params(userId, from, to).query(DayScoreRow.class).list();
+	}
+
 	/** 오늘 출석 1행. 이미 있으면 false (하루에 여러 번 불러도 1행). */
 	boolean insertAttendance(long userId, LocalDate day) {
 		return db.sql("insert into habit.attendance (user_id, attended_on) values (?, ?) on conflict do nothing")

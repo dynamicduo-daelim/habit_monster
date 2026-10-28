@@ -11,6 +11,7 @@ class Economy {
   static const int dailyHabitCap = 3; // 하루 성실도에 반영되는 습관 수 (점수 상위 3개)
   static const int maxActiveHabits = 5; // 활성 습관 상한 (챗봇은 전부 묻는다)
   static const int maxSincerityPerHabit = 25; // 습관 1개당 최대 성실도
+  static const int targetHitScore = 20; // 목표를 딱 채운 점수 = 달성률 100% (DB score_target_hit, 통계 4-4)
   static const int categoryLevelUpGold = 20;
   static const int weeklyGoalGold = 40;
   static const int monthlyGoalGold = 150;

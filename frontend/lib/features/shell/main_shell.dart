@@ -216,7 +216,7 @@ class MainShellState extends State<MainShell> {
                         ChatScreen(active: _tab == MainShell.chatTab),
                         const GoalsScreen(),
                         DexScreen(active: _tab == MainShell.dexTab),
-                        const StatsScreen(),
+                        StatsScreen(active: _tab == MainShell.statsTab),
                       ],
                     ),
                   ),

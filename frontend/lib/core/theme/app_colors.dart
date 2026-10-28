@@ -15,6 +15,8 @@ class AppColors {
   static const Color purpleSoft = Color(0xFFC9B6FF);
   static const Color text = Color(0xFFE8E4F5);
   static const Color textMuted = Color(0xFF9B91C4);
+  static const Color lockedMuted = Color(0xFF6B6390); // 통계: 열지 않은 카테고리 테두리 · 글자
+  static const Color barShine = Color(0x33FFFFFF); // 통계: 막대 윗면 밝은 줄
 
   // 밝은 게임 UI (상점 · 가방 · 몬스터 정보 · 온보딩 카드)
   static const Color ink = Color(0xFF0D0B16);

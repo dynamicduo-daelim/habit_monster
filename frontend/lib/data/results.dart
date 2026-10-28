@@ -101,3 +101,33 @@ class CatchResult {
 
   bool get caught => kind == CatchKind.newMonster;
 }
+
+/// 통계 화면 한 번 그릴 값 (`GET /stats`, 4-4). 서버 모드는 서버 값, 시연 모드는 앱 값 + 샘플 7일.
+class StatsData {
+  const StatsData({
+    required this.currentStreak,
+    required this.longestStreak,
+    required this.last14Days,
+    required this.last7Days,
+    required this.averageRate,
+    required this.categories,
+  });
+
+  final int currentStreak;
+  final int longestStreak;
+
+  /// 최근 14일 출석 여부 — 오래된 날부터, 마지막이 오늘.
+  final List<bool> last14Days;
+
+  /// 최근 7일 (요일 한 글자, 달성률 %) — 오래된 날부터, 마지막이 오늘. 체크인 안 한 날은 null.
+  final List<(String, int?)> last7Days;
+
+  /// 체크인한 날만의 평균. 하루도 없으면 null.
+  final int? averageRate;
+
+  /// 연 카테고리 → 레벨 진행. 없는 카테고리는 "미등록".
+  final Map<String, CategoryLevel> categories;
+}
+
+/// 요일 한 글자 (월 ~ 일).
+String weekdayLabel(DateTime day) => const ['월', '화', '수', '목', '금', '토', '일'][day.weekday - 1];

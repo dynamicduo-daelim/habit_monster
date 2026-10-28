@@ -619,6 +619,47 @@ public class HabitService {
 		return new Attendance(today, false, current, longest);
 	}
 
+	// ---------- 통계 (4-4) ----------
+	public record Streak(int current, int longest) {
+	}
+
+	/** 연속 출석(끊겼으면 0) · 최장 기록. */
+	@Transactional(readOnly = true)
+	public Streak streak(long userId) {
+		LocalDate today = dates.today();
+		return habits.streak(userId).map(r -> new Streak(displayStreak(r, today), r.longestStreak())).orElse(new Streak(0, 0));
+	}
+
+	@Transactional(readOnly = true)
+	public List<LocalDate> attendedDays(long userId, LocalDate from, LocalDate to) {
+		return habits.attendedDays(userId, from, to);
+	}
+
+	/**
+	 * 날짜 → 그날 전체 성실도 % (최신 점수 = 다시 체크 반영, 다시 체크 응답의 {@code overallRate}와 같은 계산).
+	 * 체크인하지 않은 날은 없다.
+	 */
+	@Transactional(readOnly = true)
+	public Map<LocalDate, Integer> dailyRates(long userId, LocalDate from, LocalDate to) {
+		return habits.dayScores(userId, from, to).stream()
+			.collect(Collectors.groupingBy(HabitRepository.DayScoreRow::checkinDate,
+					Collectors.collectingAndThen(Collectors.mapping(HabitRepository.DayScoreRow::score, Collectors.toList()),
+							scoring::overallRate)));
+	}
+
+	/** 연 카테고리의 레벨 진행. {@code expRequired}는 그 레벨에 필요한 총량(B2), 최대 레벨이면 null · {@code expInLevel} 0. */
+	public record CategoryProgress(int level, int expInLevel, Integer expRequired) {
+	}
+
+	@Transactional(readOnly = true)
+	public Map<String, CategoryProgress> categoryProgress(long userId) {
+		return habits.categoryExp(userId).stream().collect(Collectors.toMap(CategoryExpRow::categoryCode, r -> {
+			boolean max = r.level() >= config.categoryMaxLevel();
+			return new CategoryProgress(r.level(), max ? 0 : r.expTotal() - expToReach(r.level()),
+					max ? null : config.categoryExpBase() * r.level());
+		}));
+	}
+
 	/** 화면에 보일 연속 출석: 마지막 출석이 어제보다 이전이면 끊긴 것이라 0 (schema 주석). */
 	@Transactional(readOnly = true)
 	public int currentStreak(long userId) {

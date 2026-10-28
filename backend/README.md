@@ -107,6 +107,7 @@
 | GET | /dex | `{slot{dexCount, nextMilestone, availableTickets}, categories[{code, name, opened, ownedCount, seenCount, totalCount}]}` (10-28, 4-3) |
 | GET | /dex/categories/{code} | `{code, ownedCount, seenCount, totalCount, monsters[]}` — OWNED `{dexNo, status, speciesId, name, imageKey, level}` · SEEN(레벨 없음) · UNKNOWN `{dexNo, status, imageKey, unlockLevel, unlocked}`(이름 · 번호 없음, D6). 없는 코드 404 |
 | GET | /dex/species/{id} | `{dexNo, status, name, imageKey, element, rarity, level, stage, description}` (본 종은 level · stage null). 본 적 없으면 404 `NOT_DISCOVERED` |
+| GET | /stats | `{attendance{currentStreak, longestStreak, last14Days[{date, attended}]}, sincerity{last7Days[{date, dayOfWeek, rate}], averageRate}, categories[]}` — `rate`는 그날 최신 점수의 달성률 %(안 한 날 null), 연 카테고리 `{code, name, opened, level, maxLevel, expInLevel, expRequired, levelUpGold}`(B2, 최대 레벨이면 `expRequired` null) · 잠긴 카테고리 `{code, name, opened}` (10-28, D-50) |
 | POST | /categories/{code}/unlock | **Idempotency-Key 필수**. 201 `{categoryCode, starter{userMonsterId, name, imageKey, location}, availableTickets}`. 404 없는 코드, 409 `ALREADY_OPENED`, 422 `NO_TICKET` (D-49) |
 | POST | /goals/{id}/complete | **Idempotency-Key 필수**. 200 `{goalId, status, goldAwarded, gold}` (원장 `GOAL_WEEKLY` · `GOAL_MONTHLY`). 404 · 409 `GOAL_COMPLETED` · `GOAL_PERIOD_ENDED` · `GOAL_TOO_EARLY`(등록한 날) (10-28) |
 | GET | /checkins/today | `{businessDate, submitted, revision, partner{userMonsterId, name, imageKey, affectionTier}, tabs[{categoryCode, categoryName, habits[{habitId, name, unit, scoringMode, options, previousValue, filledDays, periodDays}]}]}`. 제출 전엔 오늘 대상 습관, 제출 후엔 제출에 들어간 습관(`previousValue` = 최신 값). `options`는 서버가 만든 선택지 (B3, 수면은 범위 ± 2칸 — D-42) |
@@ -144,6 +145,7 @@
 | `explore` · `throwBall` · `pendingEncounter` | `POST /explores` · `/explores/{id}/capture` · `GET /explores/pending` | `EncounterResult` · `CatchResult` — **10-20 연결** |
 | `buy` | `POST /shop/purchases` (코드는 `Catalog.serverCodeOf`) | 성공 여부 — **10-21 연결** |
 | `pet` · `play` · `feed` · `moveMonster` · `setPartner` · `talk` | `/monsters/{id}/affection` · `feed` · `location` · `PUT /me/partner` · `GET /monsters/{id}/line` | — **10-21 연결**. `dragMonster`는 서버 모드에서 0 (D-46) |
+| `loadStats` | `GET /stats` | `StatsData` — **10-28 연결** (통계 탭을 열 때마다) |
 | `openCategory` · (`load`의 도감) | `POST /categories/{code}/unlock` · `GET /dex` · `/dex/categories/{code}` | 성공 여부 — **10-28 연결** |
 | `addHabit` · `removeHabit` | `POST /habits` · `/habits/{id}/stop` | |
 | `addGoal` · `updateGoal` · `deleteGoal` · `completeGoal` | `POST /goals` · `PATCH` · `DELETE /goals/{id}` · `POST /goals/{id}/complete` | — **10-28 연결** |

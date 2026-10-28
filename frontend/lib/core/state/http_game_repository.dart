@@ -466,6 +466,34 @@ class HttpGameRepository implements GameRepository {
     return res['line'] as String?;
   }
 
+  // ---------- 통계 (4-4) ----------
+
+  /// 통계 (`GET /stats`). 경험치는 B2 이름 `expRequired`(최대 레벨이면 null → 앱은 0).
+  @override
+  Future<StatsData> loadStats() async {
+    final res = await api.get('/stats') as Map<String, dynamic>;
+    final attendance = res['attendance'] as Map<String, dynamic>;
+    final sincerity = res['sincerity'] as Map<String, dynamic>;
+    return StatsData(
+      currentStreak: attendance['currentStreak'] as int,
+      longestStreak: attendance['longestStreak'] as int,
+      last14Days: [
+        for (final d in (attendance['last14Days'] as List).cast<Map<String, dynamic>>()) d['attended'] as bool,
+      ],
+      last7Days: [
+        for (final d in (sincerity['last7Days'] as List).cast<Map<String, dynamic>>())
+          (weekdayLabel(DateTime.parse(d['date'] as String)), d['rate'] as int?),
+      ],
+      averageRate: sincerity['averageRate'] as int?,
+      categories: {
+        for (final c in (res['categories'] as List).cast<Map<String, dynamic>>())
+          if (c['opened'] == true)
+            c['code'] as String:
+                CategoryLevel(c['level'] as int, c['expInLevel'] as int, c['expRequired'] as int? ?? 0),
+      },
+    );
+  }
+
   // ---------- 목표 (4-2) ----------
   // 기간은 등록한 날부터 주간 7일 · 월간 30일, 칸 · 등록 당일 완료 불가 · 기간 끝은 서버가 판단한다 (D-48).
   // 실패는 서버 문구를 그대로 올린다 — 예: 409 GOAL_TOO_EARLY "목표는 다음 날부터 완료할 수 있어요".
