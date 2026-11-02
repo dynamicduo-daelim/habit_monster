@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 import '../../core/auth/auth_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/widgets/pixel_widgets.dart';
-import '../onboarding/onboarding_parts.dart' show DotGridPainter, RibbonPanel, pixelInputDecoration;
+import '../onboarding/onboarding_parts.dart' show DotGridPainter, pixelInputDecoration;
+import 'login_parts.dart';
+import '../../core/theme/app_theme.dart';
 
 /// 이메일 로그인 · 회원가입. 성공하면 닫히고, 아래의 [AuthGate]가 온보딩이나 홈을 보여준다.
 class EmailAuthScreen extends StatefulWidget {
@@ -19,6 +21,14 @@ class _EmailAuthScreenState extends State<EmailAuthScreen> {
   final _password = TextEditingController();
   final _confirm = TextEditingController();
   String? _error;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // 아이디 저장으로 남긴 이메일을 미리 채운다 (처음 한 번만)
+    final saved = AuthScope.of(context).prefs.savedEmail;
+    if (_email.text.isEmpty && saved != null) _email.text = saved;
+  }
 
   @override
   void dispose() {
@@ -62,8 +72,9 @@ class _EmailAuthScreenState extends State<EmailAuthScreen> {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 11),
           decoration: BoxDecoration(
-            color: AppColors.parchment,
-            border: Border.all(color: AppColors.ink, width: 3),
+            color: AppColors.white,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: AppColors.brownText, width: 2),
           ),
           child: Semantics(
             label: label,
@@ -86,7 +97,8 @@ class _EmailAuthScreenState extends State<EmailAuthScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final busy = AuthScope.of(context).busy;
+    final auth = AuthScope.of(context);
+    final busy = auth.busy;
     return Scaffold(
       backgroundColor: AppColors.introSky,
       body: Stack(
@@ -128,6 +140,7 @@ class _EmailAuthScreenState extends State<EmailAuthScreen> {
                             height: 40,
                             alignment: Alignment.center,
                             decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(10),
                               color: _signUp == signUp ? AppColors.introFloor : AppColors.nightDeep,
                               border: Border.all(
                                   color: _signUp == signUp ? AppColors.purple : AppColors.nightLine, width: 3),
@@ -143,24 +156,65 @@ class _EmailAuthScreenState extends State<EmailAuthScreen> {
                   ],
                 ),
                 const SizedBox(height: 14),
-                RibbonPanel(
-                  title: _signUp ? '이메일로 가입' : '이메일로 로그인',
-                  gap: 12,
+                Container(
+                  padding: const EdgeInsets.fromLTRB(18, 18, 18, 20),
+                  decoration: BoxDecoration(
+                    color: AppColors.cream,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.ink, width: 2),
+                    boxShadow: const [BoxShadow(color: AppColors.ink, offset: Offset(0, 4))],
+                  ),
+                  child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    Text(_signUp ? '이메일로 가입' : '이메일로 로그인',
+                        style: const TextStyle(fontFamily: AppTheme.pixelFont, fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.brownText)),
+                    const SizedBox(height: 14),
                     _field('이메일', _email, hint: 'you@example.com'),
+                    const SizedBox(height: 12),
                     _field('비밀번호', _password,
                         secret: true, hint: _signUp ? '${AuthRules.minPasswordLength}자 이상' : ''),
-                    if (_signUp) _field('비밀번호 확인', _confirm, secret: true),
-                    if (_error != null)
+                    if (_signUp) ...[const SizedBox(height: 12), _field('비밀번호 확인', _confirm, secret: true)],
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 16,
+                      children: [
+                        if (!_signUp)
+                          PixelCheckbox(
+                            label: '아이디 저장',
+                            value: auth.prefs.rememberEmail,
+                            onChanged: auth.setRememberEmail,
+                            onLight: true,
+                          ),
+                        PixelCheckbox(
+                            label: '자동 로그인', value: auth.prefs.autoLogin, onChanged: auth.setAutoLogin, onLight: true),
+                      ],
+                    ),
+                    if (_error != null) ...[
+                      const SizedBox(height: 6),
                       Text(_error!,
                           style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.red)),
-                    PixelButton(
+                    ],
+                    const SizedBox(height: 10),
+                    RoundBlockButton(
                       label: busy ? '잠시만요…' : (_signUp ? '가입하고 시작하기' : '로그인'),
                       onPressed: busy ? null : _submit,
-                      height: 46,
+                      color: AppColors.yellowButton,
+                      shadowColor: AppColors.yellowShadow,
+                      height: 50,
                     ),
                   ],
+                  ),
                 ),
+                if (!_signUp) ...[
+                  const SizedBox(height: 18),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    decoration: BoxDecoration(color: AppColors.purpleDeep, borderRadius: BorderRadius.circular(10)),
+                    child: const Text('아이디 저장: 다음에 이메일을 미리 채워 둬요 (비밀번호는 저장하지 않아요)\n자동 로그인: 끄면 앱을 껐다 켤 때 다시 로그인해요',
+                        style: TextStyle(fontSize: 11.5, height: 1.7, color: AppColors.text)),
+                  ),
+                ],
               ],
             ),
           ),

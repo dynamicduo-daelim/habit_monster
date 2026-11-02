@@ -37,3 +37,8 @@ flutter:
         - asset: assets/fonts/Galmuri11.ttf
         - asset: assets/fonts/Galmuri11-Bold.ttf
           weight: 700
+    - family: Pretendard
+      fonts:
+        - asset: assets/fonts/Pretendard-Regular.otf
+        - asset: assets/fonts/Pretendard-Bold.otf
+          weight: 700

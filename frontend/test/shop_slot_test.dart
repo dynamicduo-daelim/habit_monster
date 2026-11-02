@@ -61,7 +61,7 @@ void main() {
     await tester.tap(find.text('몬스터에게 주기'));
     await tester.pump();
     expect(find.text('방금 산 거 나 주는 거야?'), findsOneWidget);
-    expect(find.text('어떤 간식을 줄까? (경험치 물약)'), findsOneWidget);
+    expect(find.text('간식 주기'), findsOneWidget);
     await tester.pump(const Duration(seconds: 7));
   });
 

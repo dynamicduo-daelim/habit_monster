@@ -2,6 +2,8 @@ package kr.habitmonster.checkin;
 
 import java.util.UUID;
 
+import kr.habitmonster.checkin.CheckinChatService.InterpretRequest;
+import kr.habitmonster.checkin.CheckinChatService.Interpreted;
 import kr.habitmonster.checkin.CheckinService.CheckinRequest;
 import kr.habitmonster.checkin.CheckinService.Submitted;
 import kr.habitmonster.checkin.CheckinService.TodayCheckin;
@@ -25,9 +27,11 @@ import org.springframework.web.bind.annotation.RestController;
 class CheckinController {
 
 	private final CheckinService checkins;
+	private final CheckinChatService chat;
 
-	CheckinController(CheckinService checkins) {
+	CheckinController(CheckinService checkins, CheckinChatService chat) {
 		this.checkins = checkins;
+		this.chat = chat;
 	}
 
 	@GetMapping("/checkins/today")
@@ -50,5 +54,11 @@ class CheckinController {
 	Revision resubmit(@AuthenticationPrincipal Jwt jwt, @RequestHeader(IdempotencyFilter.HEADER) UUID key,
 			@RequestBody CheckinRequest req) {
 		return checkins.resubmit(Long.parseLong(jwt.getSubject()), key, req);
+	}
+
+	/** 대화 해석 (제안 docs/제안/2026-10-30-AI챗봇-API.md). 확정하지 않으므로 중복 방지 키가 없다. */
+	@PostMapping("/checkins/today/interpret")
+	Interpreted interpret(@AuthenticationPrincipal Jwt jwt, @RequestBody InterpretRequest req) {
+		return chat.interpret(Long.parseLong(jwt.getSubject()), req);
 	}
 }

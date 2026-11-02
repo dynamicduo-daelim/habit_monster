@@ -4,6 +4,7 @@ import '../../core/constants/app_assets.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/widgets/pixel_icon.dart';
 import '../../data/pixel_icons.dart';
+import '../../core/theme/app_theme.dart';
 
 /// 온보딩 1~3단계 공통 틀: 점박이 밤하늘 + 스크롤 본문 + 아래 고정 바.
 class OnboardingFrame extends StatelessWidget {
@@ -81,7 +82,7 @@ class StepHeader extends StatelessWidget {
           Container(
             width: 22,
             height: 8,
-            decoration: BoxDecoration(
+            decoration: BoxDecoration(borderRadius: BorderRadius.circular(10), 
               color: i <= step ? AppColors.gold : AppColors.nightLine2,
               border: Border.all(color: AppColors.ink, width: 2),
             ),
@@ -112,7 +113,7 @@ class ProfessorTip extends StatelessWidget {
         Container(
           width: 60,
           height: 64,
-          decoration: BoxDecoration(
+          decoration: BoxDecoration(borderRadius: BorderRadius.circular(10), 
             color: AppColors.purpleDeep,
             border: Border.all(color: AppColors.ink, width: 3),
           ),
@@ -146,7 +147,7 @@ class ProfessorTip extends StatelessWidget {
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                decoration: BoxDecoration(
+                decoration: BoxDecoration(borderRadius: BorderRadius.circular(10), 
                   color: AppColors.cream,
                   border: Border.all(color: AppColors.ink, width: 3),
                 ),
@@ -208,7 +209,7 @@ class RibbonPanel extends StatelessWidget {
           Container(
             width: double.infinity,
             padding: const EdgeInsets.fromLTRB(12, 22, 12, 14),
-            decoration: BoxDecoration(
+            decoration: BoxDecoration(borderRadius: BorderRadius.circular(10), 
               color: AppColors.cream,
               border: Border.all(color: AppColors.ink, width: 4),
               boxShadow: const [BoxShadow(color: AppColors.ink, offset: Offset(5, 5))],
@@ -230,13 +231,14 @@ class RibbonPanel extends StatelessWidget {
             child: Center(
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 3),
-                decoration: BoxDecoration(
+                decoration: BoxDecoration(borderRadius: BorderRadius.circular(10), 
                   color: ribbonColor,
                   border: Border.all(color: AppColors.ink, width: 3),
                 ),
                 child: Text(
                   title,
                   style: TextStyle(
+                    fontFamily: AppTheme.pixelFont,
                     fontSize: 12,
                     fontWeight: FontWeight.w700,
                     color: AppColors.white,
@@ -310,7 +312,7 @@ class DeleteButton extends StatelessWidget {
           width: size,
           height: size,
           alignment: Alignment.center,
-          decoration: BoxDecoration(
+          decoration: BoxDecoration(borderRadius: BorderRadius.circular(10), 
             color: AppColors.redSoft,
             border: Border.all(color: AppColors.ink, width: 3),
           ),

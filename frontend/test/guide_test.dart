@@ -43,7 +43,7 @@ void main() {
 
   testWidgets('튜토리얼: 끝까지 넘기면 닫히고, 설정에서 다시 볼 수 있다', (tester) async {
     await pumpShell(tester, tutorial: true);
-    expect(find.text('루틴몬에 온 걸 환영해요!'), findsOneWidget);
+    expect(find.text('모아루틴에 온 걸 환영해요!'), findsOneWidget);
     expect(find.text('1 / 8'), findsOneWidget);
 
     for (final title in ['나의 필드', '오늘의 성실도', '챗봇에서 습관 체크', '골드와 성실볼', '상점 · 가방 · 출석 · 습관', '목표와 도감']) {
@@ -59,9 +59,9 @@ void main() {
     // 설정 → 다시 보기 → 건너뛰기
     await tapAndWait(tester, find.bySemanticsLabel('설정'));
     await tapAndWait(tester, find.text('다시 보기'));
-    expect(find.text('루틴몬에 온 걸 환영해요!'), findsOneWidget);
+    expect(find.text('모아루틴에 온 걸 환영해요!'), findsOneWidget);
     await tapAndWait(tester, find.text('건너뛰기'));
-    expect(find.text('루틴몬에 온 걸 환영해요!'), findsNothing);
+    expect(find.text('모아루틴에 온 걸 환영해요!'), findsNothing);
   });
 
   testWidgets('아래 탭 순서: 홈 · 챗봇 · 목표 · 도감 · 통계', (tester) async {
@@ -74,7 +74,7 @@ void main() {
 
   testWidgets('튜토리얼 없이 들어오면 바로 홈', (tester) async {
     await pumpShell(tester);
-    expect(find.text('루틴몬에 온 걸 환영해요!'), findsNothing);
+    expect(find.text('모아루틴에 온 걸 환영해요!'), findsNothing);
   });
 
   testWidgets('골드 칩을 누르면 골드 얻는 법', (tester) async {
@@ -87,7 +87,12 @@ void main() {
   });
 
   testWidgets('? 버튼: 성실도 · 탐색 · 필드 설명', (tester) async {
-    await pumpShell(tester);
+    final s = await pumpShell(tester);
+    // 탐색 기회는 챗봇 체크를 마친 뒤에만 보인다 (? 버튼도 그때)
+    expect(find.bySemanticsLabel('탐색이란? 설명'), findsNothing);
+    s.confirmCheckin({'h1': 30});
+    await tester.pump();
+    expect(find.text('탐색 기회 3번 남음'), findsOneWidget);
     for (final (label, head) in [
       ('성실도란? 설명', '성실도가 뭐예요?'),
       ('탐색이란? 설명', '탐색이 뭐예요?'),
@@ -109,7 +114,7 @@ void main() {
     expect(state.checkedInToday, isFalse);
     expect(find.text('연속 12일'), findsOneWidget);
     expect(find.text('오늘 출석 완료! 내일도 만나요.'), findsOneWidget);
-    expect(find.text('DAY 12 · 연속 12일'), findsOneWidget); // 상단 바도 같은 숫자
+    expect(find.text('연속 12일째'), findsOneWidget); // 상단 바도 같은 숫자
     await tapAndWait(tester, find.text('오늘 습관 체크하러 가기')); // 닫고 챗봇 탭으로
     expect(find.text('연속 12일'), findsNothing);
 

@@ -112,6 +112,7 @@
 | POST | /goals/{id}/complete | **Idempotency-Key 필수**. 200 `{goalId, status, goldAwarded, gold}` (원장 `GOAL_WEEKLY` · `GOAL_MONTHLY`). 404 · 409 `GOAL_COMPLETED` · `GOAL_PERIOD_ENDED` · `GOAL_TOO_EARLY`(등록한 날) (10-28) |
 | GET | /checkins/today | `{businessDate, submitted, revision, partner{userMonsterId, name, imageKey, affectionTier}, tabs[{categoryCode, categoryName, habits[{habitId, name, unit, scoringMode, options, previousValue, filledDays, periodDays}]}]}`. 제출 전엔 오늘 대상 습관, 제출 후엔 제출에 들어간 습관(`previousValue` = 최신 값). `options`는 서버가 만든 선택지 (B3, 수면은 범위 ± 2칸 — D-42) |
 | POST | /checkins/today | **Idempotency-Key 필수**. 201, 명세 예시 그대로 + `categoryExp[]`의 `expInLevel` · `expRequired`(더한 값, D-43). 409 `BUSINESS_DATE_CHANGED` · `ALREADY_SUBMITTED` · `NO_ACTIVE_HABIT`, 400 빠진 · 남의 습관 · 선택지 밖 값 (`errors` 전부) |
+| POST | /checkins/today/interpret | **(제안 · 10-30)** 대화 해석 — `{businessDate, message(1~300자), history[{role BOT·USER, text}] ≤10, draft[{habitId, done, value}], askingHabitId}` → `{reply, answers[{habitId, done, value, evidence SHORT·DETAILED, confidence}], askAgain{habitId, question}, remainingHabitIds, safety, source LLM·TEMPLATE}`. **확정하지 않는다** (키 없음). 서버가 Gemini(`ai/GeminiClient`, 키 `GEMINI_API_KEY`)를 부르고 답을 다시 검사(오늘 습관 · 상한 · 선택지 맞추기 · 확신 0.6). 실패 · 3초 초과면 TEMPLATE. 400 빈 · 긴 말, 409 날짜 · `NO_ACTIVE_HABIT`, 429 `AI_RATE_LIMITED`(하루 60). 프롬프트: `docs/AI-프롬프트.md` |
 | PUT | /checkins/today | **Idempotency-Key 필수**. 200 `{revision, habits[{habitId, value, score}], overallRate}` — 최신 값 · 점수만 바뀌고 보상은 그대로. 오늘 제출이 없으면 404 `CHECKIN_NOT_FOUND` |
 | POST | /explores | **Idempotency-Key 필수**. 201 `{exploreId, result(MISS · DUPLICATE · ENCOUNTER), species{speciesId, name, imageKey, categoryCode, rarity, captureRate}, newlySeen, goldAwarded, gold, skippedExploreId, exploreRemaining}` (명세 그대로, `imageUrl` 대신 `imageKey`). 409 `BUSINESS_DATE_CHANGED` · `CHECKIN_REQUIRED`, 422 `NO_EXPLORE_LEFT` (D-45) |
 | GET | /explores/pending | 오늘 처리하지 않은 등장 200 (위와 같은 모양, `newlySeen` false) 또는 204 |
@@ -142,6 +143,7 @@
 | `attend` | `POST /me/attendance` | 처음 출석이면 true — **10-18 연결** |
 | `completeOnboarding` | `POST /onboarding` (측정 항목은 `GET /measure-types`로 id 변환) | — **10-18 연결** |
 | `confirmCheckin` · `resubmitCheckin` | `POST` · `PUT /checkins/today` | `DailyCheckinResult` (`lib/data/results.dart`) — **10-19 연결** |
+| `interpret` | `POST /checkins/today/interpret` | `InterpretResult` — **10-30 연결** (시연 모드는 null → 앱이 숫자만 읽음) |
 | `explore` · `throwBall` · `pendingEncounter` | `POST /explores` · `/explores/{id}/capture` · `GET /explores/pending` | `EncounterResult` · `CatchResult` — **10-20 연결** |
 | `buy` | `POST /shop/purchases` (코드는 `Catalog.serverCodeOf`) | 성공 여부 — **10-21 연결** |
 | `pet` · `play` · `feed` · `moveMonster` · `setPartner` · `talk` | `/monsters/{id}/affection` · `feed` · `location` · `PUT /me/partner` · `GET /monsters/{id}/line` | — **10-21 연결**. `dragMonster`는 서버 모드에서 0 (D-46) |

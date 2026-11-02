@@ -14,6 +14,7 @@ import '../../data/models.dart';
 import '../onboarding/onboarding_controller.dart';
 import '../shell/game_action.dart';
 import 'home_parts.dart';
+import '../../core/theme/app_theme.dart';
 
 /// 홈의 "습관" 아이콘 → 내 습관 목록(그만두기) ↔ 새 습관 추가(무엇을 → 얼마나 → 언제까지).
 /// 입력 상태와 검사는 온보딩과 같은 [OnboardingController]를 쓰고, 화면은 홈과 같은 어두운 테마로 따로 그린다.
@@ -249,7 +250,7 @@ class _TopBar extends StatelessWidget {
           ),
           const SizedBox(width: 12),
           Expanded(
-            child: Text(title, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.text)),
+            child: Text(title, style: const TextStyle(fontFamily: AppTheme.pixelFont, fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.text)),
           ),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -308,7 +309,7 @@ class _HabitCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(habit.name,
-                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.text)),
+                    style: const TextStyle(fontFamily: AppTheme.pixelFont, fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.text)),
                 const SizedBox(height: 7),
                 Wrap(
                   spacing: 5,
@@ -392,7 +393,7 @@ class _AddForm extends StatelessWidget {
         _Progress(step: step),
         const SizedBox(height: 20),
         Text(_questions[step],
-            style: const TextStyle(fontSize: 19, height: 1.3, fontWeight: FontWeight.w700, color: AppColors.text)),
+            style: const TextStyle(fontFamily: AppTheme.pixelFont, fontSize: 19, height: 1.3, fontWeight: FontWeight.w700, color: AppColors.text)),
         const SizedBox(height: 6),
         Text(_hints[step], style: const TextStyle(fontSize: 12, height: 1.6, color: AppColors.textMuted)),
         const SizedBox(height: 18),
@@ -524,7 +525,7 @@ class _AddForm extends StatelessWidget {
                         style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w400, color: AppColors.textMuted)),
                   ]),
                   textAlign: TextAlign.center,
-                  style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w700, color: AppColors.gold),
+                  style: const TextStyle(fontFamily: AppTheme.pixelFont, fontSize: 30, fontWeight: FontWeight.w700, color: AppColors.gold),
                 ),
               ),
               _StepButton(label: '+', semanticLabel: '목표 늘리기', onTap: c.incTarget),
@@ -707,7 +708,7 @@ class _NameBanner extends StatelessWidget {
           CategoryIcon(categoryId, size: 26),
           const SizedBox(width: 10),
           Expanded(
-            child: Text(name, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.text)),
+            child: Text(name, style: const TextStyle(fontFamily: AppTheme.pixelFont, fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.text)),
           ),
         ],
       ),

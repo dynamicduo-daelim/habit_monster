@@ -1,6 +1,9 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../core/constants/economy.dart';
+import 'sprite_sizes.dart';
 
 /// 습관을 무엇으로 셀지 (예: 운동 시간 / 분 / 기본 목표 30).
 /// 점수 방식 (DB `habit.measure_type.scoring_mode`): 목표 대비 비율 · O/X · 목표 ± 범위.
@@ -62,7 +65,6 @@ class MonsterSpecies {
     required this.description,
     required this.lines,
     this.facesLeft = false,
-    this.fieldHeight = 72,
     this.evolvedAsset,
   });
   final String id;
@@ -74,8 +76,29 @@ class MonsterSpecies {
   final String description;
   final Map<AffectionTier, List<String>> lines; // 호감도 단계별 대사
   final bool facesLeft; // 걷는 방향에 따라 좌우 반전할 때 사용
-  final double fieldHeight; // 홈 필드에서 그리는 높이(px)
   final String? evolvedAsset; // 1차 진화부터 쓰는 그림. 없으면 기본 그림 그대로
+
+  /// 홈 필드에서 몬스터 한 마리가 차지하는 정사각형 칸(px) — 이름표 · 걷는 범위 계산용이고, 그림의 가장 긴 변도 이 값을 넘지 않는다.
+  /// 72(10-29) → 64 → 60 → 70 (11-02, 사용자 "더 작게" 뒤 "너무 작다").
+  static const double fieldBox = 70;
+
+  /// 필드에서 그림이 보이는 넓이의 기준: 모든 종이 [fieldArea]×[fieldArea]와 같은 넓이로 보이게 그린다.
+  static const double fieldArea = 58;
+
+  /// 홈 필드에 그릴 크기 (D-61). 칸에 비율대로 맞추기만 하면 키 큰 그림(토끼)은 가늘고 납작한 그림(박쥐)은 작아 보여서,
+  /// **가로 × 세로 넓이가 모두 같게** 정하고 가장 긴 변이 [fieldBox]를 넘으면 그만큼 줄인다. 표에 없는 그림은 칸 그대로.
+  Size fieldSizeAt(int level) {
+    final px = spriteSizes[assetAt(level)];
+    if (px == null) return const Size(fieldBox, fieldBox);
+    final k = fieldArea / math.sqrt(px.$1 * px.$2);
+    var w = px.$1 * k, h = px.$2 * k;
+    final long = math.max(w, h);
+    if (long > fieldBox) {
+      w = w * fieldBox / long;
+      h = h * fieldBox / long;
+    }
+    return Size(w, h);
+  }
 
   /// 희귀도 별 개수 (흔함 1 · 보통 2 · 희귀 3).
   int get stars => const {'흔함': 1, '보통': 2, '희귀': 3}[rarity] ?? 1;

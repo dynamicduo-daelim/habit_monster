@@ -87,7 +87,7 @@ class _AttendanceCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(color: AppColors.nightPanel, border: Border.all(color: AppColors.gold, width: 3)),
+      decoration: BoxDecoration(color: AppColors.nightPanel, border: Border.all(color: AppColors.nightLine, width: 3)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -103,7 +103,7 @@ class _AttendanceCard extends StatelessWidget {
                     Text.rich(TextSpan(children: [
                       TextSpan(text: '${d.currentStreak}', style: const TextStyle(fontSize: 30)),
                       const TextSpan(text: '일', style: TextStyle(fontSize: 13)),
-                    ]), style: const TextStyle(color: AppColors.gold, fontWeight: FontWeight.w700)),
+                    ]), style: const TextStyle(color: AppColors.rateHigh, fontWeight: FontWeight.w700)),
                   ],
                 ),
               ),
@@ -138,9 +138,9 @@ class _DayCell extends StatelessWidget {
       aspectRatio: 1,
       child: Container(
         decoration: BoxDecoration(
-          color: attended ? (today ? AppColors.gold : AppColors.purple) : AppColors.nightDeep,
-          border: Border.all(
-              color: today ? AppColors.goldLight : (attended ? AppColors.lavender : AppColors.nightLine2), width: 2),
+          // 출석한 날 민트 · 오늘 노랑 (11-02, 통계 그래프 80% 이상 색과 맞춤 — D-60)
+          color: attended ? (today ? AppColors.goldLight : AppColors.rateHigh) : AppColors.nightDeep,
+          border: Border.all(color: attended ? AppColors.ink : (today ? AppColors.goldLight : AppColors.nightLine2), width: 2),
         ),
       ),
     );
@@ -156,7 +156,8 @@ class _SincerityCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final last = d.last7Days.length - 1;
-    Color tone(int i) => i == last ? AppColors.gold : AppColors.textMuted;
+    Color tone(int i) => i == last ? AppColors.goldLight : AppColors.textMuted;
+    final avg = d.averageRate;
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(color: AppColors.nightPanel, border: Border.all(color: AppColors.nightLine, width: 3)),
@@ -167,22 +168,44 @@ class _SincerityCard extends StatelessWidget {
             children: [
               const Expanded(
                   child: Text('성실도 그래프 · 최근 7일', style: TextStyle(fontSize: 11, color: AppColors.text))),
-              Text('평균 ${d.averageRate == null ? '-' : '${d.averageRate}%'}',
-                  style: const TextStyle(fontSize: 11, color: AppColors.textMuted)),
+              Text.rich(
+                TextSpan(text: '평균 ', children: [
+                  TextSpan(
+                      text: avg == null ? '-' : '$avg%',
+                      style: TextStyle(
+                          fontWeight: FontWeight.w700, color: avg == null ? AppColors.textMuted : rateColor(avg))),
+                ]),
+                style: const TextStyle(fontSize: 11, color: AppColors.textMuted),
+              ),
             ],
           ),
           const SizedBox(height: 14),
           Container(
             height: _chartHeight,
             decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: AppColors.nightLine2, width: 3))),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
+            child: Stack(
               children: [
-                for (var i = 0; i <= last; i++) ...[
-                  if (i > 0) const SizedBox(width: 8),
-                  Expanded(child: _Bar(rate: d.last7Days[i].$2, color: i == last ? AppColors.gold : AppColors.purple,
-                      labelColor: tone(i))),
-                ],
+                // 목표 80% 점선
+                const Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: _Bar.maxBar * goalRate / 100,
+                  child: CustomPaint(size: Size(double.infinity, 2), painter: _DashPainter()),
+                ),
+                const Positioned(
+                  right: 0,
+                  bottom: _Bar.maxBar * goalRate / 100 + 3,
+                  child: Text('목표 $goalRate%', style: TextStyle(fontSize: 9, color: AppColors.goldLight)),
+                ),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    for (var i = 0; i <= last; i++) ...[
+                      if (i > 0) const SizedBox(width: 8),
+                      Expanded(child: _Bar(rate: d.last7Days[i].$2)),
+                    ],
+                  ],
+                ),
               ],
             ),
           ),
@@ -193,8 +216,30 @@ class _SincerityCard extends StatelessWidget {
                 if (i > 0) const SizedBox(width: 8),
                 Expanded(
                   child: Text(i == last ? '오늘' : d.last7Days[i].$1,
-                      textAlign: TextAlign.center, style: TextStyle(fontSize: 10, color: tone(i))),
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                          fontSize: 10, color: tone(i), fontWeight: i == last ? FontWeight.w700 : FontWeight.w400)),
                 ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 10),
+          // 색 뜻 (성취도별 색, 2026-11-02)
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              for (final (c, label) in const [
+                (AppColors.rateLow, '50% 미만'),
+                (AppColors.rateMid, '50 ~ 79%'),
+                (AppColors.rateHigh, '80% 이상'),
+              ]) ...[
+                Container(
+                    width: 10,
+                    height: 10,
+                    decoration: BoxDecoration(color: c, borderRadius: BorderRadius.circular(3))),
+                const SizedBox(width: 4),
+                Text(label, style: const TextStyle(fontSize: 10, color: AppColors.purpleSoft)),
+                const SizedBox(width: 10),
               ],
             ],
           ),
@@ -204,14 +249,35 @@ class _SincerityCard extends StatelessWidget {
   }
 }
 
-/// 막대 하나: 위에 값, 높이 = 달성률 % (최소 4). 체크인 안 한 날은 "-"만.
-class _Bar extends StatelessWidget {
-  const _Bar({required this.rate, required this.color, required this.labelColor});
-  final int? rate;
-  final Color color;
-  final Color labelColor;
+/// 목표선 (달성률 %).
+const int goalRate = 80;
 
-  static const double _maxBar = 120;
+/// 달성률에 따른 막대 색: 50% 미만 코랄 · 50~79% 노랑 · 80% 이상 민트 (2026-11-02, 칙칙하다는 의견으로 보라 → 성취도별 색).
+Color rateColor(int rate) => rate >= goalRate ? AppColors.rateHigh : (rate >= 50 ? AppColors.rateMid : AppColors.rateLow);
+
+class _DashPainter extends CustomPainter {
+  const _DashPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final p = Paint()
+      ..color = AppColors.goldLight.withValues(alpha: 0.45)
+      ..strokeWidth = 2;
+    for (double x = 0; x < size.width; x += 8) {
+      canvas.drawLine(Offset(x, 1), Offset((x + 4).clamp(0, size.width), 1), p);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+/// 막대 하나: 위에 값, 높이 = 달성률 % (최소 4). 색 = [rateColor]. 체크인 안 한 날은 "-"만.
+class _Bar extends StatelessWidget {
+  const _Bar({required this.rate});
+  final int? rate;
+
+  static const double maxBar = 120;
 
   @override
   Widget build(BuildContext context) {
@@ -219,15 +285,22 @@ class _Bar extends StatelessWidget {
     return Column(
       mainAxisAlignment: MainAxisAlignment.end,
       children: [
-        Text(r == null ? '-' : '$r', style: TextStyle(fontSize: 9.5, color: labelColor)),
+        Text(r == null ? '-' : '$r',
+            style: TextStyle(
+                fontSize: 9.5,
+                fontWeight: FontWeight.w700,
+                color: r == null ? AppColors.lockedMuted : rateColor(r))),
         if (r != null) ...[
           const SizedBox(height: 5),
           Container(
-            height: (r.clamp(0, 100) / 100 * _maxBar).clamp(4, _maxBar).toDouble(),
+            height: (r.clamp(0, 100) / 100 * maxBar).clamp(4, maxBar).toDouble(),
+            clipBehavior: Clip.antiAlias,
+            alignment: Alignment.topCenter,
             decoration: BoxDecoration(
-              color: color,
-              border: const Border(top: BorderSide(color: AppColors.barShine, width: 3)),
+              color: rateColor(r),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(6), bottom: Radius.circular(2)),
             ),
+            child: Container(height: 3, color: AppColors.barShine),
           ),
         ],
       ],

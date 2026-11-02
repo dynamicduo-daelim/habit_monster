@@ -156,7 +156,7 @@ class _RewardRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
+      decoration: BoxDecoration(borderRadius: BorderRadius.circular(10), 
         color: color,
         border: Border.all(color: AppColors.ink, width: 3),
         boxShadow: [BoxShadow(color: shadow, offset: const Offset(0, 4))],
@@ -234,7 +234,7 @@ class _GoalSection extends StatelessWidget {
               Expanded(
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
-                  decoration: BoxDecoration(
+                  decoration: BoxDecoration(borderRadius: BorderRadius.circular(10), 
                     color: AppColors.parchment,
                     border: Border.all(color: AppColors.ink, width: 3),
                   ),
@@ -310,7 +310,7 @@ class _GoalRow extends StatelessWidget {
     final weekly = tier == GoalTier.weekly;
     return Container(
       padding: const EdgeInsets.fromLTRB(10, 8, 6, 8),
-      decoration: BoxDecoration(
+      decoration: BoxDecoration(borderRadius: BorderRadius.circular(10), 
         color: AppColors.parchment,
         border: Border.all(color: AppColors.ink, width: 3),
         boxShadow: const [BoxShadow(color: AppColors.ink, offset: Offset(0, 4))],
@@ -319,7 +319,7 @@ class _GoalRow extends StatelessWidget {
         children: [
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-            decoration: BoxDecoration(
+            decoration: BoxDecoration(borderRadius: BorderRadius.circular(10), 
               color: weekly ? AppColors.tierMidText : AppColors.goldDeep,
               border: Border.all(color: AppColors.ink, width: 2),
             ),
@@ -365,7 +365,7 @@ class _ShopPreview extends StatelessWidget {
       ),
     ];
     return Container(
-      decoration: BoxDecoration(
+      decoration: BoxDecoration(borderRadius: BorderRadius.circular(10), 
         color: AppColors.cream,
         border: Border.all(color: AppColors.ink, width: 3),
       ),

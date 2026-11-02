@@ -11,6 +11,7 @@ import '../../data/pixel_icons.dart';
 import '../shell/game_action.dart';
 import '../shell/main_shell.dart';
 import 'home_parts.dart';
+import '../../core/theme/app_theme.dart';
 
 /// 내 가방: [아이템] 칸 + 선택한 아이템 정보, [몬스터] 필드 ↔ 가방 옮기기.
 class BagOverlay extends StatefulWidget {
@@ -54,7 +55,7 @@ class _BagOverlayState extends State<BagOverlay> {
                     const SizedBox(width: 10),
                     const Expanded(
                       child: Text('내 가방',
-                          style: TextStyle(
+                          style: TextStyle(fontFamily: AppTheme.pixelFont, 
                             fontSize: 17,
                             fontWeight: FontWeight.w700,
                             color: AppColors.paper,

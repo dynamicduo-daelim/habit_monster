@@ -21,6 +21,7 @@ import '../home/home_screen.dart';
 import '../stats/stats_screen.dart';
 import '../tutorial/tutorial_overlay.dart';
 import 'game_action.dart';
+import '../../core/theme/app_theme.dart';
 
 /// 상단 바(날짜 · 탐색 · 골드 · 성실볼) + 본문 + 하단 탭 5개.
 ///
@@ -100,8 +101,8 @@ class MainShellState extends State<MainShell> {
 
   List<TutorialStep> get _tutorialSteps => [
         const TutorialStep(
-          title: '루틴몬에 온 걸 환영해요!',
-          body: '습관을 지키면 몬스터와 함께 자라는 곳이에요. 화면을 하나씩 알려 드릴게요.',
+          title: '모아루틴에 온 걸 환영해요!',
+          body: '습관을 지키면 루틴몬이 함께 자라는 곳이에요. 루틴몬은 여기 사는 동물 친구들이에요. 화면을 하나씩 알려 드릴게요.',
         ),
         TutorialStep(
           targets: _monsterKeys,
@@ -133,7 +134,7 @@ class MainShellState extends State<MainShell> {
         TutorialStep(
           targets: [_tabKeys[MainShell.goalsTab], _tabKeys[MainShell.dexTab]],
           title: '목표와 도감',
-          body: '목표 탭에서 주간 · 월간 목표를 달성하면 골드를 받아요. 도감에는 만난 몬스터가 기록돼요.',
+          body: '목표 탭에서 주간 · 월간 목표를 달성하면 골드를 받아요. 도감에는 만난 루틴몬이 기록돼요.',
         ),
         const TutorialStep(
           title: '이제 시작해 볼까요?',
@@ -234,9 +235,11 @@ class MainShellState extends State<MainShell> {
         ),
       ),
       bottomNavigationBar: Container(
+        padding: const EdgeInsets.fromLTRB(8, 6, 8, 4),
         decoration: const BoxDecoration(
           color: AppColors.nightDeep,
-          border: Border(top: BorderSide(color: AppColors.nightLine, width: 3)),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
+          border: Border(top: BorderSide(color: AppColors.nightLine, width: 2)),
         ),
         child: SafeArea(
           top: false,
@@ -249,11 +252,11 @@ class MainShellState extends State<MainShell> {
                     onTap: () => goTab(i),
                     child: Container(
                       key: _tabKeys[i],
-                      height: 62,
+                      height: 54,
+                      margin: const EdgeInsets.symmetric(horizontal: 2),
                       decoration: BoxDecoration(
-                        border: Border(
-                          top: BorderSide(color: _tab == i ? AppColors.gold : Colors.transparent, width: 3),
-                        ),
+                        color: _tab == i ? AppColors.purpleDeep : Colors.transparent,
+                        borderRadius: BorderRadius.circular(10),
                       ),
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
@@ -262,9 +265,12 @@ class MainShellState extends State<MainShell> {
                             layers: [PixelLayer(PixelIcons.nav[_tabIcons[i]], _tab == i ? AppColors.gold : AppColors.textMuted)],
                             size: 20,
                           ),
-                          const SizedBox(height: 5),
+                          const SizedBox(height: 4),
                           Text(_tabs[i],
-                              style: TextStyle(fontSize: 10.5, color: _tab == i ? AppColors.gold : AppColors.textMuted)),
+                              style: TextStyle(
+                                  fontSize: 11.5,
+                                  fontWeight: _tab == i ? FontWeight.w700 : FontWeight.w400,
+                                  color: _tab == i ? AppColors.gold : AppColors.textMuted)),
                         ],
                       ),
                     ),
@@ -301,43 +307,60 @@ class _TopBar extends StatelessWidget {
       child: Column(
         children: [
           Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Text('${now.month}월 ${now.day}일',
-                  style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700, shadows: [
-                    Shadow(color: AppColors.nightLine, offset: Offset(3, 3)),
-                  ])),
-              const SizedBox(width: 8),
-              Text(_weekdays[now.weekday - 1], style: const TextStyle(fontSize: 13, color: AppColors.purpleSoft)),
-              const SizedBox(width: 8),
-              // 날짜가 길어지는 날(두 자리 월 · 일)에도 넘치지 않게 남는 폭만 쓴다
               Expanded(
-                child: Text('DAY ${s.dayCount} · 연속 ${s.currentStreak}일',
-                    textAlign: TextAlign.right,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 10, color: AppColors.textMuted)),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('DAY ${s.dayCount} · ${_weekdays[now.weekday - 1]}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 11, color: AppColors.textMuted)),
+                    const SizedBox(height: 2),
+                    Text('${now.month}월 ${now.day}일',
+                        style: const TextStyle(fontFamily: AppTheme.pixelFont, fontSize: 21, fontWeight: FontWeight.w700, shadows: [
+                          Shadow(color: AppColors.ink, offset: Offset(0, 2)),
+                        ])),
+                  ],
+                ),
               ),
-              const SizedBox(width: 6),
+              Row(
+                key: walletKey,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+              CoinChip(
+                text: _fmt(s.gold),
+                big: true,
+                addLabel: '골드 얻는 법',
+                onAdd: () => showInfoPopup(context, title: '골드 얻는 법', items: const [
+                  ('습관 체크하기', '챗봇에서 습관을 체크하면 성실도가 쌓이고, 성실도 1점마다 ${Economy.goldPerSincerity}골드를 받아요.'),
+                  ('성실도 레벨업', '카테고리 성실도 레벨이 오를 때마다 ${Economy.categoryLevelUpGold}골드를 받아요.'),
+                  (
+                    '목표 달성',
+                    '주간 목표를 달성하면 ${Economy.weeklyGoalGold}골드, 월간 목표를 달성하면 ${Economy.monthlyGoalGold}골드를 받아요.'
+                  ),
+                  ('이미 있는 몬스터', '이미 가진 몬스터가 또 나오면 볼을 던지지 않고 바로 ${Economy.duplicateMonsterGold}골드를 받아요.'),
+                ]),
+              ),
+              const SizedBox(width: 8),
+              const SizedBox(width: 8),
+                  BallChip(count: s.balls),
+                ],
+              ),
+              const SizedBox(width: 4),
               const _SettingsButton(),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 9),
           Row(
             children: [
-              // 좁은 화면에서는 탐색 글자가 줄어들고, 골드 · 성실볼은 그대로 둔다
-              Expanded(
-                child: Row(
-                  children: [
-                    Flexible(
-                      child: Text(
-                          s.checkedInToday ? '탐색 ${s.encountersLeft}회 남음' : '체크인하면 탐색 ${Economy.encountersPerDay}회',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: 10.5, color: AppColors.gold)),
-                    ),
-                    const SizedBox(width: 2),
-                    const HelpButton(title: '탐색이란?', items: [
+              _barChip('연속 ${s.currentStreak}일째', AppColors.purpleDeep, AppColors.goldLight),
+              // 탐색 기회는 챗봇 체크를 마친 뒤에만 보인다 (기획 2026-10-29-교감-창-개편)
+              if (s.checkedInToday) ...[
+                const SizedBox(width: 8),
+                Flexible(child: _barChip('탐색 기회 ${s.encountersLeft}번 남음', AppColors.yellowButton, AppColors.brownText)),
+                const SizedBox(width: 2),
+                const HelpButton(title: '탐색이란?', items: [
                       (
                         '탐색이 뭐예요?',
                         '챗봇에서 오늘 습관을 체크하면 그날 탐색을 ${Economy.encountersPerDay}번 할 수 있어요. 탐색하면 몬스터가 나타나요. 아무도 안 나올 때도 있어요.'
@@ -345,38 +368,27 @@ class _TopBar extends StatelessWidget {
                       ('몬스터 잡기', '만난 몬스터에게 성실볼을 던지면 잡을 수 있어요. 희귀한 몬스터일수록 잘 도망가요. 성실볼은 상점에서 살 수 있어요.'),
                       ('어떤 몬스터가 나와요?', '오늘 체크한 습관의 카테고리에 사는 몬스터가 나와요. 카테고리 레벨이 오르면 새로운 몬스터가 나타나요.'),
                     ]),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 6),
-              Row(
-                key: walletKey,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  CoinChip(
-                    text: _fmt(s.gold),
-                    big: true,
-                    addLabel: '골드 얻는 법',
-                    onAdd: () => showInfoPopup(context, title: '골드 얻는 법', items: const [
-                      ('습관 체크하기', '챗봇에서 습관을 체크하면 성실도가 쌓이고, 성실도 1점마다 ${Economy.goldPerSincerity}골드를 받아요.'),
-                      ('성실도 레벨업', '카테고리 성실도 레벨이 오를 때마다 ${Economy.categoryLevelUpGold}골드를 받아요.'),
-                      (
-                        '목표 달성',
-                        '주간 목표를 달성하면 ${Economy.weeklyGoalGold}골드, 월간 목표를 달성하면 ${Economy.monthlyGoalGold}골드를 받아요.'
-                      ),
-                      ('이미 있는 몬스터', '이미 가진 몬스터가 또 나오면 볼을 던지지 않고 바로 ${Economy.duplicateMonsterGold}골드를 받아요.'),
-                    ]),
-                  ),
-                  const SizedBox(width: 8),
-                  BallChip(count: s.balls),
-                ],
-              ),
+              ],
             ],
           ),
         ],
       ),
     );
   }
+
+  /// 상단 바의 작은 둥근 칩.
+  Widget _barChip(String text, Color bg, Color fg) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: AppColors.ink, width: 2),
+        ),
+        child: Text(text,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: fg)),
+      );
 }
 
 /// 상단 바 오른쪽 위 톱니바퀴 → 설정 창 (배경음악 · 계정 · 로그아웃).

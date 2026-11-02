@@ -69,6 +69,9 @@ public enum ErrorCode {
 	LAST_HABIT(HttpStatus.UNPROCESSABLE_CONTENT, "습관은 1개 이상 있어야 해요"),
 	/** 기간이 남은 목표(진행 중 · 완료)가 칸을 다 차지함. 기간이 끝나거나 삭제하면 빈다. */
 	GOAL_SLOT_FULL(HttpStatus.UNPROCESSABLE_CONTENT, "목표 칸이 꽉 찼어요"),
+	// 429
+	/** 챗봇 대화 해석의 하루 호출 한도 (제안 docs/제안/2026-10-30-AI챗봇-API.md). 앱은 버튼(대본형)으로 이어 간다. */
+	AI_RATE_LIMITED(HttpStatus.TOO_MANY_REQUESTS, "오늘은 대화를 많이 했어요. 버튼으로 이어서 체크해요"),
 	// 503
 	SOCIAL_NOT_CONFIGURED(HttpStatus.SERVICE_UNAVAILABLE, "아직 준비 중인 로그인 방식이에요");
 

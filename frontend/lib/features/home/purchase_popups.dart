@@ -9,6 +9,7 @@ import '../../core/widgets/pixel_widgets.dart';
 import '../../core/widgets/popup_card.dart';
 import '../../data/catalog.dart';
 import '../../data/models.dart';
+import '../../core/theme/app_theme.dart';
 import 'home_parts.dart' show CheckerPainter, CoinIcon;
 
 /// "몇 개 살까?" 수량 팝업: −/+ · 1/5/10/최대 · 합계.
@@ -99,7 +100,7 @@ class _QuantityPopupState extends State<QuantityPopup> {
                   border: Border.all(color: AppColors.ink, width: 3),
                 ),
                 child: Text('$_n',
-                    style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: AppColors.butter)),
+                    style: const TextStyle(fontFamily: AppTheme.pixelFont, fontSize: 22, fontWeight: FontWeight.w700, color: AppColors.butter)),
               ),
             ),
             const SizedBox(width: 8),
@@ -149,7 +150,7 @@ class _QuantityPopupState extends State<QuantityPopup> {
             const CoinIcon(size: 14),
             const SizedBox(width: 5),
             Text(formatNum(total),
-                style: TextStyle(
+                style: TextStyle(fontFamily: AppTheme.pixelFont, 
                   fontSize: 15,
                   fontWeight: FontWeight.w700,
                   color: cant ? AppColors.red : AppColors.goldDeep,

@@ -115,6 +115,7 @@ void main() {
     final before = s.monsters.length;
     await tester.tap(find.text('탐색하기 (1회 남음)'));
     await tester.pump();
+    await tester.pump(const Duration(milliseconds: 2100)); // 찾는 중…
     await tester.tap(find.text('던지기 ×1'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 1000));
@@ -140,8 +141,10 @@ void main() {
     await tester.pump();
     await tester.tap(find.text('탐색하기 (1회 남음)'));
     await tester.pump();
+    await tester.pump(const Duration(milliseconds: 2100)); // 찾는 중…
     await tester.tap(find.text('다시 탐색 (2회)'));
     await tester.pump();
+    await tester.pump(const Duration(milliseconds: 2100)); // 찾는 중…
     expect(s.encountersLeft, 1);
     expect(s.balls, 1);
     expect(find.textContaining('나타났다!'), findsOneWidget);
@@ -155,6 +158,7 @@ void main() {
     await _checkAllNo(tester);
     await tester.tap(find.text('탐색하기 (1회 남음)'));
     await tester.pump();
+    await tester.pump(const Duration(milliseconds: 2100)); // 찾는 중…
     await tester.tap(find.text('볼 사기'));
     await tester.pump();
     expect(find.text('몇 개 살까?'), findsOneWidget);

@@ -131,3 +131,32 @@ class StatsData {
 
 /// 요일 한 글자 (월 ~ 일).
 String weekdayLabel(DateTime day) => const ['월', '화', '수', '목', '금', '토', '일'][day.weekday - 1];
+
+/// 챗봇 대화 해석 결과 (서버 `POST /checkins/today/interpret`, 결정 D-57). **아무것도 확정하지 않는다** —
+/// 앱이 확인 카드로 보여 주고 사용자가 [맞아]를 누르면 체크인 제출로 간다.
+class InterpretResult {
+  const InterpretResult({
+    required this.reply,
+    required this.answers,
+    this.askAgainHabitId,
+    this.askAgainQuestion,
+    this.safety = false,
+    this.fromAi = true,
+  });
+
+  /// 몬스터의 대답 (점수 · 골드 숫자는 없다).
+  final String reply;
+
+  /// 해석한 기록 후보 (습관 id → 값). "못 했어"는 0. 서버가 선택지에 맞춘 값이다.
+  final Map<String, double> answers;
+
+  /// 다시 물어볼 습관과 질문 (값이 애매할 때).
+  final String? askAgainHabitId;
+  final String? askAgainQuestion;
+
+  /// 힘든 감정 · 위기 신호를 감지했다 (게임 연출을 멈춘다).
+  final bool safety;
+
+  /// false = AI가 실패해 대본형 질문으로 돌아왔다.
+  final bool fromAi;
+}

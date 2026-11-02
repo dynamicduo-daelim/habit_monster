@@ -15,6 +15,7 @@ import '../../data/pixel_icons.dart';
 import '../home/home_parts.dart' show CheckerPainter;
 import '../shell/game_action.dart';
 import '../shell/main_shell.dart';
+import '../../core/theme/app_theme.dart';
 
 /// 몬스터 도감: 위 상세 카드 + 카테고리 탭 6개 + No.001~042 목록 (카테고리마다 7칸).
 /// 배경은 고른 카테고리 색의 파스텔 줄무늬.
@@ -327,8 +328,8 @@ class _DexScreenState extends State<DexScreen> {
           light(AppColors.green),
           const SizedBox(width: 8),
           const Expanded(
-            child: Text('몬스터 도감',
-                style: TextStyle(
+            child: Text('루틴몬 도감',
+                style: TextStyle(fontFamily: AppTheme.pixelFont, 
                   fontSize: 16,
                   fontWeight: FontWeight.w700,
                   letterSpacing: 1,
@@ -490,7 +491,7 @@ class _DetailCard extends StatelessWidget {
                         else
                           const Text('?',
                               style:
-                                  TextStyle(fontSize: 44, fontWeight: FontWeight.w700, color: AppColors.dexPortraitQ)),
+                                  TextStyle(fontFamily: AppTheme.pixelFont, fontSize: 44, fontWeight: FontWeight.w700, color: AppColors.dexPortraitQ)),
                         if (own != null)
                           const Positioned(right: 4, top: 4, child: PixelImage(AppAssets.seongsilBall, height: 20)),
                       ],
@@ -506,7 +507,7 @@ class _DetailCard extends StatelessWidget {
                       const SizedBox(height: 6),
                       Text(slot.known ? sp!.name : '??????',
                           style:
-                              const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.brownText)),
+                              const TextStyle(fontFamily: AppTheme.pixelFont, fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.brownText)),
                       const SizedBox(height: 6),
                       Container(
                         padding: const EdgeInsets.fromLTRB(5, 3, 8, 3),
@@ -639,7 +640,7 @@ class _SlotRow extends StatelessWidget {
                   child: sp != null
                       ? _MonsterArt(species: sp, owned: slot.known, maxSize: 34, dimOpacity: 0.3)
                       : const Text('?',
-                          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.dexSlotQ)),
+                          style: TextStyle(fontFamily: AppTheme.pixelFont, fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.dexSlotQ)),
                 ),
               ),
               const SizedBox(width: 9),

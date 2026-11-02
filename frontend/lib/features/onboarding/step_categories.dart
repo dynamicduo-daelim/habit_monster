@@ -9,6 +9,7 @@ import '../../data/models.dart';
 import '../../data/pixel_icons.dart';
 import 'onboarding_controller.dart';
 import 'onboarding_parts.dart';
+import '../../core/theme/app_theme.dart';
 
 /// 온보딩 1단계: 모험의 길(카테고리) 최대 3개 + 첫 파트너 고르기.
 class StepCategories extends StatelessWidget {
@@ -26,7 +27,7 @@ class StepCategories extends StatelessWidget {
         children: [
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-            decoration: BoxDecoration(
+            decoration: BoxDecoration(borderRadius: BorderRadius.circular(10), 
               color: AppColors.brownText,
               border: Border.all(color: AppColors.ink, width: 3),
             ),
@@ -103,7 +104,7 @@ class _CategoryCard extends StatelessWidget {
                     width: 40,
                     height: 40,
                     alignment: Alignment.center,
-                    decoration: BoxDecoration(
+                    decoration: BoxDecoration(borderRadius: BorderRadius.circular(10), 
                       color: cat.color,
                       border: Border.all(color: AppColors.ink, width: 3),
                     ),
@@ -139,7 +140,7 @@ class _CategoryCard extends StatelessWidget {
                 width: 24,
                 height: 24,
                 alignment: Alignment.center,
-                decoration: BoxDecoration(
+                decoration: BoxDecoration(borderRadius: BorderRadius.circular(10), 
                   color: AppColors.green,
                   border: Border.all(color: AppColors.ink, width: 3),
                 ),
@@ -166,7 +167,7 @@ class _StarterBox extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.fromLTRB(10, 12, 10, 12),
-      decoration: BoxDecoration(
+      decoration: BoxDecoration(borderRadius: BorderRadius.circular(10), 
         color: AppColors.purpleDeep,
         border: Border.all(color: AppColors.ink, width: 4),
         boxShadow: const [BoxShadow(color: AppColors.ink, offset: Offset(5, 5))],
@@ -182,12 +183,12 @@ class _StarterBox extends StatelessWidget {
                   width: 34,
                   height: 34,
                   alignment: Alignment.center,
-                  decoration: BoxDecoration(
+                  decoration: BoxDecoration(borderRadius: BorderRadius.circular(10), 
                     color: AppColors.butter,
                     border: Border.all(color: AppColors.ink, width: 3),
                   ),
                   child: const Text('?',
-                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.brownText)),
+                      style: TextStyle(fontFamily: AppTheme.pixelFont, fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.brownText)),
                 ),
               ),
               const SizedBox(width: 9),
@@ -293,7 +294,7 @@ class _StarterSlot extends StatelessWidget {
               const SizedBox(height: 5),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                decoration: BoxDecoration(
+                decoration: BoxDecoration(borderRadius: BorderRadius.circular(10), 
                   color: cat?.color ?? AppColors.textMuted,
                   border: Border.all(color: AppColors.ink, width: 2),
                 ),
@@ -314,7 +315,7 @@ class _StarterSlot extends StatelessWidget {
               child: Center(
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                  decoration: BoxDecoration(
+                  decoration: BoxDecoration(borderRadius: BorderRadius.circular(10), 
                     color: AppColors.red,
                     border: Border.all(color: AppColors.ink, width: 3),
                   ),

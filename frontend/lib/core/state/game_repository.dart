@@ -96,6 +96,17 @@ abstract class GameRepository {
 
   /// 목표 완료 → 보상. 이미 완료면 false.
   Future<bool> completeGoal(Goal g);
+
+  // ---------- 챗봇 대화 해석 (AI, 결정 D-57) ----------
+  /// 사용자가 쓴 말을 AI로 해석한다 (서버: `POST /checkins/today/interpret`). 확정하지 않는다.
+  /// [history]는 직전 대화 (BOT · USER, 최대 10개), [draft]는 지금까지 정한 답.
+  /// 시연 모드(서버 없음)는 AI가 없어서 null — 챗봇이 앱 안에서 간단히 숫자만 읽는다.
+  Future<InterpretResult?> interpret({
+    required String message,
+    required List<(String, String)> history,
+    required Map<String, double> draft,
+    String? askingHabitId,
+  });
 }
 
 /// 위젯 트리 어디서든 `GameRepositoryScope.of(context)`로 꺼내 쓴다.

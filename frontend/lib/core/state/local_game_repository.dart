@@ -91,6 +91,16 @@ class LocalGameRepository implements GameRepository {
   Future<bool> removeHabit(Habit h) async => state.removeHabit(h);
 
   /// 시연 모드 통계: 연속 출석 · 카테고리 레벨은 앱 값, 지난 6일 성실도는 시안의 샘플 값 (기록이 없어서).
+  /// 시연 모드에는 AI가 없다 (키는 서버에만 — D-57).
+  @override
+  Future<InterpretResult?> interpret({
+    required String message,
+    required List<(String, String)> history,
+    required Map<String, double> draft,
+    String? askingHabitId,
+  }) async =>
+      null;
+
   @override
   Future<StatsData> loadStats() async {
     final now = DateTime.now();

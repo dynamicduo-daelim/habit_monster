@@ -9,8 +9,11 @@ import '../../core/theme/app_colors.dart';
 import '../../core/widgets/pixel_widgets.dart';
 import '../onboarding/onboarding_parts.dart' show DotGridPainter;
 import 'email_auth_screen.dart';
+import 'login_parts.dart';
+import '../../core/theme/app_theme.dart';
 
 /// 첫 화면: 로고 + 카카오 · 구글 · 이메일로 시작하기.
+/// 지난번에 쓴 수단 위에 말풍선, 아래에 자동 로그인 체크 (기획 2026-10-29-로그인-편의).
 /// 처음 로그인하면 온보딩, 이미 온보딩을 마친 계정이면 바로 홈 ([AuthGate]가 정한다).
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -53,6 +56,10 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  /// 지난번에 이 수단으로 로그인했으면 말풍선을 붙인다.
+  Widget _recent(AuthController auth, AuthProvider p, Widget button) =>
+      auth.prefs.lastProvider == p ? RecentLoginMark(provider: p, child: button) : button;
+
   @override
   Widget build(BuildContext context) {
     final auth = AuthScope.of(context);
@@ -77,65 +84,68 @@ class _LoginScreenState extends State<LoginScreen> {
                               width: 128,
                               height: 128,
                               decoration: BoxDecoration(
-                                border: Border.all(color: AppColors.ink, width: 4),
-                                boxShadow: const [BoxShadow(color: AppColors.ink, offset: Offset(5, 5))],
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(color: AppColors.ink, width: 3),
+                                boxShadow: const [BoxShadow(color: AppColors.ink, offset: Offset(0, 5))],
                               ),
-                              child: const PixelImage(AppAssets.logo, fit: BoxFit.cover),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(11),
+                                child: const PixelImage(AppAssets.logo, fit: BoxFit.cover),
+                              ),
                             ),
                             const SizedBox(height: 22),
-                            const Text('루틴몬',
-                                style: TextStyle(
+                            const Text('모아루틴',
+                                style: TextStyle(fontFamily: AppTheme.pixelFont, 
                                   fontSize: 30,
                                   fontWeight: FontWeight.w700,
                                   color: AppColors.text,
                                   letterSpacing: 1,
-                                  shadows: [Shadow(color: AppColors.nightLine2, offset: Offset(3, 3))],
+                                  shadows: [Shadow(color: AppColors.ink, offset: Offset(0, 3))],
                                 )),
                             const SizedBox(height: 8),
-                            const Text('습관을 지키면 몬스터가 자라요',
-                                style: TextStyle(fontSize: 12.5, color: AppColors.purpleSoft)),
+                            const Text('습관이 쌓이면, 루틴몬이 자라요',
+                                style: TextStyle(fontSize: 13, color: AppColors.purpleSoft)),
                           ],
                         ),
                       ),
                     ),
                   ),
                   Container(
-                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 18),
+                    padding: const EdgeInsets.fromLTRB(20, 20, 20, 22),
                     decoration: const BoxDecoration(
-                      color: AppColors.nightDeep,
-                      border: Border(top: BorderSide(color: AppColors.nightLine, width: 3)),
+                      color: AppColors.nightPanel,
+                      borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+                      border: Border(top: BorderSide(color: AppColors.nightLine, width: 2)),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        PixelButton(
-                          label: '카카오로 시작하기',
-                          onPressed: () => _social(AuthProvider.kakao),
-                          color: AppColors.kakao,
-                          shadowColor: AppColors.yellowShadow,
-                          textColor: AppColors.brownText,
-                          height: 48,
-                        ),
-                        const SizedBox(height: 10),
-                        PixelButton(
-                          label: 'Google로 계속하기',
-                          onPressed: () => _social(AuthProvider.google),
-                          color: AppColors.white,
-                          shadowColor: AppColors.chipShadow,
-                          textColor: AppColors.brownText,
-                          height: 48,
-                        ),
-                        const SizedBox(height: 10),
-                        PixelButton(
-                          label: '이메일로 시작하기',
-                          onPressed: () => Navigator.of(context)
-                              .push(MaterialPageRoute(builder: (_) => const EmailAuthScreen())),
-                          color: AppColors.parchment,
-                          shadowColor: AppColors.parchmentShadow,
-                          textColor: AppColors.brownText,
-                          height: 48,
+                        _recent(
+                          auth,
+                          AuthProvider.kakao,
+                          RoundBlockButton(label: '카카오로 시작하기', onPressed: () => _social(AuthProvider.kakao), color: AppColors.kakao),
                         ),
                         const SizedBox(height: 12),
+                        _recent(
+                          auth,
+                          AuthProvider.google,
+                          RoundBlockButton(label: 'Google로 계속하기', onPressed: () => _social(AuthProvider.google), color: AppColors.white),
+                        ),
+                        const SizedBox(height: 12),
+                        _recent(
+                          auth,
+                          AuthProvider.email,
+                          RoundBlockButton(label: '이메일로 시작하기', onPressed: () => Navigator.of(context)
+                              .push(MaterialPageRoute(builder: (_) => const EmailAuthScreen())), color: AppColors.parchment),
+                        ),
+                        const SizedBox(height: 6),
+                        PixelCheckbox(
+                          label: '자동 로그인',
+                          hint: '앱을 다시 켜도 로그인 유지',
+                          value: auth.prefs.autoLogin,
+                          onChanged: auth.setAutoLogin,
+                        ),
+                        const SizedBox(height: 6),
                         const Text('카카오 · Google은 처음이면 자동으로 가입돼요',
                             textAlign: TextAlign.center,
                             style: TextStyle(fontSize: 10, color: AppColors.textMuted)),

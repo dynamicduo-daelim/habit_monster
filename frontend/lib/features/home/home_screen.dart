@@ -129,7 +129,9 @@ class _HomeScreenState extends State<HomeScreen> {
   BoxConstraints? _fieldBox;
 
   // ---------- 오른쪽 아이콘 줄 (숨기기) ----------
-  static const _iconRight = 8.0, _iconTop = 8.0, _iconColumnW = 64.0;
+  static const _iconRight = 14.0, _iconTop = 14.0, _iconColumnW = 64.0;
+  /// 필드 카드와 화면 가장자리 사이 (둥근 필드 카드, D-54).
+  static const _fieldInset = 8.0;
   static const _handleW = 22.0, _handleH = 56.0;
 
   /// 아이콘 줄을 오른쪽으로 밀어 숨겼는지.
@@ -167,9 +169,9 @@ class _HomeScreenState extends State<HomeScreen> {
     const columnW = 100.0; // 그림 · 이름표가 차지하는 폭 (대략)
     const leftGap = 20.0, rightGap = 6.0; // 왼쪽은 말풍선이 덜 잘리게 조금 더
     const fieldBarBottom = 12.0 + 28 + 6; // "나의 필드" 바 위치(top 12) + 높이 + 틈
-    final monH = sp.fieldHeight + labelH;
+    const monH = MonsterSpecies.fieldBox + labelH;
     final minX = leftGap, maxX = max(minX, w - columnW - rightGap);
-    final minY = max(fieldBarBottom, grassPx - sp.fieldHeight + 6);
+    final minY = max(fieldBarBottom, grassPx - MonsterSpecies.fieldBox + 6);
     final maxY = max(minY, h - HabitSheet.closedHeight - monH);
     var px = (x / 100 * w).clamp(minX, maxX), py = (y / 100 * h).clamp(minY, maxY);
 
@@ -401,16 +403,37 @@ class _HomeScreenState extends State<HomeScreen> {
       return ClipRect(
         child: Stack(
           children: [
-            const Positioned.fill(child: ColoredBox(color: AppColors.fieldSky)),
-            const Positioned.fill(
-              child: PixelImage(AppAssets.homeField, fit: BoxFit.cover, alignment: Alignment.bottomCenter),
+            const Positioned.fill(child: ColoredBox(color: AppColors.night)),
+            // 필드 그림은 둥근 카드 안에 (2026-10-29 시안, D-54)
+            Positioned.fill(
+              left: _fieldInset,
+              right: _fieldInset,
+              top: _fieldInset,
+              bottom: _fieldInset,
+              child: Container(
+                foregroundDecoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: AppColors.nightLine, width: 2),
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(16),
+                  child: const Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      ColoredBox(color: AppColors.fieldSky),
+                      PixelImage(AppAssets.homeField, fit: BoxFit.cover, alignment: Alignment.bottomCenter),
+                    ],
+                  ),
+                ),
+              ),
             ),
             Positioned(
-              left: 12,
-              top: 12,
+              left: 18,
+              top: 18,
               child: Container(
                 padding: const EdgeInsets.fromLTRB(7, 0, 3, 0),
                 decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(8),
                   color: AppColors.nightDeep.withValues(alpha: 0.8),
                   border: Border.all(color: AppColors.nightLine2, width: 2),
                 ),
@@ -520,9 +543,9 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
             Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
+              left: _fieldInset,
+              right: _fieldInset,
+              bottom: _fieldInset,
               child: HabitSheet(
                 key: widget.sheetKey,
                 maxHeight: box.maxHeight,
@@ -621,7 +644,16 @@ class _HomeScreenState extends State<HomeScreen> {
                         child: Transform(
                           alignment: Alignment.center,
                           transform: Matrix4.diagonal3Values(p.flip ? -1 : 1, 1, 1),
-                          child: PixelImage(sp.assetAt(m.level), height: sp.fieldHeight),
+                          // 칸은 모두 같고, 그림은 보이는 넓이가 같게 (D-61) — 발은 칸 바닥
+                          child: SizedBox(
+                            width: MonsterSpecies.fieldBox,
+                            height: MonsterSpecies.fieldBox,
+                            child: Align(
+                              alignment: Alignment.bottomCenter,
+                              child: PixelImage(sp.assetAt(m.level),
+                                  width: sp.fieldSizeAt(m.level).width, height: sp.fieldSizeAt(m.level).height),
+                            ),
+                          ),
                         ),
                       ),
                       Transform.translate(
@@ -634,8 +666,9 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               const SizedBox(height: 1),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                 decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(6),
                   color: AppColors.nightDeep.withValues(alpha: 0.85),
                   border: Border.all(color: AppColors.nightLine2, width: 2),
                 ),
@@ -722,9 +755,15 @@ class _TalkBubble extends StatelessWidget {
           constraints: const BoxConstraints(maxWidth: 150),
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
           decoration: BoxDecoration(
-            color: AppColors.parchment,
-            border: Border.all(color: AppColors.ink, width: 3),
-            boxShadow: const [BoxShadow(color: Color(0x880D0B16), offset: Offset(3, 3))],
+            color: AppColors.cream,
+            borderRadius: const BorderRadius.only(
+              topLeft: Radius.circular(10),
+              topRight: Radius.circular(10),
+              bottomRight: Radius.circular(10),
+              bottomLeft: Radius.circular(2),
+            ),
+            border: Border.all(color: AppColors.ink, width: 2),
+            boxShadow: const [BoxShadow(color: AppColors.ink, offset: Offset(0, 3))],
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -744,7 +783,7 @@ class _TalkBubble extends StatelessWidget {
             ],
           ),
         ),
-        const Positioned(bottom: -6, child: BubbleTail(color: AppColors.parchment, borderColor: AppColors.ink)),
+        const Positioned(bottom: -6, child: BubbleTail(color: AppColors.cream, borderColor: AppColors.ink)),
       ],
     );
   }

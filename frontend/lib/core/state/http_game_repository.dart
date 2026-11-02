@@ -312,6 +312,45 @@ class HttpGameRepository implements GameRepository {
   }
 
   /// 체크인 본문: 화면을 연 업무 날짜 + 습관마다 했는지 · 값. 서버가 정한 대상 순서대로 보낸다.
+  /// `POST /checkins/today/interpret` (제안 docs/제안/2026-10-30-AI챗봇-API.md). 하루 한도를 넘으면(429) null → 버튼으로.
+  @override
+  Future<InterpretResult?> interpret({
+    required String message,
+    required List<(String, String)> history,
+    required Map<String, double> draft,
+    String? askingHabitId,
+  }) async {
+    final Map<String, dynamic> res;
+    try {
+      res = await api.send('POST', '/checkins/today/interpret', body: {
+        'businessDate': _businessDate,
+        'message': message,
+        'history': [
+          for (final (role, text) in history) {'role': role, 'text': text},
+        ],
+        'draft': [
+          for (final e in draft.entries) {'habitId': int.parse(e.key), 'done': e.value > 0, 'value': e.value},
+        ],
+        'askingHabitId': askingHabitId == null ? null : int.parse(askingHabitId),
+      }) as Map<String, dynamic>;
+    } on ApiException catch (e) {
+      if (e.code == 'AI_RATE_LIMITED') return null;
+      rethrow;
+    }
+    final ask = res['askAgain'] as Map<String, dynamic>?;
+    return InterpretResult(
+      reply: res['reply'] as String,
+      answers: {
+        for (final a in (res['answers'] as List).cast<Map<String, dynamic>>())
+          '${a['habitId']}': a['done'] == true ? (a['value'] as num).toDouble() : 0,
+      },
+      askAgainHabitId: ask == null ? null : '${ask['habitId']}',
+      askAgainQuestion: ask?['question'] as String?,
+      safety: res['safety'] == true,
+      fromAi: res['source'] == 'LLM',
+    );
+  }
+
   Map<String, dynamic> _checkinBody(Map<String, double> answers) => {
         'businessDate': _businessDate,
         'answers': [

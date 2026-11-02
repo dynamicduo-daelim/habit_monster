@@ -45,6 +45,7 @@
 
 ## 규칙
 - 픽셀 이미지는 항상 `FilterQuality.none` (PixelImage 위젯 사용)
-- 폰트는 Galmuri11, 색은 AppColors만 사용
+- 글꼴: 본문은 Pretendard(앱 기본), 제목 · 숫자는 `fontFamily: AppTheme.pixelFont`(Galmuri11) — D-55. 색은 AppColors만 사용
+- 모양: 버튼 · 카드는 모서리 10(`PixelButton` · `PressCard` 기본), 교감 창만 네모(`radius: 0`) — D-54
 - 수치를 하드코딩하지 말고 `Economy` 상수 사용
 - 새 패키지를 넣을 땐 이유를 먼저 설명

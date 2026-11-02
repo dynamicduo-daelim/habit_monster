@@ -180,6 +180,20 @@ class PixelIcons {
     PixelLayer('M5 1h6v1h2v2h1v3H2V4h1V2h2z', Color(0xFFFF8A4C)),
     PixelLayer('M2 7h12v2H2z', Color(0xFF3A1F1A)),
   ];
+  /// 놀아주기 공 (비치볼). 성실볼(빨강 · 흰색 반원)과 헷갈리지 않게 세 가지 색 조각 (기획 2026-10-29-교감-창-개편).
+  static const List<PixelLayer> toyBall = [
+    PixelLayer(
+        'M5 2h6v1H5z M3 3h1v1H3z M5 3h8v1H5z M5 4h7v1H5z M5 5h6v1H5z M6 6h4v1H6z', Color(0xFFE2574C)),
+    PixelLayer('M10 7h4v1H10z M9 8h5v1H9z M8 9h6v1H8z M9 10h4v1H9z M9 11h3v1H9z M9 12h2v1H9z M9 13h1v1H9z',
+        Color(0xFF5FAAE8)),
+    PixelLayer('M2 6h1v1H2z M2 7h4v1H2z M2 8h5v1H2z M2 9h6v1H2z M2 10h5v1H2z M3 11h4v1H3z M3 12h4v1H3z M5 13h2v1H5z',
+        Color(0xFFFFC83C)),
+    PixelLayer(
+        'M12 4h1v1H12z M2 5h3v1H2z M11 5h3v1H11z M3 6h3v1H3z M10 6h4v1H10z M6 7h4v1H6z M7 8h2v1H7z M7 10h2v1H7z M7 11h2v1H7z M7 12h2v1H7z M7 13h2v1H7z',
+        Color(0xFFFFFAF0)),
+    PixelLayer('M13 10h1v1H13z M12 11h1v1H12z M11 12h2v1H11z M10 13h1v1H10z', Color(0xFF4A88BA)),
+    PixelLayer('M4 3h1v1H4z M3 4h2v1H3z', Color(0xFFFFFFFF)),
+  ];
   static const List<PixelLayer> actionTalk = [
     PixelLayer('M1 2h14v9H8v1H7v1H6v1H4v-3H1z', Color(0xFFFFFAF0)),
     PixelLayer('M4 6h2v2H4z M7 6h2v2H7z M10 6h2v2h-2z', Color(0xFF3A1F1A)),

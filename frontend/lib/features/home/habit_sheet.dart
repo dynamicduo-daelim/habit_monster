@@ -11,6 +11,7 @@ import '../../data/models.dart';
 import '../../core/widgets/category_icon.dart';
 import '../../core/widgets/help_button.dart';
 import 'home_parts.dart';
+import '../../core/theme/app_theme.dart';
 
 /// 홈 아래 슬라이드 시트. 접히면 오늘의 성실도 요약, 펼치면 [습관 리스트 | 오늘의 성실도] 두 쪽.
 class HabitSheet extends StatefulWidget {
@@ -48,17 +49,19 @@ class _HabitSheetState extends State<HabitSheet> {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 250),
       height: _open ? openH : HabitSheet.closedHeight,
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppColors.nightDeep,
-        border: Border(top: BorderSide(color: AppColors.purple, width: 3)),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.purple, width: 2),
       ),
       child: GestureDetector(
         onVerticalDragEnd: _onDrag,
         behavior: HitTestBehavior.translucent,
-        child: ClipRect(
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(12),
           child: OverflowBox(
             alignment: Alignment.topCenter,
-            maxHeight: math.max(openH, HabitSheet.closedHeight) - 3,
+            maxHeight: math.max(openH, HabitSheet.closedHeight) - 4, // 위아래 테두리 2 + 2
             child: Column(
               children: [
                 Semantics(
@@ -225,7 +228,7 @@ class _Summary extends StatelessWidget {
                         text: ' / ${GameState.maxDailyScore}',
                         style: TextStyle(fontSize: 10, fontWeight: FontWeight.w400, color: AppColors.textMuted)),
                   ]),
-                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.gold),
+                  style: const TextStyle(fontFamily: AppTheme.pixelFont, fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.gold),
                 ),
               ],
             ),
@@ -254,6 +257,8 @@ class _HabitList extends StatelessWidget {
           _HabitRow(s: s, habit: s.habits[i], counted: !s.checkedInToday || s.isCounted(s.habits[i])),
           const SizedBox(height: 8),
         ],
+        // 챗봇 체크를 마치면 버튼을 없앤다 (사용자 요청 10-29)
+        if (!s.checkedInToday) ...[
         const SizedBox(height: 4),
         Semantics(
           button: true,
@@ -269,11 +274,12 @@ class _HabitList extends StatelessWidget {
                 border: Border.all(color: AppColors.goldLight, width: 3),
                 boxShadow: const [BoxShadow(color: AppColors.ink, offset: Offset(4, 4))],
               ),
-              child: Text(s.checkedInToday ? '오늘 체크 완료 · 탐색하러 가기' : '챗봇에게 오늘 습관 체크받기',
-                  style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: AppColors.night)),
+              child: const Text('챗봇에게 오늘 습관 체크받기',
+                  style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: AppColors.night)),
             ),
           ),
         ),
+        ],
       ],
     );
   }
@@ -363,7 +369,7 @@ class _ScorePage extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Text('$score',
-                      style: const TextStyle(fontSize: 34, height: 1.1, fontWeight: FontWeight.w700, color: AppColors.gold)),
+                      style: const TextStyle(fontFamily: AppTheme.pixelFont, fontSize: 34, height: 1.1, fontWeight: FontWeight.w700, color: AppColors.gold)),
                   const SizedBox(width: 8),
                   Padding(
                     padding: const EdgeInsets.only(bottom: 6),
