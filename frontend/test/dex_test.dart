@@ -10,15 +10,15 @@ void main() {
     tester.view.physicalSize = const Size(390, 1400);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
-    final s = GameState.sample(gold: 1240, balls: 1); // 공부 38점 → Lv.3, 원숭이·찌릿 쥐·거북 보유
+    final s = GameState.sample(gold: 1240, balls: 1); // 공부 38점 → Lv.3, 모닥이·토독·오물 보유
     await tester.pumpWidget(withGame(s, const MaterialApp(home: Scaffold(body: DexScreen()))));
 
     expect(find.text('발견 3/42'), findsOneWidget);
-    expect(find.text('보유 중 · Lv.7 · 기본형'), findsOneWidget); // 불씨 원숭이
+    expect(find.text('보유 중 · Lv.7 · 기본형'), findsOneWidget); // 모닥이
 
     await tester.tap(find.bySemanticsLabel(RegExp('^공부/학습 도감')));
     await tester.pump();
-    await tester.tap(find.bySemanticsLabel('No.009 미발견')); // 번개뿔 사슴 (Lv.3 출현, 공부 Lv.3)
+    await tester.tap(find.bySemanticsLabel('No.009 미발견')); // 번득이 (Lv.3 출현, 공부 Lv.3)
     await tester.pump();
     expect(find.text('지금 탐색하면 만날 수 있어요!'), findsOneWidget);
 
@@ -38,7 +38,7 @@ void main() {
     await tester.pumpWidget(withGame(s, const MaterialApp(home: Scaffold(body: DexScreen()))));
 
     expect(find.text('발견 4/42'), findsOneWidget);
-    await tester.tap(find.bySemanticsLabel('No.002 깡총 불토끼'));
+    await tester.tap(find.bySemanticsLabel('No.002 콩지'));
     await tester.pump();
     expect(find.text('만난 적 있음 · 다시 만나면 잡아 보세요!'), findsOneWidget);
     expect(find.text('못 잡음'), findsOneWidget);

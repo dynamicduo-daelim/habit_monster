@@ -31,7 +31,7 @@ Future<void> _checkAllNo(WidgetTester tester) async {
 void main() {
   group('온보딩: 고른 길의 몬스터만', () {
     test('고르지 않은 길의 샘플 몬스터는 빠진다', () async {
-      final s = GameState.sample(gold: 1240, balls: 1); // 불씨 원숭이(운동) · 찌릿 쥐(공부) · 새싹냥(식습관)
+      final s = GameState.sample(gold: 1240, balls: 1); // 모닥이(운동) · 토독(공부) · 새싹냥(식습관)
       final c = OnboardingController(onToast: (_) {});
       c.toggleCategory('ex');
       c.toggleCategory('sl');
@@ -50,10 +50,10 @@ void main() {
       for (final id in ['ex', 'sl', 'md']) {
         c.toggleCategory(id);
       }
-      c.pickStarter(1); // 수면 길의 달밤 다람쥐
+      c.pickStarter(1); // 수면 길의 새근이
       c.habits.add(Habit(id: 'h', name: '7시간 자기', categoryId: 'sl', measureIndex: 0, target: 7, periodIndex: 0));
       await c.commit(LocalGameRepository(s));
-      expect(s.monsters.map((m) => m.speciesId), ['monkey', 'squirrel', 'koala']); // 명상 길도 물방울 코알라
+      expect(s.monsters.map((m) => m.speciesId), ['monkey', 'squirrel', 'koala']); // 명상 길도 퐁글
       final squirrel = s.monsters.firstWhere((m) => m.speciesId == 'squirrel');
       expect(s.chatPartnerUid, squirrel.uid);
       expect(squirrel.affection, 3);

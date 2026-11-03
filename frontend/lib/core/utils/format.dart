@@ -11,7 +11,7 @@ bool _hasBatchim(String word) {
   return code >= 0xAC00 && code <= 0xD7A3 && (code - 0xAC00) % 28 != 0;
 }
 
-/// 이름 뒤에 '와/과'를 붙인다. 예) '찌릿 쥐와', '새싹냥과'
+/// 이름 뒤에 '와/과'를 붙인다. 예) '콩지와', '토독과'
 String withWa(String name) => '$name${_hasBatchim(name) ? '과' : '와'}';
 
 /// 목적격 조사 '을/를'만 돌려준다. 예) josaEulReul('잿불 늑대') → '를'

@@ -73,8 +73,8 @@ void main() {
   });
 
   test('이름 뒤 와/과', () {
-    expect(withWa('찌릿 쥐'), '찌릿 쥐와');
-    expect(withWa('이끼 거북'), '이끼 거북과');
+    expect(withWa('콩지'), '콩지와');
+    expect(withWa('토독'), '토독과');
     expect(josaEunNeun('전공 공부'), '는');
     expect(josaEunNeun('아침 러닝'), '은');
   });
@@ -123,7 +123,7 @@ void main() {
     expect(find.text('간식 주기'), findsOneWidget); // 기본 칸 = 간식
     expect(find.textContaining('진화까지'), findsNothing); // 진화 안내는 보여 주지 않는다
 
-    // 대화 상대(m2 찌릿 쥐)가 대상. 물약은 누르기만 하면 안 먹고, 몬스터에게 끌어다 놓으면 먹는다 → +20 EXP
+    // 대화 상대(m2 토독)가 대상. 물약은 누르기만 하면 안 먹고, 몬스터에게 끌어다 놓으면 먹는다 → +20 EXP
     final spark = state.monsterByUid('m2')!;
     final expBefore = spark.exp;
     await tester.tap(find.byKey(const ValueKey('feed_s')));
@@ -131,7 +131,7 @@ void main() {
     expect(spark.exp, expBefore);
     expect(find.text('그거 나 주는 거야? 이쪽으로 끌어 줘!'), findsOneWidget);
     await dragTo(tester, tester.getCenter(find.byKey(const ValueKey('feed_s'))),
-        tester.getCenter(find.bySemanticsLabel('찌릿 쥐 톡 건드리기')));
+        tester.getCenter(find.bySemanticsLabel('토독 톡 건드리기')));
     expect(spark.exp, (expBefore + 20) % 125);
     expect(find.text('냠냠! 맛있다!'), findsOneWidget);
     await tester.pump(const Duration(seconds: 2));
@@ -186,10 +186,10 @@ void main() {
     });
     await tester.pump();
 
-    final label = find.text('불씨 원숭이 Lv.7');
+    final label = find.text('모닥이 Lv.7');
     final before = tester.getTopLeft(label);
     // 실제 손가락처럼 움직일 때마다 화면을 그린다 (끄는 중엔 바로 따라옴)
-    final g = await tester.startGesture(tester.getCenter(find.bySemanticsLabel('불씨 원숭이 정보 보기')));
+    final g = await tester.startGesture(tester.getCenter(find.bySemanticsLabel('모닥이 정보 보기')));
     for (var k = 0; k < 4; k++) {
       await g.moveBy(const Offset(20, 8));
       await tester.pump();
@@ -206,7 +206,7 @@ void main() {
     expect(find.text('상점 주인 마루'), findsNothing); // 끌기는 창을 열지 않는다
 
     // 두 번째부터는 옮기기만
-    await tester.drag(find.bySemanticsLabel('불씨 원숭이 정보 보기'), const Offset(-60, 0));
+    await tester.drag(find.bySemanticsLabel('모닥이 정보 보기'), const Offset(-60, 0));
     await tester.pump();
     expect(state.monsterByUid('m1')!.affection, 5);
     await tester.pump(const Duration(milliseconds: 1300));
@@ -254,7 +254,7 @@ void main() {
       }
     });
     await tester.pump();
-    await tester.tap(find.bySemanticsLabel('불씨 원숭이 정보 보기'));
+    await tester.tap(find.bySemanticsLabel('모닥이 정보 보기'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
     await tester.runAsync(() async {
@@ -273,7 +273,7 @@ void main() {
     await g.moveBy(const Offset(0, -20));
     await tester.pump();
     expect(find.text('여기로 끌어다 놓아요'), findsOneWidget);
-    final target = tester.getCenter(find.bySemanticsLabel('불씨 원숭이 톡 건드리기'));
+    final target = tester.getCenter(find.bySemanticsLabel('모닥이 톡 건드리기'));
     for (var k = 0; k < 6; k++) {
       await g.moveTo(Offset.lerp(start, target, (k + 1) / 6)!);
       await tester.pump();

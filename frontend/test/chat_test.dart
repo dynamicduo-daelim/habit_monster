@@ -51,7 +51,7 @@ void main() {
     expect(c.step, ChatStep.explore);
     expect(c.encounter!.exploreId, '9');
     expect(c.canThrow, isTrue);
-    expect(c.messages.last.text, contains('아까 만난 횃불 닭이'));
+    expect(c.messages.last.text, contains('아까 만난 홰치가'));
   });
 
   group('체크인 규칙 (하루 1번 일괄 확정)', () {
@@ -189,7 +189,7 @@ void main() {
     });
 
     test('이미 가진 종이 나오면 볼 없이 바로 +15G (던질 수 없다)', () {
-      final s = _checkedIn(GameState.sample(gold: 1240, balls: 1, random: FixedRandom(double_: 0.9, int_: 0, doubles: [0.9, 0.1]))); // 불씨 원숭이(보유 중) 등장
+      final s = _checkedIn(GameState.sample(gold: 1240, balls: 1, random: FixedRandom(double_: 0.9, int_: 0, doubles: [0.9, 0.1]))); // 모닥이(보유 중) 등장
       final before = s.gold;
       final e = s.explore()!;
       expect(e.alreadyOwned, isTrue);
@@ -226,7 +226,7 @@ void main() {
     await tester.pump();
     await tester.pump();
 
-    expect(find.text('안녕! 나 찌릿 쥐. 오늘 습관 체크하러 왔어.'), findsOneWidget);
+    expect(find.text('안녕! 나 토독. 오늘 습관 체크하러 왔어.'), findsOneWidget);
     expect(find.text("[운동] '아침 러닝' 오늘 했어?"), findsOneWidget);
 
     // 체크인 전: 탐색 횟수 없음
@@ -266,25 +266,25 @@ void main() {
     expect(find.textContaining('풀숲을 살펴보는 중'), findsOneWidget); // 바로 나오지 않고 찾는 과정
     await tester.pump(const Duration(milliseconds: 2100));
     expect(find.text('새로운 루틴몬이 등장했어요!'), findsOneWidget);
-    expect(find.textContaining('야생의 깡총 불토끼가 나타났다!'), findsOneWidget);
+    expect(find.textContaining('야생의 콩지가 나타났다!'), findsOneWidget);
     expect(find.text('위로 휙! ×1'), findsOneWidget);
     await flingBall(tester, monsterCenter(tester));
     expect(find.text('성실볼을 던졌다! 과연…'), findsOneWidget);
     await playThrow(tester);
     expect(s.balls, 0);
     // 결과 팝업을 닫기 전엔 대화 상대 줄에 안 보인다
-    expect(find.bySemanticsLabel(RegExp('^깡총 불토끼와 대화')), findsNothing);
+    expect(find.bySemanticsLabel(RegExp('^콩지와 대화')), findsNothing);
     expect(find.text('잡았다!'), findsOneWidget);
     await tester.tap(find.text('확인'));
     await tester.pump();
     expect(find.text('NEW!'), findsOneWidget);
-    expect(find.textContaining('깡총 불토끼(흔함)를 잡았어요!'), findsOneWidget);
-    expect(find.bySemanticsLabel(RegExp('^깡총 불토끼와 대화')), findsOneWidget);
+    expect(find.textContaining('콩지(흔함)를 잡았어요!'), findsOneWidget);
+    expect(find.bySemanticsLabel(RegExp('^콩지와 대화')), findsOneWidget);
     await tester.tap(find.text('그만'));
     await tester.pump();
     await tester.pump();
     expect(find.text('탐색하기 (2회 남음)'), findsOneWidget);
-    expect(find.textContaining('깡총 불토끼를 잡았어! 새 친구가 생겼네.'), findsOneWidget);
+    expect(find.textContaining('콩지를 잡았어! 새 친구가 생겼네.'), findsOneWidget);
 
     // 다시 체크: 기록만 고치고 보상 · 탐색 횟수는 그대로
     final goldBefore = s.gold;
