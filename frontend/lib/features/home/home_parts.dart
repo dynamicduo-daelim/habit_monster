@@ -51,11 +51,15 @@ class BrownCloseButton extends StatelessWidget {
     this.color = AppColors.redSoft,
     this.iconColor = AppColors.white,
     this.shadow = true,
+    this.radius = 0,
   });
   final VoidCallback onTap;
   final Color color;
   final Color iconColor;
   final bool shadow;
+
+  /// 둥근 모서리 (상점 · 2026-10-29 시안은 10).
+  final double radius;
 
   @override
   Widget build(BuildContext context) {
@@ -70,7 +74,8 @@ class BrownCloseButton extends StatelessWidget {
           alignment: Alignment.center,
           decoration: BoxDecoration(
             color: color,
-            border: Border.all(color: AppColors.inkBrown, width: 3),
+            borderRadius: radius > 0 ? BorderRadius.circular(radius) : null,
+            border: Border.all(color: AppColors.inkBrown, width: radius > 0 ? 2 : 3),
             boxShadow: shadow ? const [BoxShadow(color: AppColors.redShadow, offset: Offset(0, 3))] : null,
           ),
           child: PixelIcon(

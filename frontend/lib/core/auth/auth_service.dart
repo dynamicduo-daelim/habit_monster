@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/widgets.dart';
 
+import 'login_prefs.dart';
+
 /// 로그인 수단 (DB `identity.auth_provider`).
 enum AuthProvider { email, kakao, google }
 
@@ -73,6 +75,9 @@ abstract class AuthService {
   Future<void> completeOnboarding(AuthSession session);
 
   Future<void> signOut(AuthSession session);
+
+  /// 이 기기에 저장된 로그인(refresh 토큰)을 지운다 — 자동 로그인을 끈 채 앱을 켰을 때. 서버에는 알리지 않는다.
+  Future<void> forgetSavedLogin();
 }
 
 /// 입력 검사 (서버도 같은 규칙으로 다시 검사한다).
@@ -156,13 +161,21 @@ class FakeAuthService implements AuthService {
 
   @override
   Future<void> signOut(AuthSession session) async {}
+
+  @override
+  Future<void> forgetSavedLogin() async {}
 }
 
 /// 현재 로그인 상태. 화면은 `AuthScope.of(context)`로 쓴다.
 class AuthController extends ChangeNotifier {
-  AuthController(this.service, {this.onSignedOut});
+  AuthController(this.service, {this.onSignedOut, LoginPrefsStore? prefsStore})
+      : prefsStore = prefsStore ?? MemoryLoginPrefsStore();
 
   final AuthService service;
+
+  /// 최근 로그인 · 아이디 저장 · 자동 로그인 (기획 2026-10-29-로그인-편의).
+  final LoginPrefsStore prefsStore;
+  LoginPrefs prefs = const LoginPrefs();
 
   /// 로그아웃하면 (앱이 게임 상태를 비운다).
   final VoidCallback? onSignedOut;
@@ -186,7 +199,16 @@ class AuthController extends ChangeNotifier {
 
   Future<void> restore() async {
     try {
-      session = await service.restore();
+      prefs = await prefsStore.read();
+    } catch (_) {
+      // 저장소를 못 읽으면(웹 개인 창 등) 기본값
+    }
+    try {
+      if (prefs.autoLogin) {
+        session = await service.restore();
+      } else {
+        await service.forgetSavedLogin();
+      }
     } catch (_) {
       session = null;
     }
@@ -195,13 +217,51 @@ class AuthController extends ChangeNotifier {
   }
 
   Future<AuthSession> signUpWithEmail(String email, String password) =>
-      _run(() async => session = await service.signUpWithEmail(email: email, password: password));
+      _run(() async => _signedIn(await service.signUpWithEmail(email: email, password: password)));
 
   Future<AuthSession> signInWithEmail(String email, String password) =>
-      _run(() async => session = await service.signInWithEmail(email: email, password: password));
+      _run(() async => _signedIn(await service.signInWithEmail(email: email, password: password)));
 
   Future<AuthSession> signInWithProvider(AuthProvider p) =>
-      _run(() async => session = await service.signInWithProvider(p));
+      _run(() async => _signedIn(await service.signInWithProvider(p)));
+
+  /// 로그인 성공: 최근 수단을 남기고, 아이디 저장이 켜져 있으면 이메일도 남긴다.
+  Future<AuthSession> _signedIn(AuthSession s) async {
+    session = s;
+    final email = s.provider == AuthProvider.email ? s.email : null;
+    await _savePrefs(LoginPrefs(
+      lastProvider: s.provider,
+      savedEmail: prefs.rememberEmail ? (email ?? prefs.savedEmail) : null,
+      rememberEmail: prefs.rememberEmail,
+      autoLogin: prefs.autoLogin,
+    ));
+    return s;
+  }
+
+  Future<void> setAutoLogin(bool on) => _savePrefs(LoginPrefs(
+        lastProvider: prefs.lastProvider,
+        savedEmail: prefs.savedEmail,
+        rememberEmail: prefs.rememberEmail,
+        autoLogin: on,
+      ));
+
+  /// 끄면 저장된 이메일도 지운다.
+  Future<void> setRememberEmail(bool on) => _savePrefs(LoginPrefs(
+        lastProvider: prefs.lastProvider,
+        savedEmail: on ? prefs.savedEmail : null,
+        rememberEmail: on,
+        autoLogin: prefs.autoLogin,
+      ));
+
+  Future<void> _savePrefs(LoginPrefs p) async {
+    prefs = p;
+    notifyListeners();
+    try {
+      await prefsStore.write(p);
+    } catch (_) {
+      // 저장에 실패해도 이번 실행에서는 그대로 쓴다
+    }
+  }
 
   Future<void> completeOnboarding() async {
     final s = session;

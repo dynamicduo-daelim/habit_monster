@@ -229,7 +229,7 @@ void main() {
     expect(find.text("[운동] '아침 러닝' 오늘 했어?"), findsOneWidget);
 
     // 체크인 전: 탐색 횟수 없음
-    expect(find.text('체크인하면 탐색 3회'), findsOneWidget);
+    expect(find.textContaining('탐색 기회'), findsNothing);
 
     // 아침 러닝: 했어 → 빠른 선택 30분 (보상은 아직 — 마지막에 한 번에 확정)
     await tester.tap(find.text('했어!').last); // 말풍선이 아닌 버튼
@@ -257,11 +257,14 @@ void main() {
     expect(s.todayRecords['h2'], 0);
     expect(find.text('식습관/건강 Lv.3 달성! +20G'), findsOneWidget); // 물 25점으로 21 → 46점
     expect(s.gold, 1240 + 45 + 20);
-    expect(find.text('DAY 12 · 연속 12일'), findsOneWidget);
+    expect(find.text('연속 12일째'), findsOneWidget);
     expect(find.text('다시 체크'), findsOneWidget); // 기록은 고칠 수 있다 (보상은 그대로)
 
     await tester.tap(find.text('탐색하기 (3회 남음)'));
     await tester.pump();
+    expect(find.textContaining('풀숲을 살펴보는 중'), findsOneWidget); // 바로 나오지 않고 찾는 과정
+    await tester.pump(const Duration(milliseconds: 2100));
+    expect(find.text('새로운 루틴몬이 등장했어요!'), findsOneWidget);
     expect(find.textContaining('야생의 깡총 불토끼가 나타났다!'), findsOneWidget);
     expect(find.text('던지기 ×1'), findsOneWidget);
     await tester.tap(find.text('던지기 ×1'));

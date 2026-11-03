@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:habit_monster/app.dart';
 import 'package:habit_monster/core/audio/bgm.dart';
 import 'package:habit_monster/core/auth/auth_service.dart';
+import 'package:habit_monster/core/auth/login_prefs.dart';
 import 'package:habit_monster/features/auth/login_screen.dart';
 import 'package:habit_monster/features/onboarding/onboarding_screen.dart';
 import 'package:habit_monster/features/shell/main_shell.dart';
@@ -92,11 +93,13 @@ void main() {
     await settle(tester);
     expect(find.byType(LoginScreen), findsOneWidget);
     expect(find.byType(MainShell), findsNothing);
+    expect(find.text('최근에 이메일로 로그인했어요'), findsOneWidget); // 최근 로그인 말풍선
 
     // 틀린 비밀번호 → 오류, 맞으면 온보딩 없이 바로 홈
     await tester.tap(find.text('이메일로 시작하기'));
     await settle(tester);
     final f2 = find.byType(TextField);
+    expect(tester.widget<TextField>(f2.at(0)).controller!.text, 'me@habit.kr'); // 아이디 저장으로 미리 채움
     await tester.enterText(f2.at(0), 'ME@habit.kr');
     await tester.enterText(f2.at(1), 'password9');
     await tester.tap(find.text('로그인').last);
@@ -119,4 +122,47 @@ void main() {
     expect(find.byType(OnboardingScreen), findsOneWidget);
     await tester.pump(const Duration(seconds: 7));
   });
+
+  group('로그인 편의 (AuthController)', () {
+    test('로그인하면 최근 수단 · 이메일을 저장, 아이디 저장을 끄면 이메일을 지운다', () async {
+      final store = MemoryLoginPrefsStore();
+      final auth = AuthController(FakeAuthService(delay: Duration.zero), prefsStore: store);
+      await auth.restore();
+      await auth.signUpWithEmail('a@b.co', 'password1');
+      expect(store.value.lastProvider, AuthProvider.email);
+      expect(store.value.savedEmail, 'a@b.co');
+      await auth.setRememberEmail(false);
+      expect(store.value.savedEmail, isNull);
+      await auth.signOut();
+      await auth.signInWithProvider(AuthProvider.kakao);
+      expect(store.value.lastProvider, AuthProvider.kakao);
+      expect(store.value.savedEmail, isNull);
+    });
+
+    test('자동 로그인이 꺼져 있으면 저장된 로그인을 쓰지 않고 지운다', () async {
+      final svc = _SavedLoginAuth();
+      final on = AuthController(svc, prefsStore: MemoryLoginPrefsStore());
+      await on.restore();
+      expect(on.session, isNotNull);
+
+      final off = AuthController(svc, prefsStore: MemoryLoginPrefsStore(const LoginPrefs(autoLogin: false)));
+      await off.restore();
+      expect(off.session, isNull);
+      expect(svc.forgotten, isTrue);
+      expect(off.ready, isTrue);
+    });
+  });
+}
+
+/// 저장된 로그인이 있는 것처럼 복원해 주는 가짜 인증.
+class _SavedLoginAuth extends FakeAuthService {
+  _SavedLoginAuth() : super(delay: Duration.zero);
+  bool forgotten = false;
+
+  @override
+  Future<AuthSession?> restore() async => const AuthSession(
+      userId: 'u1', provider: AuthProvider.kakao, accessToken: 'a', refreshToken: 'r', onboardingDone: true);
+
+  @override
+  Future<void> forgetSavedLogin() async => forgotten = true;
 }

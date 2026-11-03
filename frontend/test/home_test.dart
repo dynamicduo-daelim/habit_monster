@@ -6,6 +6,28 @@ import 'package:habit_monster/core/utils/format.dart';
 import 'package:habit_monster/features/shell/main_shell.dart';
 import 'game_harness.dart';
 
+/// 손가락처럼 여러 번 나눠 움직여 끌기 (한 번에 옮기면 중간 프레임이 없어 놓는 곳을 못 찾는다).
+Future<void> dragTo(WidgetTester tester, Offset from, Offset to) async {
+  final g = await tester.startGesture(from);
+  for (var k = 1; k <= 6; k++) {
+    await g.moveTo(Offset.lerp(from, to, k / 6)!);
+    await tester.pump();
+  }
+  await g.up();
+  await tester.pump();
+}
+
+/// 무대를 휙 미는 스와이프 (한 번에 [step]씩 8번, 16ms 간격 → 손을 뗄 때 빠르기가 남는다).
+Future<void> swipe(WidgetTester tester, Offset from, Offset step) async {
+  final g = await tester.startGesture(from);
+  for (var k = 0; k < 8; k++) {
+    await g.moveBy(step, timeStamp: Duration(milliseconds: 16 * (k + 1)));
+    await tester.pump(const Duration(milliseconds: 16));
+  }
+  await g.up(timeStamp: const Duration(milliseconds: 16 * 9));
+  await tester.pump();
+}
+
 void main() {
   group('GameState 교감 · 성실도', () {
     test('쓰다듬기는 ♥+2, 최대치를 넘지 않는다', () {
@@ -98,21 +120,50 @@ void main() {
     await tester.tap(find.text('사용하러 가기 ▶'));
     await tester.pump();
     expect(find.text('그거 나 주는 거야?'), findsOneWidget);
-    expect(find.text('어떤 간식을 줄까? (경험치 물약)'), findsOneWidget);
+    expect(find.text('간식 주기'), findsOneWidget); // 기본 칸 = 간식
+    expect(find.textContaining('진화까지'), findsNothing); // 진화 안내는 보여 주지 않는다
 
-    // 대화 상대(m2 찌릿 쥐)가 대상. 하급 물약 먹이기 → +20 EXP
+    // 대화 상대(m2 찌릿 쥐)가 대상. 물약은 누르기만 하면 안 먹고, 몬스터에게 끌어다 놓으면 먹는다 → +20 EXP
     final spark = state.monsterByUid('m2')!;
     final expBefore = spark.exp;
-    await tester.tap(find.text('하급 ×4'));
+    await tester.tap(find.byKey(const ValueKey('feed_s')));
     await tester.pump();
+    expect(spark.exp, expBefore);
+    expect(find.text('그거 나 주는 거야? 이쪽으로 끌어 줘!'), findsOneWidget);
+    await dragTo(tester, tester.getCenter(find.byKey(const ValueKey('feed_s'))),
+        tester.getCenter(find.bySemanticsLabel('찌릿 쥐 톡 건드리기')));
     expect(spark.exp, (expBefore + 20) % 125);
     expect(find.text('냠냠! 맛있다!'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 2));
 
-    // 놀아주기 → 호감도 +1
+    // 놀아주기 → 무대를 휙 밀면 공이 날아가고, 몬스터가 잡으면 호감도 +1 (오늘 처음만)
     final aff = spark.affection;
+    await tester.ensureVisible(find.text('놀아주기'));
+    await tester.pump();
     await tester.tap(find.text('놀아주기'));
-    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300)); // 무대가 길어진다
+    await tester.ensureVisible(find.byKey(const ValueKey('play_stage')));
+    await tester.pump();
+    final ground = tester.getRect(find.byKey(const ValueKey('play_stage')));
+    // 살짝 누르기만 하면 안 던진다
+    await tester.tapAt(ground.center);
+    await tester.pump();
+    expect(find.text('던진 횟수 0'), findsOneWidget);
+    await swipe(tester, Offset(ground.center.dx, ground.bottom - 40), const Offset(-12, -14));
+    expect(spark.affection, aff); // 아직 공이 날아가는 중
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pump(const Duration(milliseconds: 800));
+    await tester.pump();
     expect(spark.affection, aff + 1);
+    expect(find.text('던진 횟수 1'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 2));
+    // 두 번째부터는 놀기만
+    await swipe(tester, Offset(ground.center.dx, ground.bottom - 40), const Offset(14, -10));
+    await tester.pump(const Duration(milliseconds: 1300));
+    await tester.pump();
+    expect(spark.affection, aff + 1);
+    expect(find.text('던진 횟수 2'), findsOneWidget);
 
     // 타이머 정리
     await tester.pump(const Duration(seconds: 6));
@@ -188,6 +239,50 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
     expect(tester.getCenter(shop).dx, shown);
+    await tester.pump(const Duration(seconds: 4));
+  });
+  testWidgets('교감 창: 물약을 몬스터에게 끌어다 놓으면 먹는다', (tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final state = GameState.sample(gold: 1240, balls: 1);
+    await tester.pumpWidget(withGame(state, const MaterialApp(home: MainShell())));
+    await tester.pump();
+    await tester.runAsync(() async {
+      for (final e in find.byType(Image).evaluate()) {
+        await precacheImage((e.widget as Image).image, e);
+      }
+    });
+    await tester.pump();
+    await tester.tap(find.bySemanticsLabel('불씨 원숭이 정보 보기'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.runAsync(() async {
+      for (final e in find.byType(Image).evaluate()) {
+        await precacheImage((e.widget as Image).image, e);
+      }
+    });
+    await tester.pump();
+
+    final monkey = state.monsterByUid('m1')!;
+    final expBefore = monkey.exp;
+    final potions = state.inventory['s']!;
+    expect(find.text('간식 주기'), findsOneWidget);
+    final start = tester.getCenter(find.byKey(const ValueKey('feed_s')));
+    final g = await tester.startGesture(start);
+    await g.moveBy(const Offset(0, -20));
+    await tester.pump();
+    expect(find.text('여기로 끌어다 놓아요'), findsOneWidget);
+    final target = tester.getCenter(find.bySemanticsLabel('불씨 원숭이 톡 건드리기'));
+    for (var k = 0; k < 6; k++) {
+      await g.moveTo(Offset.lerp(start, target, (k + 1) / 6)!);
+      await tester.pump();
+    }
+    await g.up();
+    await tester.pump();
+    expect(state.inventory['s'], potions - 1);
+    expect(monkey.exp, (expBefore + 20) % 125);
+    expect(find.text('여기로 끌어다 놓아요'), findsNothing);
     await tester.pump(const Duration(seconds: 4));
   });
 }

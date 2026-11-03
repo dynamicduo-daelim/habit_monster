@@ -11,8 +11,8 @@
 <path d="M62,1090 H170 V1410 H62 A22,22 0 0 1 40,1388 V1112 A22,22 0 0 1 62,1090 Z" fill="#4FA84A"/>
 <rect x="40" y="1450" width="1520" height="240" rx="22" fill="#FFEEF2" stroke="#E0527A" stroke-width="2.5"/>
 <path d="M62,1450 H170 V1690 H62 A22,22 0 0 1 40,1668 V1472 A22,22 0 0 1 62,1450 Z" fill="#E0527A"/>
-<text x="40" y="48.0" font-size="32" font-weight="800" fill="#2B2440" text-anchor="start" dominant-baseline="central">루틴몬 사용자 흐름도</text>
-<text x="40" y="84.0" font-size="15" font-weight="500" fill="#6B6385" text-anchor="start" dominant-baseline="central">습관을 지키면 몬스터가 자라는 앱 — 처음 켰을 때부터 매일 하는 일까지</text>
+<text x="40" y="48.0" font-size="32" font-weight="800" fill="#2B2440" text-anchor="start" dominant-baseline="central">모아루틴 사용자 흐름도</text>
+<text x="40" y="84.0" font-size="15" font-weight="500" fill="#6B6385" text-anchor="start" dominant-baseline="central">습관을 지키면 루틴몬이 자라는 앱 — 처음 켰을 때부터 매일 하는 일까지</text>
 <rect x="1050" y="34" width="44" height="26" rx="8" fill="#FFFFFF" stroke="#2B2440" stroke-width="2"/>
 <text x="1104" y="47.0" font-size="13" font-weight="600" fill="#6B6385" text-anchor="start" dominant-baseline="central">화면 · 행동</text>
 <polygon points="1222,32 1246,47 1222,62 1198,47" fill="#FFF1B8" stroke="#2B2440" stroke-width="2"/>

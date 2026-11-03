@@ -58,6 +58,7 @@ void main() {
     }
     await tester.tap(find.text('탐색하기 (1회 남음)')); // 전부 "못 했어"인 날은 탐색 1회
     await tester.pump();
+    await tester.pump(const Duration(milliseconds: 2100)); // 찾는 중…
     await tester.pump();
     expect(bgm.lastRequested, BgmTrack.explore);
     // 탐색 중에 다른 탭으로 가면 그 탭 곡 (탐색 곡은 챗봇 탭에서만)

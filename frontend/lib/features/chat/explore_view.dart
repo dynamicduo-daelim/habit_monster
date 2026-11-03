@@ -15,10 +15,12 @@ import '../../data/models.dart';
 import '../../data/results.dart';
 import '../home/home_parts.dart' show CheckerPainter, CoinIcon;
 import 'chat_controller.dart';
+import '../../core/theme/app_theme.dart';
 
-enum _Phase { appear, throwing, popup, done }
+enum _Phase { searching, appear, throwing, popup, done }
 
-/// 탐색 화면: 몬스터가 나타나면 [볼 던지기 · 다시 탐색 · 그만].
+/// 탐색 화면: 먼저 "찾는 중…"(덤불이 흔들림, [searchDuration]) → "새로운 루틴몬이 등장했어요!" / "발견하지 못했어요" 알림 →
+/// 몬스터가 나타나면 [볼 던지기 · 다시 탐색 · 그만].
 /// 던지면 성실볼 1개를 쓰고(흔들흔들) → 잡았다/놓쳤다 팝업. 아무도 없으면 덤불만 흔들린다.
 class ExploreView extends StatefulWidget {
   const ExploreView({super.key, required this.controller, required this.bobUp, required this.onNeedBall});
@@ -30,6 +32,9 @@ class ExploreView extends StatefulWidget {
 
   @override
   State<ExploreView> createState() => _ExploreViewState();
+
+  /// 탐색하는 과정의 길이 (사용자 요청 10-29 — "갑자기 팍 나오지 않게").
+  static const Duration searchDuration = Duration(milliseconds: 2000);
 }
 
 class _ExploreViewState extends State<ExploreView> {
@@ -44,6 +49,14 @@ class _ExploreViewState extends State<ExploreView> {
   _Phase _phase = _Phase.done;
   int _wobble = 0;
   Timer? _timer;
+
+  /// 찾는 중 덤불 흔들기 · 점(…) 세기.
+  Timer? _searchTimer;
+  int _searchTick = 0;
+
+  /// 결과 알림 ("새로운 루틴몬이 등장했어요!" 등). 잠깐 보였다 사라진다.
+  String? _banner;
+  Timer? _bannerTimer;
   EncounterResult? _shownFor;
 
   ChatController get _c => widget.controller;
@@ -61,11 +74,41 @@ class _ExploreViewState extends State<ExploreView> {
     if (!identical(_c.encounter, _shownFor)) _reset();
   }
 
-  /// 새로 탐색하면: 몬스터가 있으면 등장, 없으면 바로 끝.
+  /// 새로 탐색하면: 먼저 찾는 중 → 몬스터가 있으면 등장, 없으면 끝. 되살린 등장은 바로 보여 준다.
   void _reset() {
     _timer?.cancel();
+    _searchTimer?.cancel();
     _shownFor = _c.encounter;
+    if (_c.justExplored && _c.encounter != null) {
+      _c.justExplored = false;
+      _phase = _Phase.searching;
+      _searchTick = 0;
+      _searchTimer = Timer.periodic(const Duration(milliseconds: 250), (t) {
+        if (!mounted) return;
+        setState(() => _searchTick++);
+        if (_searchTick * 250 >= ExploreView.searchDuration.inMilliseconds) {
+          t.cancel();
+          setState(_reveal);
+        }
+      });
+      return;
+    }
     _phase = _e.catchable ? _Phase.appear : _Phase.done; // 가진 종은 볼 없이 골드만 받고 끝
+  }
+
+  /// 찾기가 끝났다: 결과에 맞는 알림을 잠깐 띄운다.
+  void _reveal() {
+    _phase = _e.catchable ? _Phase.appear : _Phase.done;
+    final sp = _e.species;
+    _banner = sp == null
+        ? '발견하지 못했어요…'
+        : _e.alreadyOwned
+            ? '친구 ${sp.name}${josaIGa(sp.name)} 놀러 왔어요!'
+            : (_e.newlySeen ? '새로운 루틴몬이 등장했어요!' : '야생의 루틴몬이 등장했어요!');
+    _bannerTimer?.cancel();
+    _bannerTimer = Timer(const Duration(milliseconds: 1800), () {
+      if (mounted) setState(() => _banner = null);
+    });
   }
 
   /// 볼 던지기: 볼이 없으면 사러 가고, 있으면 1개 쓰고 흔들흔들 → 결과 팝업.
@@ -101,6 +144,8 @@ class _ExploreViewState extends State<ExploreView> {
   @override
   void dispose() {
     _timer?.cancel();
+    _searchTimer?.cancel();
+    _bannerTimer?.cancel();
     super.dispose();
   }
 
@@ -108,6 +153,8 @@ class _ExploreViewState extends State<ExploreView> {
     final sp = _e.species;
     final r = _c.lastCatch;
     switch (_phase) {
+      case _Phase.searching:
+        return '풀숲을 살펴보는 중${'.' * (_searchTick % 3 + 1)}\n어떤 루틴몬이 숨어 있을까?';
       case _Phase.appear:
         final rate = ((_e.captureRate ?? s.captureRateOf(sp!)) * 100).round();
         return '야생의 ${sp!.name}${josaIGa(sp.name)} 나타났다! 성실볼을 던져볼까?\n잡힐 확률 $rate%';
@@ -194,7 +241,7 @@ class _ExploreViewState extends State<ExploreView> {
                                   ),
                                   child: const Text('!',
                                       style:
-                                          TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.red)),
+                                          TextStyle(fontFamily: AppTheme.pixelFont, fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.red)),
                                 ),
                                 const SizedBox(height: 6),
                                 Semantics(
@@ -215,16 +262,30 @@ class _ExploreViewState extends State<ExploreView> {
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               Transform.translate(
-                                offset: Offset(widget.bobUp ? -3 : 3, 0),
+                                offset: Offset(_shake(-1), 0),
                                 child: const PixelIcon(layers: _bush, size: 70, height: 56, viewBox: 20),
                               ),
                               const SizedBox(width: 4),
                               Transform.translate(
-                                offset: Offset(widget.bobUp ? 3 : -3, 0),
+                                offset: Offset(_shake(1), 0),
                                 child: const PixelIcon(layers: _bush, size: 70, height: 56, viewBox: 20),
                               ),
                             ],
                           ),
+                        ),
+                      if (_phase == _Phase.searching)
+                        Positioned(
+                          left: 0,
+                          right: 0,
+                          top: 52,
+                          child: Center(child: _searchBadge()),
+                        ),
+                      if (_banner != null)
+                        Positioned(
+                          left: 0,
+                          right: 0,
+                          top: 52,
+                          child: Center(child: _resultBanner(_banner!)),
                         ),
                       // 흔들리는 성실볼
                       if (_phase == _Phase.throwing)
@@ -280,7 +341,7 @@ class _ExploreViewState extends State<ExploreView> {
                   ),
                   const SizedBox(height: 10),
                   AbsorbPointer(
-                    absorbing: _phase == _Phase.throwing || _phase == _Phase.popup,
+                    absorbing: _phase == _Phase.searching || _phase == _Phase.throwing || _phase == _Phase.popup,
                     child: Row(
                       children: [
                         SizedBox(
@@ -320,6 +381,47 @@ class _ExploreViewState extends State<ExploreView> {
         if (_phase == _Phase.popup && r != null)
           Positioned.fill(child: _CatchPopup(result: r, bobUp: widget.bobUp, onClose: _closePopup)),
       ],
+    );
+  }
+
+  /// 덤불 흔들림: 찾는 중엔 빠르고 크게, 평소엔 천천히.
+  double _shake(int dir) =>
+      _phase == _Phase.searching ? dir * (_searchTick.isEven ? 6.0 : -6.0) : dir * (widget.bobUp ? -3.0 : 3.0);
+
+  Widget _searchBadge() => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: AppColors.nightDeep.withValues(alpha: 0.85),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: AppColors.nightLine2, width: 2),
+        ),
+        child: Text('탐색 중${'.' * (_searchTick % 3 + 1)}',
+            style: const TextStyle(
+                fontFamily: AppTheme.pixelFont, fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.text)),
+      );
+
+  Widget _resultBanner(String text) {
+    final found = !text.startsWith('발견');
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0.6, end: 1),
+      duration: const Duration(milliseconds: 260),
+      curve: Curves.easeOutBack,
+      builder: (context, k, child) => Transform.scale(scale: k, child: child),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: found ? AppColors.yellowButton : AppColors.nightDeep,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.ink, width: 2),
+          boxShadow: const [BoxShadow(color: AppColors.ink, offset: Offset(0, 3))],
+        ),
+        child: Text(text,
+            style: TextStyle(
+                fontFamily: AppTheme.pixelFont,
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: found ? AppColors.brownText : AppColors.text)),
+      ),
     );
   }
 

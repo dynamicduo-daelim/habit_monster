@@ -6,6 +6,7 @@ import '../../core/widgets/pixel_icon.dart';
 import '../../core/widgets/pixel_widgets.dart';
 import '../../core/widgets/popup_card.dart';
 import '../../data/pixel_icons.dart';
+import '../../core/theme/app_theme.dart';
 
 /// 홈의 출석 아이콘 → 출석부 창을 띄운다. [onGoChat]은 "습관 체크하러 가기".
 Future<void> showAttendancePopup(BuildContext context, {required VoidCallback onGoChat, DateTime? today}) {
@@ -95,7 +96,7 @@ class AttendancePopup extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
                       Text('연속 ${s.currentStreak}일',
-                          style: const TextStyle(
+                          style: const TextStyle(fontFamily: AppTheme.pixelFont, 
                               fontSize: 22, height: 1.2, fontWeight: FontWeight.w700, color: AppColors.goldDeep)),
                       const Spacer(),
                       Text('함께한 지 ${s.dayCount}일째',

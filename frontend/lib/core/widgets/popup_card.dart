@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../theme/app_colors.dart';
+import '../theme/app_theme.dart';
 
 /// 화면 가운데 뜨는 팝업 카드 (어두운 배경 + 위에 걸린 리본).
 class PopupCard extends StatelessWidget {
@@ -60,7 +61,12 @@ class PopupCard extends StatelessWidget {
                         border: Border.all(color: AppColors.ink, width: 3),
                       ),
                       child:
-                          Text(title, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: ribbonText)),
+                          Text(title,
+                              style: TextStyle(
+                                  fontFamily: AppTheme.pixelFont,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                  color: ribbonText)),
                     ),
                   ),
                 ),

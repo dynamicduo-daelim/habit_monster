@@ -4,7 +4,8 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/widgets.dart';
 
 /// 배경음악 곡. 파일은 `assets/audio/bgm/<이름>.mp3`.
-enum BgmTrack { intro, home, chat, explore, shop }
+/// `study…`는 공부 타이머 집중 중의 공부 소리(ASMR — 직접 만든 소리, 2026-11-02), [quiet]는 아무것도 틀지 않음.
+enum BgmTrack { intro, home, chat, explore, shop, studyRain, studyPencil, studyCafe, quiet }
 
 /// 배경음악. 화면이 "지금 이 곡"을 요청하면 이전 곡을 줄이고 새 곡을 키운다(크로스페이드).
 abstract class Bgm extends ChangeNotifier {
@@ -118,7 +119,7 @@ class AudioBgm extends Bgm with WidgetsBindingObserver {
     _busy = true;
     try {
       while (!_away) {
-        final target = _on ? _want : null;
+        final target = _on && _want != BgmTrack.quiet ? _want : null;
         if (target == _playing) break;
         if (_playing != null) {
           await _fadeTo(0);

@@ -14,3 +14,8 @@ _to_delete/
 docs/로컬-테스트-계정.md
 docs/handoff/
 backend/db/제안-*.md
+
+# 비밀 값 (API 키 · DB 비밀번호) — 어느 폴더든 .env는 올리지 않는다. 예시 파일만 올린다
+.env
+.env.*
+!.env.example

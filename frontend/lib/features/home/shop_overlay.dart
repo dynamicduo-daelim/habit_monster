@@ -8,6 +8,7 @@ import '../../core/widgets/pixel_widgets.dart';
 import '../../data/catalog.dart';
 import '../../data/models.dart';
 import 'home_parts.dart';
+import '../../core/theme/app_theme.dart';
 
 /// 상점: 줄무늬 차양 + 상점 주인 마루 + 물약 3종 · 성실볼.
 class ShopOverlay extends StatelessWidget {
@@ -73,9 +74,8 @@ class ShopOverlay extends StatelessWidget {
                           ],
                           const SizedBox(height: 10),
                           const Text(
-                            '물약은 몬스터 정보에서 사용 · 레벨당 ${Economy.expPerLevel} EXP · '
-                            'Lv.${Economy.firstEvolutionLevel} 1차 진화, Lv.${Economy.finalEvolutionLevel} 최종 진화',
-                            style: TextStyle(fontSize: 9.5, height: 1.8, color: AppColors.footnoteBrown),
+                            '물약은 몬스터 교감 창의 간식에서 써요 · ${Economy.expPerLevel} EXP마다 레벨업',
+                            style: TextStyle(fontSize: 11, height: 1.7, color: AppColors.footnoteBrown),
                           ),
                         ],
                       ),
@@ -93,11 +93,12 @@ class ShopOverlay extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 5),
                     decoration: BoxDecoration(
                       color: AppColors.woodDark,
-                      border: Border.all(color: AppColors.inkBrown, width: 4),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: AppColors.inkBrown, width: 2),
                       boxShadow: const [BoxShadow(color: AppColors.woodDeep, offset: Offset(0, 4))],
                     ),
                     child: const Text('상점',
-                        style: TextStyle(
+                        style: TextStyle(fontFamily: AppTheme.pixelFont, 
                           fontSize: 16,
                           fontWeight: FontWeight.w700,
                           color: AppColors.paper,
@@ -106,7 +107,7 @@ class ShopOverlay extends StatelessWidget {
                   ),
                 ),
               ),
-              Positioned(right: 10, top: 8, child: BrownCloseButton(onTap: onClose)),
+              Positioned(right: 10, top: 8, child: BrownCloseButton(onTap: onClose, radius: 10)),
             ],
           ),
         ),
@@ -207,32 +208,23 @@ class _Keeper extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
                   decoration: BoxDecoration(
                     color: AppColors.cream,
-                    border: Border.all(color: AppColors.inkBrown, width: 3),
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(10),
+                      topRight: Radius.circular(10),
+                      bottomRight: Radius.circular(10),
+                      bottomLeft: Radius.circular(2),
+                    ),
+                    border: Border.all(color: AppColors.inkBrown, width: 2),
+                    boxShadow: const [BoxShadow(color: AppColors.inkBrown, offset: Offset(0, 3))],
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text('상점 주인 마루',
-                          style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.w700, color: AppColors.red)),
+                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.red)),
                       const SizedBox(height: 2),
-                      Text(line, style: const TextStyle(fontSize: 11.5, height: 1.8, color: AppColors.brownText)),
+                      Text(line, style: const TextStyle(fontSize: 12.5, height: 1.6, color: AppColors.brownText)),
                     ],
-                  ),
-                ),
-                Positioned(
-                  left: -6,
-                  bottom: 15,
-                  child: Container(
-                    width: 9,
-                    height: 16,
-                    decoration: const BoxDecoration(
-                      color: AppColors.cream,
-                      border: Border(
-                        left: BorderSide(color: AppColors.inkBrown, width: 3),
-                        top: BorderSide(color: AppColors.inkBrown, width: 3),
-                        bottom: BorderSide(color: AppColors.inkBrown, width: 3),
-                      ),
-                    ),
                   ),
                 ),
               ],
@@ -254,25 +246,32 @@ class _ItemRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isBall = item.id == Catalog.seongsilBall.id;
-    final desc = isBall
-        ? '탐색에서 만난 몬스터에게 던져서 잡아요 · 1번에 1개'
-        : '+${item.exp} EXP · 골드당 효율 ${item.goldEfficiency.toStringAsFixed(2)}';
+    // 하급보다 골드당 경험치가 몇 % 많은지 (하급은 기준이라 안 적는다)
+    final bonus = isBall ? 0 : ((item.goldEfficiency / Catalog.items.first.goldEfficiency - 1) * 100).round();
+    final desc = isBall ? '탐색에서 만난 몬스터를 잡아요' : '+${item.exp} EXP${bonus > 0 ? ' · $bonus% 이득' : ''}';
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
       decoration: BoxDecoration(
         color: AppColors.cream,
-        border: Border.all(color: AppColors.inkBrown, width: 3),
-        boxShadow: const [BoxShadow(color: AppColors.tanShadow, offset: Offset(0, 4))],
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.inkBrown, width: 2),
+        boxShadow: const [BoxShadow(color: AppColors.inkBrown, offset: Offset(0, 3))],
       ),
       child: Row(
         children: [
           Container(
-            width: 52,
-            height: 52,
-            decoration: BoxDecoration(border: Border.all(color: AppColors.inkBrown, width: 3)),
-            child: CustomPaint(
-              painter: const CheckerPainter(AppColors.checker, AppColors.offWhite),
-              child: Center(child: PixelImage(item.asset, height: 34)),
+            width: 56,
+            height: 56,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: AppColors.inkBrown, width: 2),
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(6),
+              child: CustomPaint(
+                painter: const CheckerPainter(AppColors.checker, AppColors.offWhite),
+                child: Center(child: PixelImage(item.asset, height: 36)),
+              ),
             ),
           ),
           const SizedBox(width: 11),
@@ -281,30 +280,34 @@ class _ItemRow extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(item.name,
-                    style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: AppColors.brownText)),
+                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.brownText)),
                 const SizedBox(height: 4),
-                Text(desc, style: const TextStyle(fontSize: 10, height: 1.5, color: AppColors.brownMuted)),
+                Text(desc,
+                    style: TextStyle(
+                        fontSize: 11.5,
+                        height: 1.4,
+                        fontWeight: isBall ? FontWeight.w400 : FontWeight.w700,
+                        color: isBall ? AppColors.brownMuted : AppColors.tierMidText)),
                 const SizedBox(height: 4),
                 Container(
-                  color: AppColors.woodDark,
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  child: Text('보유 $owned개', style: const TextStyle(fontSize: 9.5, color: AppColors.paper)),
+                  decoration: BoxDecoration(color: AppColors.woodDark, borderRadius: BorderRadius.circular(5)),
+                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                  child: Text('보유 $owned개',
+                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.paper)),
                 ),
               ],
             ),
           ),
           const SizedBox(width: 11),
           SizedBox(
-            width: 76,
-            child: PixelButton(
+            width: 84,
+            child: RoundBlockButton(
               label: '${item.price}G',
               onPressed: canBuy ? onBuy : null,
-              height: 44,
-              depth: 4,
+              height: 46,
               color: AppColors.yellowButton,
               shadowColor: AppColors.yellowShadow,
               borderColor: AppColors.inkBrown,
-              padding: EdgeInsets.zero,
               child: FittedBox(
                 fit: BoxFit.scaleDown,
                 child: Row(

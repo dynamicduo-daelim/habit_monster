@@ -120,6 +120,12 @@ class HttpAuthService implements AuthService, TokenSource {
     await social.signOut(session.provider);
   }
 
+  @override
+  Future<void> forgetSavedLogin() async {
+    await store.clear();
+    _accessToken = null;
+  }
+
   /// 가입 · 로그인 → 토큰 저장 → `GET /me`로 계정 정보.
   Future<AuthSession> _login(String path, Map<String, Object?> body) async {
     final json = await _send('POST', path, body) as Map<String, dynamic>;

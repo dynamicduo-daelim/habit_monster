@@ -391,6 +391,24 @@ public class HabitService {
 	public record Revision(int revision, List<RevisedHabit> habits, int overallRate) {
 	}
 
+	/** AI 대화 해석에 넘길 오늘 습관 한 줄 (값으로 넘긴다 — {@code ai} 모듈은 습관 테이블을 읽지 않는다). */
+	public record ChatHabit(long habitId, String name, String categoryName, String unit, String scoringMode, Number target,
+			Number maxValue, List<Number> options) {
+	}
+
+	/** 오늘 대화로 체크할 습관 ({@link #board}와 같은 대상, 등록 순서). AI 해석(챗봇 대화)의 문맥 · 검사용. */
+	@Transactional(readOnly = true)
+	public List<ChatHabit> chatHabits(long userId) {
+		LocalDate today = dates.today();
+		List<CheckinHabitRow> rows = habits.dailyCheckin(userId, today).map(c -> habits.submittedHabits(c.id()))
+			.orElseGet(() -> habits.targetHabits(userId, today));
+		return rows.stream().sorted(Comparator.comparingLong(CheckinHabitRow::habitId))
+			.map(r -> new ChatHabit(r.habitId(), r.name(), r.categoryName(), r.unit(), r.scoringMode(),
+					Decimals.plain(r.target()), r.maxValue() == null ? null : Decimals.plain(r.maxValue()),
+					scoring.options(measure(r)).stream().map(Decimals::plain).toList()))
+			.toList();
+	}
+
 	/** 오늘 체크인 화면: 제출 전이면 대상 습관, 제출 후면 제출에 들어간 습관(최신 값과 함께). */
 	@Transactional(readOnly = true)
 	public Board board(long userId) {

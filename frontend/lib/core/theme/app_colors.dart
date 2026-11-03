@@ -17,6 +17,16 @@ class AppColors {
   static const Color textMuted = Color(0xFF9B91C4);
   static const Color lockedMuted = Color(0xFF6B6390); // 통계: 열지 않은 카테고리 테두리 · 글자
   static const Color barShine = Color(0x33FFFFFF); // 통계: 막대 윗면 밝은 줄
+  static const Color rateLow = Color(0xFFFF7A6B); // 통계: 달성률 50% 미만 (코랄)
+  static const Color rateMid = Color(0xFFFFC83C); // 통계: 50 ~ 79% (노랑)
+  static const Color rateHigh = Color(0xFF5FD3A0); // 통계: 80% 이상 (민트)
+
+  // 공부 타이머 공부방 (2026-11-02)
+  static const Color studyRoom = Color(0xFF2A2150); // 방 테두리 안 바탕
+  static const Color studyFloor = Color(0xFF3A2C55); // 바닥
+  static const Color chalkboard = Color(0xFF2E4A3A); // 칠판
+  static const Color chalkSoft = Color(0xFFCFE8D8); // 칠판 위 작은 글씨
+  static const Color bookBlue = Color(0xFF5FAAE8); // 책장 파란 책
 
   // 밝은 게임 UI (상점 · 가방 · 몬스터 정보 · 온보딩 카드)
   static const Color ink = Color(0xFF0D0B16);

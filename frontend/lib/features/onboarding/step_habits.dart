@@ -11,6 +11,7 @@ import '../../data/models.dart';
 import '../../data/pixel_icons.dart';
 import 'onboarding_controller.dart';
 import 'onboarding_parts.dart';
+import '../../core/theme/app_theme.dart';
 
 /// 온보딩 2단계: 습관 퀘스트 만들기. 무엇을 → 얼마나 → 언제까지 순서로 한 단계씩.
 class StepHabits extends StatelessWidget {
@@ -175,7 +176,7 @@ class _QuestForm extends StatelessWidget {
     return [
       Text(c.draftName.text.trim(),
           textAlign: TextAlign.center,
-          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.brownText)),
+          style: const TextStyle(fontFamily: AppTheme.pixelFont, fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.brownText)),
       Wrap(
         alignment: WrapAlignment.center,
         spacing: 6,
@@ -205,7 +206,7 @@ class _QuestForm extends StatelessWidget {
       if (c.draftIsOX)
         Container(
           padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
+          decoration: BoxDecoration(borderRadius: BorderRadius.circular(10), 
             color: AppColors.parchment,
             border: Border.all(color: AppColors.ink, width: 3),
           ),
@@ -233,7 +234,7 @@ class _QuestForm extends StatelessWidget {
       ),
       Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
+        decoration: BoxDecoration(borderRadius: BorderRadius.circular(10), 
           color: AppColors.brownText,
           border: Border.all(color: AppColors.ink, width: 3),
         ),
@@ -271,7 +272,7 @@ class _StepTabs extends StatelessWidget {
               children: [
                 Container(
                   height: 6,
-                  decoration: BoxDecoration(
+                  decoration: BoxDecoration(borderRadius: BorderRadius.circular(10), 
                     color: i <= step ? AppColors.gold : AppColors.disabled,
                     border: Border.all(color: AppColors.ink, width: 2),
                   ),
@@ -437,7 +438,7 @@ class _TargetStepper extends StatelessWidget {
         Expanded(
           child: Container(
             height: 52,
-            decoration: BoxDecoration(
+            decoration: BoxDecoration(borderRadius: BorderRadius.circular(10), 
               color: AppColors.brownText,
               border: Border.all(color: AppColors.ink, width: 3),
             ),
@@ -446,7 +447,7 @@ class _TargetStepper extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Text(formatNum(c.draftTarget),
-                    style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w700, color: AppColors.butter)),
+                    style: const TextStyle(fontFamily: AppTheme.pixelFont, fontSize: 26, fontWeight: FontWeight.w700, color: AppColors.butter)),
                 const SizedBox(width: 6),
                 Text(unit, style: const TextStyle(fontSize: 13, color: AppColors.parchment)),
               ],
@@ -529,7 +530,7 @@ class _HabitRow extends StatelessWidget {
         ' · ${Catalog.periods[habit.periodIndex].$1} ${Catalog.periodMult(habit.periodIndex)}';
     return Container(
       padding: const EdgeInsets.fromLTRB(10, 8, 6, 8),
-      decoration: BoxDecoration(
+      decoration: BoxDecoration(borderRadius: BorderRadius.circular(10), 
         color: AppColors.parchment,
         border: Border.all(color: AppColors.ink, width: 3),
         boxShadow: const [BoxShadow(color: AppColors.ink, offset: Offset(0, 4))],

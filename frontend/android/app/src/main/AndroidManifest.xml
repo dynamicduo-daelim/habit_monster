@@ -2,7 +2,7 @@
     <!-- 서버 · 카카오 · 구글 로그인 -->
     <uses-permission android:name="android.permission.INTERNET"/>
     <application
-        android:label="루틴몬"
+        android:label="모아루틴"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

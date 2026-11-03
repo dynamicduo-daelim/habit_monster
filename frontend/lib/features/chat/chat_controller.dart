@@ -11,8 +11,8 @@ import '../../data/models.dart';
 import '../../data/results.dart';
 import 'chat_brain.dart';
 
-/// 대화 단계: 시작 전 · 했어/못 했어 · 수행량 입력 · 체크 끝 · 탐색 화면.
-enum ChatStep { idle, yesNo, amount, done, explore }
+/// 대화 단계: 시작 전 · 했어/못 했어 · 수행량 입력 · 확인 카드(말로 답했을 때) · 체크 끝 · 탐색 화면.
+enum ChatStep { idle, yesNo, amount, confirm, done, explore }
 
 class ChatMessage {
   const ChatMessage.bot(this.text, {this.reward, this.levelUp}) : fromBot = true;
@@ -36,8 +36,15 @@ class ChatMessage {
 /// 말은 [ChatBrain]이, 규칙 계산(상위 3개 반영 · 골드 · 레벨)은 [GameState]가 한다.
 class ChatController extends ChangeNotifier {
   /// [repository]를 안 주면 앱 안에서 계산한다 (테스트 · 시연).
-  ChatController({required this.state, GameRepository? repository, this.brain = const ScriptedChatBrain()})
-      : repository = repository ?? LocalGameRepository(state);
+  ChatController({
+    required this.state,
+    GameRepository? repository,
+    this.brain = const ScriptedChatBrain(),
+    this.timerMinutes,
+  }) : repository = repository ?? LocalGameRepository(state);
+
+  /// 오늘 공부 타이머로 잰 분 (습관 id → 분). 있으면 그 습관을 물을 때 미리 채운다.
+  final int Function(String habitId)? timerMinutes;
 
   /// 읽기 (오늘 기록 · 남은 탐색 · 볼 개수 …).
   final GameState state;
@@ -56,6 +63,9 @@ class ChatController extends ChangeNotifier {
   /// 확정한 기록을 고치려고 다시 묻는 중 ([recheck]).
   bool _rechecking = false;
 
+  /// 말(글)로 답한 적이 있다 → 마지막에 바로 제출하지 않고 확인 카드를 보여 준다 (AI가 잘못 알아들었을 수 있어서).
+  bool _usedText = false;
+
   /// 챗봇이 대답을 만드는 중 (AI 연결 시 입력을 막고 "…"을 보여준다).
   bool busy = false;
 
@@ -64,6 +74,9 @@ class ChatController extends ChangeNotifier {
 
   /// 그 몬스터에게 던진 성실볼 결과 (아직 안 던졌으면 null).
   CatchResult? lastCatch;
+
+  /// 방금 "탐색하기"로 나온 결과인지 (탐색 화면이 "찾는 중…" 연출을 한다). 남아 있던 등장을 되살린 것이면 false.
+  bool justExplored = false;
 
   bool _disposed = false;
 
@@ -79,8 +92,18 @@ class ChatController extends ChangeNotifier {
     if (h == null || m == null || m.isOX) return const [];
     double r1(double v) => (v * 10).round() / 10;
     final raw = m.unit == '점' ? const [3.0, 4.0, 5.0] : [r1(h.target * 0.5) < 1 ? 1.0 : r1(h.target * 0.5), h.target, r1(h.target * 1.5)];
-    return {for (final v in raw) state.recordableValue(h, v)}.toList();
+    final timer = timedMinutes(h);
+    return {if (timer > 0) state.recordableValue(h, timer.toDouble()), for (final v in raw) state.recordableValue(h, v)}.toList();
   }
+
+  /// 오늘 공부 타이머로 잰 분 (시간(분) 습관만, 없으면 0).
+  int timedMinutes(Habit h) => state.measureOf(h).unit == '분' ? (timerMinutes?.call(h.id) ?? 0) : 0;
+
+  /// 확인 카드에 보일 답 (습관 순서).
+  List<(Habit, double)> get draft => [
+        for (final h in _habits)
+          if (_answers[h.id] case final v?) (h, v),
+      ];
 
   /// 대화 상대 (몬스터가 하나도 없으면 null).
   OwnedMonster? get partner => state.monsterByUid(state.chatPartnerUid) ?? state.monsters.firstOrNull;
@@ -108,6 +131,7 @@ class ChatController extends ChangeNotifier {
     encounter = null;
     _answers.clear();
     _rechecking = false;
+    _usedText = false;
     final p = partner;
     final sp = p == null ? null : Catalog.speciesById(p.speciesId);
     messages.add(ChatMessage.bot(await _think(brain.greet(sp))));
@@ -121,17 +145,108 @@ class ChatController extends ChangeNotifier {
     await _ask(0);
   }
 
+  /// [i]번째부터 아직 답이 없는 습관을 묻는다. 다 답했으면 제출(말로 답한 적이 있으면 확인 카드).
   Future<void> _ask(int i) async {
-    _habitIndex = i;
+    var k = i;
+    while (k < _habits.length && _answers.containsKey(_habits[k].id)) {
+      k++;
+    }
+    _habitIndex = k;
     final h = currentHabit;
     if (h == null) {
+      if (_usedText) {
+        step = ChatStep.confirm;
+        messages.add(const ChatMessage.bot('오늘 기록 이대로 적을까? 아래에서 확인해 줘!'));
+        _notify();
+        return;
+      }
       await _confirm();
       return;
-    } else {
-      messages.add(ChatMessage.bot(await _think(brain.askHabit(h, Catalog.category(h.categoryId)))));
-      step = ChatStep.yesNo;
     }
+    messages.add(ChatMessage.bot(await _think(brain.askHabit(h, Catalog.category(h.categoryId)))));
+    final timer = timedMinutes(h);
+    if (timer > 0) messages.add(ChatMessage.bot('타이머로 $timer분 쟀네! 했어를 누르고 $timer분을 고르면 돼.'));
+    step = ChatStep.yesNo;
     _notify();
+  }
+
+  /// 말(글)로 답하기: 서버 AI가 해석한 기록 후보를 답에 넣고, 아직 안 들은 습관을 이어서 묻는다.
+  /// AI가 없거나(시연 모드) 실패하면 말 속의 숫자 · "못 했어"만 읽는다.
+  Future<void> sendText(String raw) async {
+    final text = raw.trim();
+    if (text.isEmpty || busy || (step != ChatStep.yesNo && step != ChatStep.amount)) return;
+    final asking = currentHabit;
+    final history = [
+      for (final m in messages.length > 10 ? messages.sublist(messages.length - 10) : messages)
+        (m.fromBot ? 'BOT' : 'USER', m.text),
+    ];
+    messages.add(ChatMessage.me(text));
+    _notify();
+    final r = await _call(() => _think(repository.interpret(
+          message: text,
+          history: history,
+          draft: Map.of(_answers),
+          askingHabitId: asking?.id,
+        )));
+    if (r == null || (!r.fromAi && r.answers.isEmpty)) {
+      if (r != null) messages.add(ChatMessage.bot(r.reply));
+      await _readLocally(text, asking);
+      return;
+    }
+    messages.add(ChatMessage.bot(r.reply));
+    // 힘든 감정 · 위기 신호: 습관 질문을 밀어붙이지 않고 그 자리에 머문다 (버튼으로 이어 갈 수 있다)
+    if (r.safety) {
+      _notify();
+      return;
+    }
+    _usedText = true;
+    for (final e in r.answers.entries) {
+      if (_habits.any((h) => h.id == e.key)) _answers[e.key] = e.value;
+    }
+    final again = r.askAgainHabitId;
+    final i = again == null ? -1 : _habits.indexWhere((h) => h.id == again);
+    if (i >= 0 && !_answers.containsKey(again)) {
+      _habitIndex = i;
+      final q = r.askAgainQuestion;
+      if (q != null && q.isNotEmpty && !r.reply.contains(q)) messages.add(ChatMessage.bot(q));
+      step = state.measureOf(_habits[i]).isOX ? ChatStep.yesNo : ChatStep.amount;
+      _notify();
+      return;
+    }
+    await _ask(0);
+  }
+
+  /// AI 없이: 말에 숫자가 있으면 그 값, "못/안 했어"면 0. 그 밖에는 버튼으로 알려 달라고 한다.
+  Future<void> _readLocally(String text, Habit? h) async {
+    if (h == null) return;
+    final n = RegExp(r'\d+(\.\d+)?').firstMatch(text);
+    if (RegExp(r'못|안 ?했').hasMatch(text)) {
+      _usedText = true;
+      return _record(0);
+    }
+    if (n != null) {
+      _usedText = true;
+      return _record(state.measureOf(h).isOX ? 1 : double.parse(n.group(0)!));
+    }
+    messages.add(const ChatMessage.bot('음… 잘 못 알아들었어. 아래 버튼으로 알려줄래?'));
+    _notify();
+  }
+
+  /// 확인 카드 [맞아] → 제출.
+  Future<void> confirmDraft() async {
+    if (step != ChatStep.confirm || busy) return;
+    _usedText = false;
+    messages.add(const ChatMessage.me('맞아!'));
+    await _confirm();
+  }
+
+  /// 확인 카드 [고칠래] → 처음부터 다시 묻는다.
+  Future<void> editDraft() async {
+    if (step != ChatStep.confirm || busy) return;
+    _answers.clear();
+    messages.add(const ChatMessage.me('고칠래'));
+    messages.add(const ChatMessage.bot('그럼 처음부터 하나씩 다시 물어볼게!'));
+    await _ask(0);
   }
 
   /// 했어 / 못 했어.
@@ -229,6 +344,7 @@ class ChatController extends ChangeNotifier {
     if (r == null) return;
     encounter = r;
     lastCatch = null;
+    justExplored = true;
     step = ChatStep.explore;
     _notify();
   }
@@ -240,6 +356,7 @@ class ChatController extends ChangeNotifier {
     final n = e.species!.name;
     encounter = e;
     lastCatch = null;
+    justExplored = false;
     messages.add(ChatMessage.bot('아까 만난 $n${josaIGa(n)} 아직 근처에 있어! 성실볼을 던져 볼까?'));
     step = ChatStep.explore;
   }

@@ -7,6 +7,7 @@ import '../../core/audio/bgm.dart';
 import '../../core/constants/app_assets.dart';
 import '../../core/state/game_repository.dart';
 import '../../core/state/game_state.dart';
+import '../../core/state/study_timer.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/format.dart';
 import '../../core/widgets/pixel_widgets.dart';
@@ -17,8 +18,9 @@ import '../shell/game_action.dart';
 import '../shell/main_shell.dart';
 import 'chat_controller.dart';
 import 'explore_view.dart';
+import 'study_timer_view.dart';
 
-/// 챗봇 탭: 대화 상대 고르기 + 습관 체크 대화 + 탐색.
+/// 챗봇 탭: [챗봇 | 공부 타이머] 칸 전환. 챗봇 = 대화 상대 고르기 + 습관 체크 대화(버튼 또는 말 — AI 해석, D-57) + 탐색.
 class ChatScreen extends StatefulWidget {
   const ChatScreen({super.key, this.active = true, this.controllerBuilder});
 
@@ -41,11 +43,25 @@ class _ChatScreenState extends State<ChatScreen> {
   static String _sigOf(GameState s) => s.habits.map((h) => h.id).join(',');
   final _scroll = ScrollController();
   final _amount = TextEditingController();
+
+  /// 말로 답하기 입력칸 (AI 해석).
+  final _text = TextEditingController();
+
+  /// 0 = 챗봇, 1 = 공부 타이머.
+  int _pane = 0;
+
+  /// 앱 전체 타이머 (없으면 이 화면만의 타이머 — 위젯 테스트).
+  late StudyTimer _timer;
+  StudyTimer? _ownTimer;
   int _lastCount = 0;
   ChatStep? _lastStep;
 
-  /// 탐색 화면이라 탐색 곡을 틀었는지.
-  bool _exploreMusic = false;
+  /// 셸에 부탁해 둔 이 탭의 곡 (탐색 곡 · 공부 소리 · null = 기본 챗봇 곡).
+  BgmTrack? _music;
+
+  /// 타이머 설정에서 소리를 고르면 2.5초 들려준다.
+  BgmTrack? _preview;
+  Timer? _previewTimer;
   bool _bobUp = false;
   Timer? _ticker;
 
@@ -58,7 +74,10 @@ class _ChatScreenState extends State<ChatScreen> {
     if (_c != null) return;
     final s = GameScope.read(context);
     final repo = GameRepositoryScope.of(context);
-    _c = (widget.controllerBuilder ?? (st) => ChatController(state: st, repository: repo))(s)..addListener(_onChange);
+    _timer = StudyTimerScope.maybeOf(context) ?? (_ownTimer ??= StudyTimer());
+    _c = (widget.controllerBuilder ??
+        (st) => ChatController(state: st, repository: repo, timerMinutes: (id) => _timer.todayMinutes(id)))(s)
+      ..addListener(_onChange);
     _partnerUid = s.chatPartnerUid;
     _habitSig = _sigOf(s);
     _c!.start();
@@ -98,10 +117,13 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void dispose() {
     _ticker?.cancel();
+    _previewTimer?.cancel();
     _c?.removeListener(_onChange);
     _c?.dispose();
     _scroll.dispose();
     _amount.dispose();
+    _text.dispose();
+    _ownTimer?.dispose();
     super.dispose();
   }
 
@@ -121,16 +143,58 @@ class _ChatScreenState extends State<ChatScreen> {
     _amount.clear();
   }
 
+  Future<void> _sendText() async {
+    final t = _text.text;
+    if (t.trim().isEmpty) return;
+    _text.clear();
+    await _c!.sendText(t);
+  }
+
+  /// 위쪽 [챗봇 | 공부 타이머] 전환.
+  Widget _paneTabs() {
+    Widget tab(int i, String label) => Expanded(
+          child: Semantics(
+            button: true,
+            selected: _pane == i,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => setState(() => _pane = i),
+              child: Container(
+                height: 40,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: _pane == i ? AppColors.purpleDeep : Colors.transparent,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(label,
+                    style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: _pane == i ? FontWeight.w700 : FontWeight.w400,
+                        color: _pane == i ? AppColors.goldLight : AppColors.textMuted)),
+              ),
+            ),
+          ),
+        );
+    return Container(
+      padding: const EdgeInsets.fromLTRB(10, 8, 10, 6),
+      color: AppColors.nightPanel,
+      child: Row(children: [tab(0, '챗봇'), const SizedBox(width: 6), tab(1, '공부 타이머')]),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final s = GameScope.of(context);
     final c = _c!;
-    // 탐색 중엔 탐색 곡, 돌아오면 챗봇 곡 (그리기가 끝난 뒤 셸에 알린다)
+    // 탐색 중엔 탐색 곡, 공부 타이머로 집중하는 동안엔 공부 소리, 아니면 챗봇 곡 (그리기가 끝난 뒤 셸에 알린다).
+    // 집중 → 쉬는 시간은 시간만 흘러 바뀌므로 0.5초마다 다시 그릴 때([_ticker]) 같이 본다.
     final exploring = c.step == ChatStep.explore;
-    if (exploring != _exploreMusic) {
-      _exploreMusic = exploring;
+    final focusing = _timer.running && _timer.phase == StudyPhase.focus;
+    final music = _preview ?? (exploring ? BgmTrack.explore : (focusing ? _timer.sound.track : null));
+    if (music != _music) {
+      _music = music;
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) MainShell.maybeOf(context)?.setMusicOverride(MainShell.chatTab, exploring ? BgmTrack.explore : null);
+        if (mounted) MainShell.maybeOf(context)?.setMusicOverride(MainShell.chatTab, music);
       });
     }
     // 홈 교감 창에서 "대화 상대로"를 눌렀거나 여기서 바꿨으면 대화를 새로 시작.
@@ -150,6 +214,25 @@ class _ChatScreenState extends State<ChatScreen> {
       children: [
         Column(
           children: [
+            if (c.step != ChatStep.explore) _paneTabs(),
+            if (_pane == 1 && c.step != ChatStep.explore)
+              Expanded(
+                child: StudyTimerView(
+                  timer: _timer,
+                  onSaved: (m) {
+                    if (m > 0) MainShell.maybeOf(context)?.toast('공부 $m분을 기록했어요');
+                  },
+                  onGoChat: () => setState(() => _pane = 0),
+                  onPreview: (track) {
+                    _previewTimer?.cancel();
+                    setState(() => _preview = track);
+                    _previewTimer = Timer(const Duration(milliseconds: 2500), () {
+                      if (mounted) setState(() => _preview = null);
+                    });
+                  },
+                ),
+              )
+            else ...[
             _partnerBar(s, c),
             Expanded(
               child: c.step == ChatStep.explore
@@ -161,6 +244,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       ],
                     ),
             ),
+            ],
           ],
         ),
         if (_buyingBall)
@@ -260,13 +344,22 @@ class _ChatScreenState extends State<ChatScreen> {
       case ChatStep.idle:
         content = _GoldButton(label: '오늘 습관 체크 시작', onTap: c.start);
       case ChatStep.yesNo:
-        content = Row(
+        content = Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Expanded(child: _DarkButton(label: '못 했어', onTap: () => c.answer(false))),
-            const SizedBox(width: 9),
-            Expanded(child: _GoldButton(label: '했어!', onTap: () => c.answer(true))),
+            _textRow(),
+            const SizedBox(height: 9),
+            Row(
+              children: [
+                Expanded(child: _DarkButton(label: '못 했어', onTap: () => c.answer(false))),
+                const SizedBox(width: 9),
+                Expanded(child: _GoldButton(label: '했어!', onTap: () => c.answer(true))),
+              ],
+            ),
           ],
         );
+      case ChatStep.confirm:
+        content = _confirmCard(c);
       case ChatStep.amount:
         final unit = c.currentMeasure?.unit ?? '';
         content = Column(
@@ -379,6 +472,101 @@ class _ChatScreenState extends State<ChatScreen> {
         border: Border(top: BorderSide(color: AppColors.nightLine, width: 3)),
       ),
       child: AbsorbPointer(absorbing: c.busy, child: content),
+    );
+  }
+
+  /// 말로 답하기: "아침에 30분 뛰었어"처럼 쓰면 AI가 알아듣는다 (서버 모드). 시연 모드는 숫자만 읽는다.
+  Widget _textRow() {
+    return Row(
+      children: [
+        Expanded(
+          child: Container(
+            decoration: BoxDecoration(
+              color: AppColors.night,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: AppColors.nightLine2, width: 2),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            child: Semantics(
+              label: '말로 답하기',
+              child: TextField(
+                controller: _text,
+                maxLength: 300,
+                cursorColor: AppColors.gold,
+                style: const TextStyle(fontSize: 14, color: AppColors.text),
+                decoration: const InputDecoration(
+                  isDense: true,
+                  border: InputBorder.none,
+                  counterText: '',
+                  contentPadding: EdgeInsets.zero,
+                  hintText: '말로 알려줘도 돼 (예: 30분 뛰었어)',
+                  hintStyle: TextStyle(color: AppColors.textMuted, fontSize: 13),
+                ),
+                onSubmitted: (_) => _sendText(),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        _GoldButton(label: '보내기', onTap: _sendText, expand: false, shadow: false),
+      ],
+    );
+  }
+
+  /// 확인 카드: 말로 답한 기록을 제출 전에 보여 준다 (AI가 잘못 알아들었으면 [고칠래]).
+  Widget _confirmCard(ChatController c) {
+    final s = GameScope.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: AppColors.cream,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppColors.ink, width: 2),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text('이대로 기록할까?',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.brownText)),
+              const SizedBox(height: 8),
+              for (final (h, v) in c.draft)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 3),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(h.name, style: const TextStyle(fontSize: 13, color: AppColors.brownText)),
+                      ),
+                      Text(
+                          v <= 0
+                              ? '못 했어'
+                              : (s.measureOf(h).isOX ? '했어' : '${formatNum(v)}${s.measureOf(h).unit}'),
+                          style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: v <= 0 ? AppColors.brownMuted : AppColors.tierMidText)),
+                      if (c.timedMinutes(h) > 0 && v > 0) ...[
+                        const SizedBox(width: 6),
+                        const Text('타이머', style: TextStyle(fontSize: 11, color: AppColors.purple)),
+                      ],
+                    ],
+                  ),
+                ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 9),
+        Row(
+          children: [
+            Expanded(child: _DarkButton(label: '고칠래', onTap: c.editDraft)),
+            const SizedBox(width: 9),
+            Expanded(flex: 2, child: _GoldButton(label: '맞아!', onTap: c.confirmDraft)),
+          ],
+        ),
+      ],
     );
   }
 }

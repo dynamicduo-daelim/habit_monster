@@ -48,7 +48,7 @@ class Catalog {
   static const List<MonsterSpecies> species = [
     // ── 운동 · 불꽃 ──
     MonsterSpecies(
-      id: 'monkey', categoryId: 'ex', name: '불씨 원숭이', rarity: '흔함', unlockLevel: 1, asset: AppAssets.monkey, evolvedAsset: AppAssets.monkey2, fieldHeight: 72,
+      id: 'monkey', categoryId: 'ex', name: '불씨 원숭이', rarity: '흔함', unlockLevel: 1, asset: AppAssets.monkey, evolvedAsset: AppAssets.monkey2,
       description: '이마의 불씨는 몸을 움직인 만큼 자란다. 진화하면 꼬리 끝에도 불이 붙는다.',
       lines: {
         AffectionTier.low: ['끽…? 누구야?', '가만히 있으면 불씨가 작아져.', '(이마의 불씨가 깜빡인다)'],
@@ -57,7 +57,7 @@ class Catalog {
       },
     ),
     MonsterSpecies(
-      id: 'rabbit', categoryId: 'ex', name: '깡총 불토끼', rarity: '흔함', unlockLevel: 3, asset: AppAssets.rabbit, fieldHeight: 72,
+      id: 'rabbit', categoryId: 'ex', name: '깡총 불토끼', rarity: '흔함', unlockLevel: 3, asset: AppAssets.rabbit,
       description: '줄넘기 소리가 나면 어디선가 깡총 나타난다. 뛸 때마다 발끝이 따끈해진다.',
       lines: {
         AffectionTier.low: ['…깡총?', '(귀를 쫑긋 세운다)', '낯선 사람은 싫어.'],
@@ -66,7 +66,7 @@ class Catalog {
       },
     ),
     MonsterSpecies(
-      id: 'chicken', categoryId: 'ex', name: '횃불 닭', rarity: '보통', unlockLevel: 6, asset: AppAssets.chicken, evolvedAsset: AppAssets.chicken2, fieldHeight: 68,
+      id: 'chicken', categoryId: 'ex', name: '횃불 닭', rarity: '보통', unlockLevel: 6, asset: AppAssets.chicken, evolvedAsset: AppAssets.chicken2,
       description: '해 뜨기 전에 일어나 운동하는 사람을 좋아한다. 진화하면 볏이 횃불처럼 솟는다.',
       lines: {
         AffectionTier.low: ['꼬…?', '(고개를 갸웃한다)', '아직 아침 운동 안 했지?'],
@@ -75,7 +75,7 @@ class Catalog {
       },
     ),
     MonsterSpecies(
-      id: 'anaconda', categoryId: 'ex', name: '용암 아나콘다', rarity: '보통', unlockLevel: 9, asset: AppAssets.anaconda, fieldHeight: 66,
+      id: 'anaconda', categoryId: 'ex', name: '용암 아나콘다', rarity: '보통', unlockLevel: 9, asset: AppAssets.anaconda,
       description: '몸을 길게 늘이는 스트레칭의 달인. 근육이 풀릴수록 비늘이 붉게 빛난다.',
       lines: {
         AffectionTier.low: ['스으…', '(똬리를 더 단단히 튼다)', '…뭘 보는 거야.'],
@@ -84,7 +84,7 @@ class Catalog {
       },
     ),
     MonsterSpecies(
-      id: 'peacock', categoryId: 'ex', name: '노을 공작', rarity: '희귀', unlockLevel: 12, asset: AppAssets.peacock, fieldHeight: 72,
+      id: 'peacock', categoryId: 'ex', name: '노을 공작', rarity: '희귀', unlockLevel: 12, asset: AppAssets.peacock,
       description: '꾸준히 운동한 사람 앞에서만 깃을 편다. 펼친 깃은 노을빛 불꽃으로 물든다.',
       lines: {
         AffectionTier.low: ['…흥.', '깃은 아무 앞에서나 안 펴.', '(고개를 돌린다)'],
@@ -94,7 +94,7 @@ class Catalog {
     ),
     // ── 공부 · 번개 ──
     MonsterSpecies(
-      id: 'mouse', categoryId: 'st', name: '찌릿 쥐', rarity: '흔함', unlockLevel: 1, asset: AppAssets.mouse, fieldHeight: 70,
+      id: 'mouse', categoryId: 'st', name: '찌릿 쥐', rarity: '흔함', unlockLevel: 1, asset: AppAssets.mouse,
       description: '책장 넘기는 소리를 좋아한다. 집중할수록 배의 번개 무늬가 톡톡 빛난다.',
       lines: {
         AffectionTier.low: ['찌릿…? 누구세요?', '책은… 펴긴 했어?', '(배의 무늬가 희미하게 깜빡인다)'],
@@ -103,7 +103,7 @@ class Catalog {
       },
     ),
     MonsterSpecies(
-      id: 'deer', categoryId: 'st', name: '번개뿔 사슴', rarity: '흔함', unlockLevel: 3, asset: AppAssets.deer, fieldHeight: 74,
+      id: 'deer', categoryId: 'st', name: '번개뿔 사슴', rarity: '흔함', unlockLevel: 3, asset: AppAssets.deer,
       description: '뿔 끝으로 번뜩이는 생각을 모은다. 문제를 하나 풀 때마다 등의 무늬가 늘어난다.',
       lines: {
         AffectionTier.low: ['…(귀를 쫑긋)', '조용히 해 줄래? 생각 중이야.', '뿔은 만지지 마.'],
@@ -112,7 +112,7 @@ class Catalog {
       },
     ),
     MonsterSpecies(
-      id: 'swan', categoryId: 'st', name: '천둥 백조', rarity: '보통', unlockLevel: 6, asset: AppAssets.swan, evolvedAsset: AppAssets.swan2, fieldHeight: 74,
+      id: 'swan', categoryId: 'st', name: '천둥 백조', rarity: '보통', unlockLevel: 6, asset: AppAssets.swan, evolvedAsset: AppAssets.swan2,
       description: '오래 앉아 공부하는 사람 곁에 조용히 내려앉는다. 진화하면 날개에 번개 깃이 돋는다.',
       lines: {
         AffectionTier.low: ['…', '(깃을 정리하며 모른 척한다)', '시끄러운 건 싫어.'],
@@ -121,7 +121,7 @@ class Catalog {
       },
     ),
     MonsterSpecies(
-      id: 'lion', categoryId: 'st', name: '벼락 사자', rarity: '희귀', unlockLevel: 9, asset: AppAssets.lion, fieldHeight: 76,
+      id: 'lion', categoryId: 'st', name: '벼락 사자', rarity: '희귀', unlockLevel: 9, asset: AppAssets.lion,
       description: '끝까지 해내는 사람만 알아본다. 갈기 속에는 작은 벼락이 잠들어 있다.',
       lines: {
         AffectionTier.low: ['…크릉.', '쉽게 곁을 내주진 않아.', '(갈기가 지직거린다)'],
@@ -131,7 +131,7 @@ class Catalog {
     ),
     // ── 식습관 · 풀 ──
     MonsterSpecies(
-      id: 'turtle', categoryId: 'fd', name: '이끼 거북', rarity: '흔함', unlockLevel: 1, asset: AppAssets.turtle, fieldHeight: 64,
+      id: 'turtle', categoryId: 'fd', name: '이끼 거북', rarity: '흔함', unlockLevel: 1, asset: AppAssets.turtle,
       description: '천천히 꼭꼭 씹어 먹는 사람을 좋아한다. 등딱지의 이끼는 채소를 먹을수록 푸르러진다.',
       lines: {
         AffectionTier.low: ['…(등딱지에 숨는다)', '천천히… 먹어…', '물… 마셨어…?'],
@@ -140,7 +140,7 @@ class Catalog {
       },
     ),
     MonsterSpecies(
-      id: 'hedgehog', categoryId: 'fd', name: '잎새 고슴도치', rarity: '흔함', unlockLevel: 3, asset: AppAssets.hedgehog, fieldHeight: 70,
+      id: 'hedgehog', categoryId: 'fd', name: '잎새 고슴도치', rarity: '흔함', unlockLevel: 3, asset: AppAssets.hedgehog,
       description: '가시 대신 부드러운 잎이 돋아 있다. 야식 냄새가 나면 잎을 바짝 세운다.',
       lines: {
         AffectionTier.low: ['(잎을 바짝 세운다)', '야식 냄새… 나는데?', '가까이 오지 마.'],
@@ -149,7 +149,7 @@ class Catalog {
       },
     ),
     MonsterSpecies(
-      id: 'badger', categoryId: 'fd', name: '덤불 오소리', rarity: '보통', unlockLevel: 6, asset: AppAssets.badger, fieldHeight: 70,
+      id: 'badger', categoryId: 'fd', name: '덤불 오소리', rarity: '보통', unlockLevel: 6, asset: AppAssets.badger,
       description: '제철 채소와 열매를 귀신같이 찾아낸다. 편식하는 사람 앞에선 덤불 속에 숨어 버린다.',
       lines: {
         AffectionTier.low: ['킁킁… 뭐 먹었어?', '(덤불 뒤에서 지켜본다)', '편식은 싫어.'],
@@ -158,7 +158,7 @@ class Catalog {
       },
     ),
     MonsterSpecies(
-      id: 'platypus', categoryId: 'fd', name: '새순 오리너구리', rarity: '보통', unlockLevel: 9, asset: AppAssets.platypus, fieldHeight: 70,
+      id: 'platypus', categoryId: 'fd', name: '새순 오리너구리', rarity: '보통', unlockLevel: 9, asset: AppAssets.platypus,
       description: '하루 물 여덟 잔을 꼭 챙겨 마신다. 부리 끝의 새순은 물을 마실수록 자란다.',
       lines: {
         AffectionTier.low: ['꽉…?', '물은 마셨어?', '(부리를 꾹 다문다)'],
@@ -167,7 +167,7 @@ class Catalog {
       },
     ),
     MonsterSpecies(
-      id: 'owl', categoryId: 'fd', name: '숲지기 부엉이', rarity: '희귀', unlockLevel: 12, asset: AppAssets.owl, fieldHeight: 72,
+      id: 'owl', categoryId: 'fd', name: '숲지기 부엉이', rarity: '희귀', unlockLevel: 12, asset: AppAssets.owl,
       description: '숲의 열매를 지키는 부엉이. 규칙적으로 먹는 사람의 식탁을 밤새 지켜본다.',
       lines: {
         AffectionTier.low: ['부엉…', '(큰 눈으로 빤히 본다)', '아직 너를 몰라.'],
@@ -177,7 +177,7 @@ class Catalog {
     ),
     // ── 명상 · 물 ──
     MonsterSpecies(
-      id: 'koala', categoryId: 'md', name: '물방울 코알라', rarity: '흔함', unlockLevel: 1, asset: AppAssets.koala, evolvedAsset: AppAssets.koala2, fieldHeight: 70,
+      id: 'koala', categoryId: 'md', name: '물방울 코알라', rarity: '흔함', unlockLevel: 1, asset: AppAssets.koala, evolvedAsset: AppAssets.koala2,
       description: '숨을 천천히 쉬면 귀에 맺힌 물방울이 고요해진다. 진화하면 몸빛이 깊은 바다색이 된다.',
       lines: {
         AffectionTier.low: ['…(꾸벅)', '천천히… 숨 쉬어…', '서두르지 마.'],
@@ -186,7 +186,7 @@ class Catalog {
       },
     ),
     MonsterSpecies(
-      id: 'crocodile', categoryId: 'md', name: '개울 악어', rarity: '흔함', unlockLevel: 3, asset: AppAssets.crocodile, fieldHeight: 72,
+      id: 'crocodile', categoryId: 'md', name: '개울 악어', rarity: '흔함', unlockLevel: 3, asset: AppAssets.crocodile,
       description: '개울에 반쯤 잠겨 하루 종일 멍하니 있는다. 무서워 보여도 화를 내는 법이 없다.',
       lines: {
         AffectionTier.low: ['…(눈만 꿈뻑)', '물속이 편해.', '화난 거 아니야. 원래 이래.'],
@@ -195,7 +195,7 @@ class Catalog {
       },
     ),
     MonsterSpecies(
-      id: 'bat', categoryId: 'md', name: '안개 박쥐', rarity: '보통', unlockLevel: 6, asset: AppAssets.bat, fieldHeight: 60,
+      id: 'bat', categoryId: 'md', name: '안개 박쥐', rarity: '보통', unlockLevel: 6, asset: AppAssets.bat,
       description: '물안개 속에서 소리 없이 날아다닌다. 조용히 눈을 감은 사람 곁에 내려앉는다.',
       lines: {
         AffectionTier.low: ['…쉿.', '(안개 속으로 숨는다)', '시끄러우면 날아갈 거야.'],
@@ -204,7 +204,7 @@ class Catalog {
       },
     ),
     MonsterSpecies(
-      id: 'wolf', categoryId: 'md', name: '파도 늑대', rarity: '희귀', unlockLevel: 9, asset: AppAssets.wolf, fieldHeight: 74,
+      id: 'wolf', categoryId: 'md', name: '파도 늑대', rarity: '희귀', unlockLevel: 9, asset: AppAssets.wolf,
       description: '거친 파도 앞에서도 흔들리지 않는다. 마음을 다스리는 사람만 등에 태워 준다.',
       lines: {
         AffectionTier.low: ['…흥.', '아직 마음이 시끄럽네.', '(꼬리로 물을 친다)'],
@@ -214,7 +214,7 @@ class Catalog {
     ),
     // ── 수면 · 달빛 ──
     MonsterSpecies(
-      id: 'squirrel', categoryId: 'sl', name: '달밤 다람쥐', rarity: '흔함', unlockLevel: 1, asset: AppAssets.squirrel, fieldHeight: 70,
+      id: 'squirrel', categoryId: 'sl', name: '달밤 다람쥐', rarity: '흔함', unlockLevel: 1, asset: AppAssets.squirrel,
       description: '꼬리를 이불 삼아 일찍 잠든다. 볼주머니에는 꿈을 하나씩 모아 둔다.',
       lines: {
         AffectionTier.low: ['…졸려.', '(꼬리로 몸을 감싼다)', '(하품)'],
@@ -223,7 +223,7 @@ class Catalog {
       },
     ),
     MonsterSpecies(
-      id: 'axolotl', categoryId: 'sl', name: '별빛 우파루파', rarity: '흔함', unlockLevel: 3, asset: AppAssets.axolotl, fieldHeight: 62,
+      id: 'axolotl', categoryId: 'sl', name: '별빛 우파루파', rarity: '흔함', unlockLevel: 3, asset: AppAssets.axolotl,
       description: '밤이 되면 아가미가 별빛처럼 은은하게 빛난다. 휴대폰 불빛을 아주 싫어한다.',
       lines: {
         AffectionTier.low: ['…눈부셔.', '휴대폰… 아직 보는 거야?', '(아가미를 접는다)'],
@@ -232,7 +232,7 @@ class Catalog {
       },
     ),
     MonsterSpecies(
-      id: 'orangutan', categoryId: 'sl', name: '꿈결 오랑우탄', rarity: '보통', unlockLevel: 6, asset: AppAssets.orangutan, fieldHeight: 74,
+      id: 'orangutan', categoryId: 'sl', name: '꿈결 오랑우탄', rarity: '보통', unlockLevel: 6, asset: AppAssets.orangutan,
       description: '해가 지면 나뭇잎 침대를 정성껏 만든다. 같은 시간에 자는 사람을 좋아한다.',
       lines: {
         AffectionTier.low: ['…우우.', '(나뭇잎 침대를 고친다)', '늦게 자는 건 싫어.'],
@@ -241,7 +241,7 @@ class Catalog {
       },
     ),
     MonsterSpecies(
-      id: 'manta', categoryId: 'sl', name: '은하 가오리', rarity: '희귀', unlockLevel: 9, asset: AppAssets.manta, fieldHeight: 58,
+      id: 'manta', categoryId: 'sl', name: '은하 가오리', rarity: '희귀', unlockLevel: 9, asset: AppAssets.manta,
       description: '꿈과 꿈 사이를 헤엄쳐 다닌다. 깊이 잠든 사람의 꿈에만 나타난다.',
       lines: {
         AffectionTier.low: ['…', '(조용히 떠다닌다)', '아직 꿈이 얕아.'],
@@ -251,7 +251,7 @@ class Catalog {
     ),
     // ── 절약 · 금속 ──
     MonsterSpecies(
-      id: 'redpanda', categoryId: 'mn', name: '동전 레서판다', rarity: '흔함', unlockLevel: 1, asset: AppAssets.redPanda, fieldHeight: 70,
+      id: 'redpanda', categoryId: 'mn', name: '동전 레서판다', rarity: '흔함', unlockLevel: 1, asset: AppAssets.redPanda,
       description: '반짝이는 동전을 꼬리에 모아 둔다. 충동구매를 참을 때마다 털이 은빛으로 빛난다.',
       lines: {
         AffectionTier.low: ['…(꼬리를 감춘다)', '내 동전은 안 줘.', '오늘 뭐 샀어?'],
@@ -260,7 +260,7 @@ class Catalog {
       },
     ),
     MonsterSpecies(
-      id: 'hippo', categoryId: 'mn', name: '철갑 하마', rarity: '흔함', unlockLevel: 3, asset: AppAssets.hippo, fieldHeight: 70,
+      id: 'hippo', categoryId: 'mn', name: '철갑 하마', rarity: '흔함', unlockLevel: 3, asset: AppAssets.hippo,
       description: '입을 꽉 다문 채 지갑을 지킨다. 등의 철갑은 아낀 만큼 두꺼워진다.',
       lines: {
         AffectionTier.low: ['…(입을 꽉 다문다)', '지갑은 닫아 둬.', '흥.'],
@@ -269,7 +269,7 @@ class Catalog {
       },
     ),
     MonsterSpecies(
-      id: 'chameleon', categoryId: 'mn', name: '나사 카멜레온', rarity: '보통', unlockLevel: 6, asset: AppAssets.chameleon, fieldHeight: 72,
+      id: 'chameleon', categoryId: 'mn', name: '나사 카멜레온', rarity: '보통', unlockLevel: 6, asset: AppAssets.chameleon,
       description: '광고를 보면 몸 색을 바꿔 숨어 버린다. 사고 싶은 마음을 하루 미루는 게 특기다.',
       lines: {
         AffectionTier.low: ['…(벽 색으로 변한다)', '나 여기 없어.', '광고는 보지 마.'],
@@ -278,7 +278,7 @@ class Catalog {
       },
     ),
     MonsterSpecies(
-      id: 'octopus', categoryId: 'mn', name: '무쇠 문어', rarity: '보통', unlockLevel: 9, asset: AppAssets.octopus, fieldHeight: 72,
+      id: 'octopus', categoryId: 'mn', name: '무쇠 문어', rarity: '보통', unlockLevel: 9, asset: AppAssets.octopus,
       description: '여덟 다리로 수입과 지출을 따로따로 챙긴다. 계산이 맞아떨어지면 먹물 대신 은가루를 뿜는다.',
       lines: {
         AffectionTier.low: ['…(다리를 꼰다)', '계산 중이야. 방해하지 마.', '흐음.'],
@@ -287,7 +287,7 @@ class Catalog {
       },
     ),
     MonsterSpecies(
-      id: 'shark', categoryId: 'mn', name: '강철 상어', rarity: '보통', unlockLevel: 12, asset: AppAssets.shark, fieldHeight: 70,
+      id: 'shark', categoryId: 'mn', name: '강철 상어', rarity: '보통', unlockLevel: 12, asset: AppAssets.shark,
       description: '새는 돈 냄새를 멀리서도 맡는다. 강철 지느러미로 쓸데없는 지출을 싹둑 잘라 낸다.',
       lines: {
         AffectionTier.low: ['…킁.', '새는 돈 냄새가 나.', '(지느러미를 세운다)'],
@@ -296,7 +296,7 @@ class Catalog {
       },
     ),
     MonsterSpecies(
-      id: 'jaguar', categoryId: 'mn', name: '은빛 재규어', rarity: '희귀', unlockLevel: 15, asset: AppAssets.jaguar, fieldHeight: 72,
+      id: 'jaguar', categoryId: 'mn', name: '은빛 재규어', rarity: '희귀', unlockLevel: 15, asset: AppAssets.jaguar,
       description: '오래 모은 사람 앞에만 모습을 드러낸다. 은빛 무늬는 쌓인 저축만큼 선명해진다.',
       lines: {
         AffectionTier.low: ['…', '아직 모은 게 적네.', '(꼬리만 살랑인다)'],

@@ -4,6 +4,7 @@ import '../../data/pixel_icons.dart';
 import '../constants/app_assets.dart';
 import '../theme/app_colors.dart';
 import 'pixel_icon.dart';
+import '../theme/app_theme.dart';
 
 /// 픽셀 그림이 흐려지지 않게 그리는 이미지.
 class PixelImage extends StatelessWidget {
@@ -82,6 +83,7 @@ class PixelButton extends StatefulWidget {
     this.semanticLabel,
     this.borderColor = AppColors.ink,
     this.child,
+    this.radius = 10,
   });
   final String label;
   final VoidCallback? onPressed;
@@ -89,6 +91,9 @@ class PixelButton extends StatefulWidget {
   final Color shadowColor;
   final Color textColor;
   final Color disabledColor;
+
+  /// 모서리 둥글기 (2026-10-29부터 기본 10, D-54). 0이면 네모 픽셀 (교감 창).
+  final double radius;
   final Color disabledShadowColor;
   final Color disabledTextColor;
   final double height;
@@ -142,7 +147,9 @@ class _PixelButtonState extends State<PixelButton> {
             children: [
               Positioned(
                 left: 0, right: 0, bottom: 0, height: widget.height,
-                child: Container(color: shadow),
+                child: Container(
+                  decoration: BoxDecoration(color: shadow, borderRadius: BorderRadius.circular(widget.radius)),
+                ),
               ),
               AnimatedPositioned(
                 duration: const Duration(milliseconds: 60),
@@ -152,7 +159,11 @@ class _PixelButtonState extends State<PixelButton> {
                 child: Container(
                   alignment: Alignment.center,
                   padding: widget.padding,
-                  decoration: BoxDecoration(color: bg, border: Border.all(color: widget.borderColor, width: 3)),
+                  decoration: BoxDecoration(
+                    color: bg,
+                    borderRadius: BorderRadius.circular(widget.radius),
+                    border: Border.all(color: widget.borderColor, width: widget.radius > 0 ? 2 : 3),
+                  ),
                   child: widget.child ??
                       Text(
                         widget.label,
@@ -199,7 +210,12 @@ class CoinChip extends StatelessWidget {
         children: [
           CustomPaint(size: Size(size, size), painter: _CoinPainter()),
           const SizedBox(width: 6),
-          Text(text, style: TextStyle(fontSize: big ? 14 : 11, fontWeight: FontWeight.w700, color: AppColors.goldDeep)),
+          Text(text,
+              style: TextStyle(
+                  fontFamily: AppTheme.pixelFont,
+                  fontSize: big ? 14 : 11,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.goldDeep)),
           if (onAdd != null) ...[
             const SizedBox(width: 7),
             Container(
@@ -248,7 +264,9 @@ class BallChip extends StatelessWidget {
         children: [
           const PixelImage(AppAssets.seongsilBall, width: 16, height: 16),
           const SizedBox(width: 5),
-          Text('×$count', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.brownText)),
+          Text('×$count',
+              style: const TextStyle(
+                  fontFamily: AppTheme.pixelFont, fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.brownText)),
         ],
       ),
     );
@@ -330,9 +348,13 @@ class PressCard extends StatelessWidget {
     this.minHeight = 0,
     this.alignment,
     this.semanticLabel,
+    this.radius = 10,
   });
   final Widget child;
   final VoidCallback? onTap;
+
+  /// 모서리 둥글기 (기본 10, 0이면 네모 픽셀).
+  final double radius;
   final Color color;
   final Color shadowColor;
   final Color borderColor;
@@ -361,10 +383,103 @@ class PressCard extends StatelessWidget {
             padding: padding,
             decoration: BoxDecoration(
               color: color,
-              border: Border.all(color: borderColor, width: 3),
+              borderRadius: BorderRadius.circular(radius),
+              border: Border.all(color: borderColor, width: radius > 0 ? 2 : 3),
               boxShadow: sunk || depth == 0 ? null : [BoxShadow(color: shadowColor, offset: Offset(0, depth))],
             ),
             child: child,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 둥근 모서리 블록 버튼 (2026-10-29 시안 — 모서리 10, 2px 테두리, 아래로 떨어지는 그림자). 누르면 그림자만큼 내려간다.
+/// [child]를 주면 글자 대신 그린다 (예: 동전 + 가격).
+class RoundBlockButton extends StatefulWidget {
+  const RoundBlockButton({
+    super.key,
+    required this.label,
+    required this.onPressed,
+    required this.color,
+    this.shadowColor = AppColors.ink,
+    this.textColor = AppColors.brownText,
+    this.height = 54,
+    this.leading,
+    this.borderColor = AppColors.ink,
+    this.fontSize = 15,
+    this.child,
+  });
+  final String label;
+  final VoidCallback? onPressed;
+  final Color color;
+  final Color shadowColor;
+  final Color textColor;
+  final double height;
+  final Widget? leading;
+  final Color borderColor;
+  final double fontSize;
+  final Widget? child;
+
+  @override
+  State<RoundBlockButton> createState() => _RoundBlockButtonState();
+}
+
+class _RoundBlockButtonState extends State<RoundBlockButton> {
+  bool _down = false;
+  static const double _depth = 4;
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = widget.onPressed != null;
+    return Semantics(
+      button: true,
+      label: widget.label,
+      excludeSemantics: true,
+      onTap: widget.onPressed,
+      child: GestureDetector(
+        onTapDown: enabled ? (_) => setState(() => _down = true) : null,
+        onTapCancel: () => setState(() => _down = false),
+        onTapUp: enabled ? (_) => setState(() => _down = false) : null,
+        onTap: widget.onPressed,
+        child: SizedBox(
+          height: widget.height + _depth,
+          child: Stack(
+            children: [
+              Positioned.fill(
+                top: _depth,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(color: widget.shadowColor, borderRadius: BorderRadius.circular(10)),
+                ),
+              ),
+              AnimatedPositioned(
+                duration: const Duration(milliseconds: 60),
+                left: 0,
+                right: 0,
+                top: _down ? _depth : 0,
+                height: widget.height,
+                child: Container(
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: enabled ? widget.color : AppColors.disabled,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: widget.borderColor, width: 2),
+                  ),
+                  child: widget.child ?? Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (widget.leading != null) ...[widget.leading!, const SizedBox(width: 8)],
+                      Text(widget.label,
+                          style: TextStyle(
+                              fontSize: widget.fontSize,
+                              fontWeight: FontWeight.w700,
+                              color: enabled ? widget.textColor : AppColors.disabledText)),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ),
