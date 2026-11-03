@@ -53,7 +53,7 @@ class Catalog {
       lines: {
         AffectionTier.low: ['끽…? 누구야?', '가만히 있으면 불씨가 작아져끽.', '(이마의 불씨가 깜빡인다)'],
         AffectionTier.mid: ['오늘도 몸 풀었어? 끽끽!', '일단 해보자끽! 불씨가 따뜻해져.', '스트레칭은 나한테 배워끽!'],
-        AffectionTier.high: ['네 덕분에 불씨가 활활이끽!', '오늘도 같이 땀 흘리자끽!', '너랑 있으면 몸이 근질근질해끽!'],
+        AffectionTier.high: ['네 덕분에 불씨가 활활 타올라끽!', '오늘도 같이 땀 흘리자끽!', '너랑 있으면 몸이 근질근질해끽!'],
       },
     ),
     MonsterSpecies(
