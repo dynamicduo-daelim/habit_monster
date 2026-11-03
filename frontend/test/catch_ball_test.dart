@@ -9,6 +9,7 @@ import 'package:habit_monster/features/shell/main_shell.dart';
 
 import 'chat_test.dart' show FixedRandom;
 import 'game_harness.dart';
+import 'throw_helper.dart';
 
 void _view(WidgetTester tester) {
   tester.view.physicalSize = const Size(390, 844);
@@ -116,14 +117,13 @@ void main() {
     await tester.tap(find.text('탐색하기 (1회 남음)'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 2100)); // 찾는 중…
-    await tester.tap(find.text('던지기 ×1'));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 1000));
+    await flingBall(tester, monsterCenter(tester));
+    await playThrow(tester);
     expect(find.text('놓쳤다…'), findsOneWidget);
     await tester.tap(find.text('확인'));
     await tester.pump();
     expect(find.textContaining('도망갔어요'), findsOneWidget);
-    expect(find.text('던지기 ×0'), findsNothing); // 이미 던졌으면 던지기 버튼 없음
+    expect(ballFinder, findsNothing); // 이미 던졌으면 볼이 없다
     expect(s.monsters.length, before);
     await tester.tap(find.text('그만'));
     await tester.pump();
@@ -168,10 +168,41 @@ void main() {
     await tester.pump();
     expect(s.balls, 5);
     expect(s.gold, 990);
-    await tester.tap(find.text('던지기 ×5'));
-    await tester.pump();
+    await flingBall(tester, monsterCenter(tester));
+    await playThrow(tester);
     expect(s.balls, 4);
-    await tester.pump(const Duration(milliseconds: 1000));
+    expect(find.text('잡았다!'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 7));
+  });
+
+  testWidgets('성실볼: 빗나가면 볼을 쓰지 않고 다시 던질 수 있다, 살짝 밀면 날아가지 않는다', (tester) async {
+    _view(tester);
+    final s = GameState.sample(gold: 1240, balls: 1, random: FixedRandom(double_: 0.5, int_: 1));
+    await tester.pumpWidget(withGame(s, const MaterialApp(home: MainShell())));
+    await _checkAllNo(tester);
+    await tester.tap(find.text('탐색하기 (1회 남음)'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 2100)); // 찾는 중…
+    expect(find.textContaining('위로 휙 밀어 던져 봐'), findsOneWidget);
+    expect(find.text('위로 휙! ×1'), findsOneWidget);
+
+    // 살짝 밀기: 던지지 않고 제자리
+    await swipeFrom(tester, tester.getCenter(ballFinder), const Offset(0, -10), 150);
+    await playThrow(tester, total: const Duration(milliseconds: 800));
+    expect(s.balls, 1);
+    expect(ballFinder, findsOneWidget);
+
+    // 옆으로 크게 빗나가게: 볼은 그대로, 다시 던질 수 있다
+    await flingBall(tester, monsterCenter(tester), sideways: 170);
+    await playThrow(tester, total: const Duration(milliseconds: 1400));
+    expect(s.balls, 1);
+    expect(find.textContaining('빗나갔다'), findsOneWidget);
+    expect(ballFinder, findsOneWidget);
+
+    // 이번엔 맞힌다: 볼 1개를 쓰고 잡힌다
+    await flingBall(tester, monsterCenter(tester));
+    await playThrow(tester);
+    expect(s.balls, 0);
     expect(find.text('잡았다!'), findsOneWidget);
     await tester.pump(const Duration(seconds: 7));
   });

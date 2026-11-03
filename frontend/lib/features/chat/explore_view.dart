@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/constants/app_assets.dart';
@@ -19,9 +20,13 @@ import '../../core/theme/app_theme.dart';
 
 enum _Phase { searching, appear, throwing, popup, done }
 
+/// 성실볼 연출 단계: 제자리 · 끄는 중 · 날아감 · 빗나감 · 빨려 들기 · 떨어짐 · 흔들흔들 · 터짐(잡힘 별 / 놓침 깨짐).
+enum _Fx { idle, drag, fly, miss, absorb, drop, wobble, burst }
+
 /// 탐색 화면: 먼저 "찾는 중…"(덤불이 흔들림, [searchDuration]) → "새로운 루틴몬이 등장했어요!" / "발견하지 못했어요" 알림 →
-/// 몬스터가 나타나면 [볼 던지기 · 다시 탐색 · 그만].
-/// 던지면 성실볼 1개를 쓰고(흔들흔들) → 잡았다/놓쳤다 팝업. 아무도 없으면 덤불만 흔들린다.
+/// 몬스터가 나타나면 아래의 성실볼을 **위로 휙 밀어 던진다** (11-02, 기획 `2026-11-02-성실볼-직접-던지기.md`).
+/// 민 방향 · 세기대로 날아가 몬스터에 맞으면 빨려 들기 → 흔들흔들 → 별(잡힘) / 깨짐(놓침) → 팝업. 이때 볼 1개를 쓴다.
+/// 빗나가면 볼을 쓰지 않고 제자리로 돌아온다. 잡을 확률은 지금처럼 서버(저장소)가 정한다. 아무도 없으면 덤불만 흔들린다.
 class ExploreView extends StatefulWidget {
   const ExploreView({super.key, required this.controller, required this.bobUp, required this.onNeedBall});
   final ChatController controller;
@@ -37,9 +42,25 @@ class ExploreView extends StatefulWidget {
   static const Duration searchDuration = Duration(milliseconds: 2000);
 }
 
-class _ExploreViewState extends State<ExploreView> {
-  static const _wobbles = 6;
-  static const _wobbleMs = 150;
+class _ExploreViewState extends State<ExploreView> with SingleTickerProviderStateMixin {
+  static const double _ballSize = 44;
+  static const double _landSize = 56;
+  static const double _monH = 150;
+
+  /// 이보다 느리게 밀면 던지지 않고 볼이 제자리로 (실수로 톡 친 것 거르기, 기획 [가정]).
+  static const double _minFling = 300;
+
+  /// 맞음 판정: 몬스터 그림 상자의 이 배수 (기획 [가정] — 너무 어렵지 않게).
+  static const double _hitScale = 1.2;
+
+  /// 밀기 빠르기(px/s) × 이 값 = 날아가는 거리.
+  static const double _flingReach = 0.18;
+  static const _flyTime = Duration(milliseconds: 500);
+  static const _missTime = Duration(milliseconds: 600);
+  static const _absorbTime = Duration(milliseconds: 450);
+  static const _dropTime = Duration(milliseconds: 350);
+  static const _swingTime = Duration(milliseconds: 200);
+  static const _burstTime = Duration(milliseconds: 600);
 
   static const _bush = [
     PixelLayer('M1 16V8h2V4h2v4h2V2h2v6h2V3h2v5h2V5h2v5h2v6z', AppColors.bushDark),
@@ -48,7 +69,23 @@ class _ExploreViewState extends State<ExploreView> {
 
   _Phase _phase = _Phase.done;
   int _wobble = 0;
-  Timer? _timer;
+
+  _Fx _fx = _Fx.idle;
+  late final AnimationController _anim = AnimationController(vsync: this);
+
+  /// 연출 세대: 새로 탐색하면 올라가서, 하던 연출이 멈춘다.
+  int _gen = 0;
+
+  /// 끄는 중인 볼의 중심 (필드 좌표).
+  Offset? _ballAt;
+  Offset _from = Offset.zero;
+  Offset _to = Offset.zero;
+
+  /// 방금 빗나갔다 (대사용).
+  bool _missed = false;
+
+  /// 마지막으로 그린 필드 크기 — 볼 자리 · 맞음 판정 계산용.
+  Size _field = Size.zero;
 
   /// 찾는 중 덤불 흔들기 · 점(…) 세기.
   Timer? _searchTimer;
@@ -76,7 +113,11 @@ class _ExploreViewState extends State<ExploreView> {
 
   /// 새로 탐색하면: 먼저 찾는 중 → 몬스터가 있으면 등장, 없으면 끝. 되살린 등장은 바로 보여 준다.
   void _reset() {
-    _timer?.cancel();
+    _gen++;
+    _anim.stop();
+    _fx = _Fx.idle;
+    _ballAt = null;
+    _missed = false;
     _searchTimer?.cancel();
     _shownFor = _c.encounter;
     if (_c.justExplored && _c.encounter != null) {
@@ -111,28 +152,120 @@ class _ExploreViewState extends State<ExploreView> {
     });
   }
 
-  /// 볼 던지기: 볼이 없으면 사러 가고, 있으면 1개 쓰고 흔들흔들 → 결과 팝업.
-  Future<void> _throw() async {
-    final s = GameScope.read(context);
-    if (s.balls <= 0) {
-      widget.onNeedBall();
+  // ---------- 성실볼 던지기 ----------
+  double get _ground => _field.height * 0.16;
+
+  /// 던지기 전 볼이 놓인 자리 (발판 아래 가운데).
+  Offset get _ballRest => Offset(_field.width / 2, _field.height - _ground * 0.5);
+
+  /// 맞은 볼이 떨어져 흔들리는 자리 (발판 위).
+  Offset get _ballLand => Offset(_field.width / 2, _field.height - _ground - 14 - _landSize / 2);
+
+  /// 몬스터 그림 상자 (그림 높이 [_monH], 발판 위 18).
+  Rect get _monRect => Rect.fromLTWH(_field.width / 2 - _monH / 2, _field.height - _ground - 18 - _monH, _monH, _monH);
+  Rect get _hitRect => Rect.fromCenter(center: _monRect.center, width: _monH * _hitScale, height: _monH * _hitScale);
+
+  bool _canThrowNow(GameState s) => _phase == _Phase.appear && _c.canThrow && s.balls > 0 && _fx == _Fx.idle;
+
+  /// 연출 한 단계를 [d] 동안 재생. 중간에 멈췄거나(새 탐색) 화면이 사라졌으면 false.
+  Future<bool> _run(Duration d) async {
+    final g = _gen;
+    _anim.duration = d;
+    try {
+      await _anim.forward(from: 0).orCancel;
+    } on TickerCanceled {
+      return false;
+    }
+    return mounted && g == _gen;
+  }
+
+  void _dragStart(DragStartDetails d) {
+    if (!_canThrowNow(GameScope.read(context))) return;
+    setState(() {
+      _fx = _Fx.drag;
+      _ballAt = _ballRest;
+    });
+  }
+
+  void _dragUpdate(DragUpdateDetails d) {
+    if (_fx != _Fx.drag) return;
+    setState(() => _ballAt = _ballAt! + d.delta);
+  }
+
+  /// 손을 뗐다: 위로 충분히 빠르게 밀었으면 그 방향 · 세기대로 날아간다. 아니면 제자리.
+  void _dragEnd(DragEndDetails d) {
+    if (_fx != _Fx.drag) return;
+    final v = d.velocity.pixelsPerSecond;
+    final from = _ballAt ?? _ballRest;
+    if (v.distance < _minFling || v.dy > -_minFling / 2) {
+      setState(() {
+        _fx = _Fx.idle;
+        _ballAt = null;
+      });
       return;
     }
-    final r = await _c.throwBall();
-    if (r == null || !mounted) return;
+    final reach = (v.distance * _flingReach).clamp(120.0, _field.height * 1.1);
+    _fly(from, from + v / v.distance * reach);
+  }
+
+  /// 화면 읽기(접근성)로 "던지기": 몬스터에게 곧장 던진다.
+  void _quickThrow() {
+    if (_canThrowNow(GameScope.read(context))) _fly(_ballRest, _monRect.center);
+  }
+
+  Future<void> _fly(Offset from, Offset to) async {
     setState(() {
+      _fx = _Fx.fly;
+      _from = from;
+      _to = to;
+      _ballAt = null;
+      _missed = false;
+    });
+    if (!await _run(_flyTime)) return;
+    if (_hitRect.contains(to)) return _hit();
+    // 빗나감: 볼은 쓰지 않고 떨어졌다가 제자리로
+    setState(() {
+      _fx = _Fx.miss;
+      _missed = true;
+    });
+    if (!await _run(_missTime)) return;
+    setState(() => _fx = _Fx.idle);
+  }
+
+  /// 맞았다: 빨려 들기와 함께 저장소(서버)에 던지기를 보내고(볼 1개 소모, 결과는 저장소가 정함) → 떨어짐 → 흔들흔들 → 터짐 → 팝업.
+  Future<void> _hit() async {
+    final g = _gen;
+    setState(() {
+      _fx = _Fx.absorb;
       _phase = _Phase.throwing;
+    });
+    final done = await Future.wait<Object?>([_c.throwBall(), _run(_absorbTime)]);
+    if (!mounted || g != _gen) return;
+    final r = done[0] as CatchResult?;
+    if (r == null) {
+      // 오류(볼이 없거나 서버 문제): 몬스터는 그대로, 다시 던질 수 있게
+      setState(() {
+        _fx = _Fx.idle;
+        _phase = _Phase.appear;
+      });
+      return;
+    }
+    setState(() => _fx = _Fx.drop);
+    if (!await _run(_dropTime)) return;
+    setState(() {
+      _fx = _Fx.wobble;
       _wobble = 0;
     });
-    _timer = Timer.periodic(const Duration(milliseconds: _wobbleMs), (t) {
-      if (!mounted) return;
-      setState(() {
-        _wobble++;
-        if (_wobble >= _wobbles) {
-          t.cancel();
-          _phase = _Phase.popup;
-        }
-      });
+    // 잡히면 세 번(좌우 6번) 흔들리고, 놓치면 한 번 반 만에 튀어나온다 (연출만)
+    for (var k = 0; k < (r.caught ? 6 : 3); k++) {
+      if (!await _run(_swingTime)) return;
+      setState(() => _wobble++);
+    }
+    setState(() => _fx = _Fx.burst);
+    if (!await _run(_burstTime)) return;
+    setState(() {
+      _fx = _Fx.idle;
+      _phase = _Phase.popup;
     });
   }
 
@@ -143,7 +276,7 @@ class _ExploreViewState extends State<ExploreView> {
 
   @override
   void dispose() {
-    _timer?.cancel();
+    _anim.dispose();
     _searchTimer?.cancel();
     _bannerTimer?.cancel();
     super.dispose();
@@ -157,7 +290,10 @@ class _ExploreViewState extends State<ExploreView> {
         return '풀숲을 살펴보는 중${'.' * (_searchTick % 3 + 1)}\n어떤 루틴몬이 숨어 있을까?';
       case _Phase.appear:
         final rate = ((_e.captureRate ?? s.captureRateOf(sp!)) * 100).round();
-        return '야생의 ${sp!.name}${josaIGa(sp.name)} 나타났다! 성실볼을 던져볼까?\n잡힐 확률 $rate%';
+        if (_fx == _Fx.fly) return '성실볼을 던졌다! 과연…';
+        if (_missed) return '앗, 빗나갔다! 볼은 그대로야. 몬스터를 향해 다시 휙!\n잡힐 확률 $rate%';
+        if (s.balls <= 0) return '야생의 ${sp!.name}${josaIGa(sp.name)} 나타났다! 성실볼이 없네…\n잡힐 확률 $rate%';
+        return '야생의 ${sp!.name}${josaIGa(sp.name)} 나타났다! 아래 성실볼을 위로 휙 밀어 던져 봐!\n잡힐 확률 $rate%';
       case _Phase.throwing:
         return '성실볼을 던졌다! 과연…';
       case _Phase.popup:
@@ -190,8 +326,13 @@ class _ExploreViewState extends State<ExploreView> {
     final bob = widget.bobUp ? -4.0 : 0.0;
     final caught = r?.caught ?? false;
     // 등장 · 팝업 중엔 몬스터가 보이고, 던지는 중엔 볼 안에 있다. 끝나면 잡은 몬스터만 남는다.
-    final showMonster =
-        sp != null && (_phase == _Phase.appear || _phase == _Phase.popup || (_phase == _Phase.done && (caught || _e.alreadyOwned)));
+    final escaped = r != null && !r.caught;
+    final showMonster = sp != null &&
+        (_phase == _Phase.appear ||
+            _phase == _Phase.popup ||
+            (_phase == _Phase.done && (caught || _e.alreadyOwned)) ||
+            // 던지는 중: 빨려 들어가는 동안, 놓쳤으면 튀어나올 때
+            (_phase == _Phase.throwing && (_fx == _Fx.absorb || (_fx == _Fx.burst && escaped))));
 
     return Stack(
       children: [
@@ -199,7 +340,8 @@ class _ExploreViewState extends State<ExploreView> {
           children: [
             Expanded(
               child: LayoutBuilder(builder: (context, box) {
-                final ground = box.maxHeight * 0.16;
+                _field = Size(box.maxWidth, box.maxHeight);
+                final ground = _ground;
                 return ClipRect(
                   child: Stack(
                     children: [
@@ -228,29 +370,31 @@ class _ExploreViewState extends State<ExploreView> {
                           bottom: ground + 18,
                           child: Transform.translate(
                             offset: Offset(0, bob),
-                            child: Column(
+                            child: _monsterFx(escaped, Column(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Container(
-                                  width: 28,
-                                  height: 34,
-                                  alignment: Alignment.center,
-                                  decoration: BoxDecoration(
-                                    color: AppColors.cream,
-                                    border: Border.all(color: AppColors.ink, width: 3),
+                                if (_phase != _Phase.throwing)
+                                  Container(
+                                    width: 28,
+                                    height: 34,
+                                    alignment: Alignment.center,
+                                    decoration: BoxDecoration(
+                                      color: AppColors.cream,
+                                      border: Border.all(color: AppColors.ink, width: 3),
+                                    ),
+                                    child: const Text('!',
+                                        style:
+                                            TextStyle(fontFamily: AppTheme.pixelFont, fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.red)),
                                   ),
-                                  child: const Text('!',
-                                      style:
-                                          TextStyle(fontFamily: AppTheme.pixelFont, fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.red)),
-                                ),
                                 const SizedBox(height: 6),
                                 Semantics(
+                                  key: const ValueKey('explore_monster'),
                                   label: sp.name,
                                   image: true,
-                                  child: PixelImage(sp.asset, height: 150),
+                                  child: PixelImage(sp.asset, height: _monH),
                                 ),
                               ],
-                            ),
+                            )),
                           ),
                         )
                       else if (_phase != _Phase.throwing)
@@ -287,20 +431,22 @@ class _ExploreViewState extends State<ExploreView> {
                           top: 52,
                           child: Center(child: _resultBanner(_banner!)),
                         ),
-                      // 흔들리는 성실볼
-                      if (_phase == _Phase.throwing)
-                        Positioned(
-                          left: 0,
-                          right: 0,
-                          bottom: ground + 14,
-                          child: Center(
-                            child: Transform.rotate(
-                              angle: (_wobble.isEven ? -20 : 20) * math.pi / 180,
-                              alignment: Alignment.bottomCenter,
-                              child: const PixelImage(AppAssets.seongsilBall, height: 56),
+                      // 번쩍 · 빛 조각 · 별
+                      Positioned.fill(
+                        child: IgnorePointer(
+                          child: CustomPaint(
+                            painter: _FxPainter(
+                              anim: _anim,
+                              fx: _fx,
+                              mon: _monRect,
+                              to: _to,
+                              land: _ballLand,
+                              caught: caught,
                             ),
                           ),
                         ),
+                      ),
+                      ..._ballLayer(s, escaped),
                     ],
                   ),
                 );
@@ -341,7 +487,10 @@ class _ExploreViewState extends State<ExploreView> {
                   ),
                   const SizedBox(height: 10),
                   AbsorbPointer(
-                    absorbing: _phase == _Phase.searching || _phase == _Phase.throwing || _phase == _Phase.popup,
+                    absorbing: _phase == _Phase.searching ||
+                        _phase == _Phase.throwing ||
+                        _phase == _Phase.popup ||
+                        _fx != _Fx.idle,
                     child: Row(
                       children: [
                         SizedBox(
@@ -358,7 +507,7 @@ class _ExploreViewState extends State<ExploreView> {
                         ),
                         if (_phase == _Phase.appear) ...[
                           const SizedBox(width: 8),
-                          Expanded(child: _throwButton(s)),
+                          Expanded(child: _throwHint(s)),
                         ],
                         const SizedBox(width: 8),
                         Expanded(
@@ -425,28 +574,214 @@ class _ExploreViewState extends State<ExploreView> {
     );
   }
 
-  /// 볼 던지기 (볼이 없으면 "볼 사기").
-  Widget _throwButton(GameState s) {
-    final empty = s.balls <= 0;
-    return PixelButton(
-      label: empty ? '볼 사기' : '볼 던지기',
-      onPressed: _throw,
-      color: AppColors.ballOfferBg,
-      shadowColor: AppColors.purple,
-      padding: const EdgeInsets.symmetric(horizontal: 4),
+  /// 아래 줄 가운데: 볼이 있으면 던지는 법 안내(누르는 버튼 아님), 없으면 "볼 사기".
+  Widget _throwHint(GameState s) {
+    if (s.balls <= 0) {
+      return PixelButton(
+        label: '볼 사기',
+        onPressed: widget.onNeedBall,
+        color: AppColors.ballOfferBg,
+        shadowColor: AppColors.purple,
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        textColor: AppColors.brownText,
+        fontSize: 12.5,
+      );
+    }
+    return Container(
+      height: 48,
+      padding: const EdgeInsets.symmetric(horizontal: 6),
+      decoration: BoxDecoration(
+        color: AppColors.nightPanel,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.nightLine2, width: 2),
+      ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const PixelImage(AppAssets.seongsilBall, height: 22),
+          const Text('▲', style: TextStyle(fontSize: 11, color: AppColors.goldLight)),
           const SizedBox(width: 5),
           Flexible(
-            child: Text(empty ? '볼 사기' : '던지기 ×${s.balls}',
+            child: Text('위로 휙! ×${s.balls}',
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: AppColors.brownText)),
+                style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: AppColors.goldLight)),
           ),
         ],
       ),
     );
+  }
+
+  /// 몬스터 연출: 빨려 들 때 하얗게 작아지며 볼로, 놓쳤을 때 볼에서 튀어나온다.
+  Widget _monsterFx(bool escaped, Widget child) {
+    if (_phase != _Phase.throwing) return child;
+    return AnimatedBuilder(
+      animation: _anim,
+      child: child,
+      builder: (context, child) {
+        final t = _anim.value;
+        if (_fx == _Fx.absorb) {
+          final k = Curves.easeIn.transform(t);
+          return Transform.translate(
+            offset: (_to - _monRect.center) * k,
+            child: Transform.scale(
+              scale: 1 - k,
+              child: ColorFiltered(
+                colorFilter: ColorFilter.mode(AppColors.white.withValues(alpha: math.min(1, t * 2)), BlendMode.srcATop),
+                child: child,
+              ),
+            ),
+          );
+        }
+        // 튀어나오기: 볼 자리에서 커지며 제자리로
+        final k = Curves.easeOutBack.transform(t);
+        return Transform.translate(
+          offset: (_ballLand - _monRect.center) * (1 - k),
+          child: Transform.scale(scale: k.clamp(0.0, 1.2), child: child),
+        );
+      },
+    );
+  }
+
+  /// 성실볼 (제자리 · 끄는 중 · 날아감 · 빗나감 · 떨어짐 · 흔들림 · 터짐).
+  List<Widget> _ballLayer(GameState s, bool escaped) {
+    final idle = _fx == _Fx.idle || _fx == _Fx.drag;
+    if (idle) {
+      if (!_canThrowNow(s) && _fx != _Fx.drag) return const [];
+      final c = _ballAt ?? _ballRest + Offset(0, widget.bobUp ? -3 : 0);
+      const hit = 76.0; // 손가락이 닿는 칸 (볼보다 넓게)
+      return [
+        Positioned(
+          key: const ValueKey('throw_ball'),
+          left: c.dx - hit / 2,
+          top: c.dy - hit / 2,
+          width: hit,
+          height: hit,
+          child: Semantics(
+            button: true,
+            label: '성실볼 던지기',
+            excludeSemantics: true,
+            onTap: _quickThrow,
+            // 손가락을 대는 즉시 볼을 잡는다 (보통 끌기는 36px 움직여야 시작돼서 짧게 휙 밀면 놓친다 — 교감 창 공과 같은 방식)
+            child: RawGestureDetector(
+              behavior: HitTestBehavior.opaque,
+              gestures: {
+                _EagerPan: GestureRecognizerFactoryWithHandlers<_EagerPan>(
+                  _EagerPan.new,
+                  (g) => g
+                    ..onStart = _dragStart
+                    ..onUpdate = _dragUpdate
+                    ..onEnd = _dragEnd,
+                ),
+              },
+              child: Center(
+                child: Transform.scale(
+                  scale: _fx == _Fx.drag ? 1.12 : 1,
+                  child: const PixelImage(AppAssets.seongsilBall, width: _ballSize, height: _ballSize),
+                ),
+              ),
+            ),
+          ),
+        ),
+        if (_fx == _Fx.idle)
+          Positioned(
+            left: c.dx + 24,
+            top: c.dy - 8,
+            child: IgnorePointer(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                color: AppColors.ink,
+                child: Text('×${s.balls}',
+                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.goldLight)),
+              ),
+            ),
+          ),
+      ];
+    }
+    if (_phase == _Phase.popup || _phase == _Phase.done) return const [];
+    return [
+      AnimatedBuilder(
+        animation: _anim,
+        builder: (context, _) {
+          final t = _anim.value;
+          var c = _to;
+          var size = _ballSize;
+          var angle = 0.0;
+          var opacity = 1.0;
+          var align = Alignment.center;
+          switch (_fx) {
+            case _Fx.fly:
+              // 포물선: 직선 위로 솟았다 내려오고, 멀어지며 작아지고, 돈다
+              final k = Curves.easeOut.transform(t);
+              final arc = math.min(80.0, (_to - _from).distance * 0.3);
+              c = Offset.lerp(_from, _to, k)! + Offset(0, -math.sin(math.pi * t) * arc);
+              size = _ballSize * (1 - 0.25 * t);
+              angle = t * 4 * math.pi;
+            case _Fx.miss:
+              c = _to + Offset(0, 260 * t * t);
+              size = _ballSize * 0.75;
+              angle = 4 * math.pi + t * 3 * math.pi;
+              opacity = 1 - t;
+            case _Fx.absorb:
+              size = _ballSize * (0.75 + 0.15 * math.sin(math.pi * t));
+            case _Fx.drop:
+              c = Offset.lerp(_to, _ballLand, Curves.bounceOut.transform(t))!;
+              size = _ballSize * 0.9 + (_landSize - _ballSize * 0.9) * t;
+            case _Fx.wobble:
+              c = _ballLand;
+              size = _landSize;
+              align = Alignment.bottomCenter;
+              angle = (_wobble.isEven ? -1 : 1) * math.sin(math.pi * t) * 22 * math.pi / 180;
+            case _Fx.burst:
+              c = _ballLand;
+              size = _landSize * (1 + 0.12 * math.sin(math.pi * t));
+              if (escaped) return _brokenBall(t);
+            case _Fx.idle:
+            case _Fx.drag:
+              break;
+          }
+          return Positioned(
+            left: c.dx - size / 2,
+            top: c.dy - size / 2,
+            child: IgnorePointer(
+              child: Opacity(
+                opacity: opacity.clamp(0.0, 1.0),
+                child: Transform.rotate(
+                  angle: angle,
+                  alignment: align,
+                  child: PixelImage(AppAssets.seongsilBall, width: size, height: size),
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    ];
+  }
+
+  /// 놓침: 볼이 위아래 반쪽으로 갈라져 날아간다.
+  Widget _brokenBall(double t) {
+    Widget half(bool top) {
+      final dir = top ? -1.0 : 1.0;
+      return Positioned(
+        left: _ballLand.dx - _landSize / 2 + dir * 34 * t,
+        top: _ballLand.dy - _landSize / 2 + (top ? -30 * t : 10 * t),
+        child: Opacity(
+          opacity: (1 - t).clamp(0.0, 1.0),
+          child: Transform.rotate(
+            angle: dir * t * 0.9,
+            child: ClipRect(
+              child: Align(
+                alignment: top ? Alignment.topCenter : Alignment.bottomCenter,
+                heightFactor: 0.5,
+                child: const PixelImage(AppAssets.seongsilBall, width: _landSize, height: _landSize),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Positioned.fill(
+        child: IgnorePointer(child: Stack(clipBehavior: Clip.none, children: [half(true), half(false)])));
   }
 
   Widget _newBadge(String text) => Transform.rotate(
@@ -608,4 +943,73 @@ class _PlatformPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+/// 던지기 이펙트: 맞는 순간 번쩍 + 빛 조각이 볼로 빨려 들기, 잡히면 별이 터지고, 놓치면 하얀 번쩍.
+class _FxPainter extends CustomPainter {
+  _FxPainter({
+    required this.anim,
+    required this.fx,
+    required this.mon,
+    required this.to,
+    required this.land,
+    required this.caught,
+  }) : super(repaint: anim);
+  final Animation<double> anim;
+  final _Fx fx;
+  final Rect mon;
+  final Offset to;
+  final Offset land;
+  final bool caught;
+
+  static const _sparks = 10;
+
+  void _square(Canvas canvas, Offset c, double size, Color color) {
+    canvas.save();
+    canvas.translate(c.dx, c.dy);
+    canvas.rotate(math.pi / 4);
+    canvas.drawRect(Rect.fromCenter(center: Offset.zero, width: size, height: size), Paint()..color = color);
+    canvas.restore();
+  }
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final t = anim.value;
+    switch (fx) {
+      case _Fx.absorb:
+        canvas.drawCircle(mon.center, 30 + 110 * t, Paint()..color = AppColors.white.withValues(alpha: (1 - t) * 0.7));
+        final k = Curves.easeIn.transform(t);
+        for (var i = 0; i < _sparks; i++) {
+          final a = i * 2 * math.pi / _sparks;
+          final start = mon.center + Offset(math.cos(a), math.sin(a)) * 70;
+          _square(canvas, Offset.lerp(start, to, k)!, 7 * (1 - k) + 2, i.isEven ? AppColors.white : AppColors.goldLight);
+        }
+      case _Fx.burst:
+        canvas.drawCircle(land, 20 + 80 * t, Paint()..color = AppColors.white.withValues(alpha: (1 - t) * 0.6));
+        if (caught) {
+          for (var i = 0; i < _sparks; i++) {
+            final a = i * 2 * math.pi / _sparks - math.pi / 2;
+            final p = land + Offset(math.cos(a), math.sin(a)) * (24 + 70 * Curves.easeOut.transform(t));
+            _square(canvas, p, 10 * (1 - t) + 3, i.isEven ? AppColors.gold : AppColors.white);
+          }
+        }
+      default:
+        break;
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _FxPainter old) =>
+      old.fx != fx || old.mon != mon || old.to != to || old.land != land || old.caught != caught;
+}
+
+/// 손가락을 대자마자 이기는 끌기 (성실볼).
+class _EagerPan extends PanGestureRecognizer {
+  _EagerPan() : super(supportedDevices: null);
+
+  @override
+  void addAllowedPointer(PointerDownEvent event) {
+    super.addAllowedPointer(event);
+    resolve(GestureDisposition.accepted);
+  }
 }

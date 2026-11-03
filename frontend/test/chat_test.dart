@@ -11,6 +11,7 @@ import 'package:habit_monster/data/results.dart';
 import 'package:habit_monster/features/chat/chat_controller.dart';
 import 'package:habit_monster/features/shell/main_shell.dart';
 import 'game_harness.dart';
+import 'throw_helper.dart';
 
 /// 정해진 값을 돌려주는 Random (탐색 결과 고정용).
 class FixedRandom implements Random {
@@ -266,14 +267,13 @@ void main() {
     await tester.pump(const Duration(milliseconds: 2100));
     expect(find.text('새로운 루틴몬이 등장했어요!'), findsOneWidget);
     expect(find.textContaining('야생의 깡총 불토끼가 나타났다!'), findsOneWidget);
-    expect(find.text('던지기 ×1'), findsOneWidget);
-    await tester.tap(find.text('던지기 ×1'));
-    await tester.pump();
+    expect(find.text('위로 휙! ×1'), findsOneWidget);
+    await flingBall(tester, monsterCenter(tester));
     expect(find.text('성실볼을 던졌다! 과연…'), findsOneWidget);
+    await playThrow(tester);
     expect(s.balls, 0);
     // 결과 팝업을 닫기 전엔 대화 상대 줄에 안 보인다
     expect(find.bySemanticsLabel(RegExp('^깡총 불토끼와 대화')), findsNothing);
-    await tester.pump(const Duration(milliseconds: 1000));
     expect(find.text('잡았다!'), findsOneWidget);
     await tester.tap(find.text('확인'));
     await tester.pump();
