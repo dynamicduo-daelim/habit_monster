@@ -1,0 +1,211 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{TITLE}}</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&display=swap">
+<style>
+@font-face { font-family: "Galmuri11"; src: url(data:font/ttf;base64,{{GALMURI}}) format("truetype"); font-weight: 400; font-display: block; }
+@font-face { font-family: "Galmuri11"; src: url(data:font/ttf;base64,{{GALMURI_BOLD}}) format("truetype"); font-weight: 700; font-display: block; }
+@font-face { font-family: "Pretendard"; src: url(data:font/otf;base64,{{PRETENDARD_BOLD}}) format("opentype"); font-weight: 700; font-display: block; }
+
+/* 세로 웹툰: 폰 폭 한 줄 칸, 칸 사이 여백이 이야기의 쉼표. 앱(모아루틴)의 밤 보라 바탕 + 크림 말풍선 + 금빛 불씨 */
+:root {
+  --bg: #12101f;          /* AppColors.night */
+  --panel-edge: #0d0b16;  /* ink */
+  --raised: #191533;      /* nightRaised */
+  --text: #e8e4f5;
+  --muted: #9b91c4;
+  --bubble: #fffaf0;      /* cream */
+  --narr: #f4ead2;        /* parchment */
+  --brown: #2b1a1a;
+  --gold: #f0b23c;
+  --gold-soft: #ffd479;
+  --heart: #ff7a6b;
+  --font-pixel: "Galmuri11", "Gowun Dodum", system-ui, sans-serif;
+  --font-story: "Gowun Dodum", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+  color-scheme: dark;
+}
+html, body { background: var(--bg); color: var(--text); }
+body {
+  font-family: var(--font-story);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 28px 56px;
+}
+.strip { max-width: 420px; margin: 0 auto; display: flex; flex-direction: column; gap: 34px; }
+
+/* 표지 */
+.cover { display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
+.village { font-family: var(--font-pixel); font-size: 12px; letter-spacing: .08em; color: var(--gold-soft);
+  border: 2px solid var(--gold); padding: 4px 8px; }
+.cover h1 { margin: 0; font-family: var(--font-pixel); font-weight: 700; font-size: 26px; line-height: 1.35; text-wrap: balance; }
+.cover h1 small { display: block; font-size: 14px; font-weight: 400; color: var(--muted); margin-bottom: 4px; }
+.cover p { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.7; }
+
+/* 칸 */
+.panel { position: relative; width: 100%; max-width: 100%; aspect-ratio: 4 / 5; overflow: hidden;
+  border: 3px solid var(--panel-edge); box-shadow: 0 0 0 2px #2a2450, 6px 6px 0 var(--panel-edge);
+  background-color: #8fd3f4; background-repeat: no-repeat; image-rendering: pixelated; }
+.panel.wide { aspect-ratio: 1 / 1; }
+.sprite { position: absolute; image-rendering: pixelated; width: 34%; height: auto; transform-origin: 50% 100%; }
+
+.narr { position: absolute; left: 10px; top: 10px; max-width: 78%; background: var(--narr); color: var(--brown);
+  border: 3px solid var(--panel-edge); padding: 7px 10px; font-size: 14px; line-height: 1.6; z-index: 3; }
+.narr.bottom { top: auto; bottom: 10px; left: auto; right: 10px; }
+
+.bubble { position: absolute; background: var(--bubble); color: var(--brown); border: 3px solid var(--panel-edge);
+  border-radius: 14px; padding: 7px 11px; font-family: var(--font-pixel); font-size: 15px; font-weight: 700; line-height: 1.4;
+  box-shadow: 3px 3px 0 var(--panel-edge); z-index: 4; white-space: nowrap; }
+.bubble::after { content: ""; position: absolute; width: 12px; height: 12px; background: var(--bubble);
+  border-right: 3px solid var(--panel-edge); border-bottom: 3px solid var(--panel-edge); bottom: -8px; left: 22px; transform: rotate(45deg); }
+.bubble.tail-right::after { left: auto; right: 22px; }
+.bubble.small { font-size: 12px; padding: 4px 8px; border-radius: 10px; }
+
+.sfx { position: absolute; font-family: var(--font-pixel); font-weight: 700; color: var(--gold-soft);
+  -webkit-text-stroke: 1.5px var(--panel-edge); paint-order: stroke fill; z-index: 4; }
+.lines { position: absolute; z-index: 2; }
+.lines i { position: absolute; display: block; width: 4px; background: var(--bubble); opacity: .9; }
+.sweat { position: absolute; width: 10px; height: 14px; background: #8fd3f4; border: 2px solid var(--panel-edge);
+  border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%; z-index: 3; }
+
+.glow { position: absolute; border-radius: 50%; pointer-events: none; z-index: 1;
+  background: radial-gradient(circle, rgba(255, 212, 121, .85) 0%, rgba(255, 212, 121, .25) 45%, rgba(255, 212, 121, 0) 70%); }
+.spark { position: absolute; width: 8px; height: 8px; background: var(--gold-soft); transform: rotate(45deg); z-index: 3;
+  box-shadow: 0 0 0 2px var(--panel-edge); }
+.hand { position: absolute; z-index: 3; image-rendering: pixelated; }
+
+/* 끝 카드 */
+.end { display: flex; flex-direction: column; gap: 12px; }
+.card { background: var(--raised); border: 3px solid var(--panel-edge); box-shadow: 4px 4px 0 var(--panel-edge); padding: 14px; display: flex; gap: 12px; align-items: center; }
+.card .k { font-family: var(--font-pixel); font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+.card .t { font-family: var(--font-pixel); font-weight: 700; font-size: 15px; line-height: 1.5; }
+.card .d { font-size: 13px; color: var(--muted); margin-top: 2px; line-height: 1.6; }
+.card.locked { opacity: .78; }
+.hearts { display: flex; gap: 3px; flex: none; }
+.lock { flex: none; width: 34px; height: 34px; }
+.replay { align-self: center; font-family: "Pretendard", var(--font-story); font-weight: 700; font-size: 14px; color: var(--brown);
+  background: var(--gold); border: 3px solid var(--panel-edge); box-shadow: 0 4px 0 var(--panel-edge); padding: 10px 18px; cursor: pointer; }
+.replay:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--panel-edge); }
+.replay:focus-visible { outline: 3px solid var(--gold-soft); outline-offset: 3px; }
+.foot { text-align: center; font-size: 12px; color: var(--muted); line-height: 1.7; }
+
+/* 칸에 들어오면 한 번 재생 (아무것도 안 해도 마지막 모습이 보인다) */
+@media (prefers-reduced-motion: no-preference) {
+  .play .jump { animation: jump .9s cubic-bezier(.3,1.4,.5,1) both; }
+  @keyframes jump { 0% { transform: translate(-120%, 140%) scale(.9); } 60% { transform: translate(0, -18%) scale(1.05, .95); } 100% { transform: none; } }
+  .play .pop { animation: pop .45s .55s cubic-bezier(.3,1.6,.5,1) both; }
+  @keyframes pop { from { transform: scale(.3); opacity: 0; } to { transform: none; opacity: 1; } }
+  .shiver { animation: shiver .18s steps(2) infinite; }
+  @keyframes shiver { 0% { transform: translateX(-1.5px); } 100% { transform: translateX(1.5px); } }
+  .play .drop { animation: drop 1.4s ease-in infinite; }
+  @keyframes drop { 0%, 30% { transform: translateY(0); opacity: 1; } 100% { transform: translateY(22px); opacity: 0; } }
+  .play .reach { animation: reach 1.1s ease-out both; }
+  @keyframes reach { from { transform: translateY(70%); } to { transform: none; } }
+  .warm { animation: warm 2.4s ease-in-out infinite alternate; }
+  @keyframes warm { from { opacity: .55; transform: scale(.92); } to { opacity: 1; transform: scale(1.06); } }
+  .play .hop { animation: hop .7s cubic-bezier(.3,1.5,.5,1) both; }
+  @keyframes hop { 0% { transform: translateY(0) scale(1.1, .9); } 50% { transform: translateY(-14%); } 100% { transform: none; } }
+  .play .flare { animation: flare 1.2s .5s ease-out both, warm 2s 1.7s ease-in-out infinite alternate; }
+  @keyframes flare { 0% { transform: scale(0); opacity: 0; } 60% { transform: scale(1.4); opacity: 1; } 100% { transform: scale(1); opacity: .9; } }
+  .play .twinkle { animation: twinkle 1.6s ease-out both; }
+  @keyframes twinkle { 0% { transform: rotate(45deg) scale(0); opacity: 0; } 40% { opacity: 1; transform: rotate(45deg) scale(1.3); } 100% { transform: rotate(45deg) scale(1); opacity: 1; } }
+}
+
+/* 조립한 장면: 하늘 · 땅 · 소품(Ludo.ai 픽셀 그림) */
+.scene { background: none; }
+.sky { position: absolute; inset: 0; }
+.sky.morning { background: linear-gradient(#a8dcf5 0%, #c9e9f3 52%, #ffe0b0 100%); }
+.sky.high { background: linear-gradient(#7fc6ef 0%, #b5e1f5 60%, #e6f4ea 100%); }
+.sky.warm { background: linear-gradient(#bfe6f6 0%, #ffe6bf 70%, #ffd18a 100%); }
+.sky.dusk { background: linear-gradient(#6f5fa8 0%, #c98fb8 55%, #ffc08a 100%); }
+.ground { position: absolute; left: 0; right: 0; bottom: 0; background: #8cbf5f; border-top: 4px solid #5d8f3e; }
+.prop { position: absolute; height: auto; max-width: none; image-rendering: pixelated; }
+.prop.far { filter: saturate(.75) brightness(1.05); opacity: .9; }
+.cloud { position: absolute; z-index: 1; opacity: .95; }
+.cover-art { width: 62%; max-width: 260px; image-rendering: pixelated; align-self: center; margin-bottom: 6px; }
+
+/* 임시 소품: Ludo 그림이 아직 없을 때 단색 블록 + 컷 구석 '임시' 표시 */
+.tmp-block { aspect-ratio: 1; background: #cfc3ea; border: 3px dashed #6b5aa8; opacity: .85; box-sizing: border-box; }
+.tmp-badge { position: absolute; left: 6px; bottom: 6px; z-index: 5; font-family: var(--font-pixel); font-size: 10px;
+  color: var(--brown); background: var(--gold-soft); border: 2px solid var(--panel-edge); padding: 1px 5px; opacity: .92; }
+</style>
+
+<main class="strip">
+{{COVER}}
+
+{{PANELS}}
+
+{{END}}
+</main>
+
+<script>
+// 픽셀 그림 (앱의 PixelIcon처럼 칸마다 네모를 찍는다)
+function pixels(svg, rows, colors) {
+  const ns = 'http://www.w3.org/2000/svg';
+  rows.forEach((row, y) => [...row].forEach((c, x) => {
+    if (!colors[c]) return;
+    const r = document.createElementNS(ns, 'rect');
+    r.setAttribute('x', x); r.setAttribute('y', y); r.setAttribute('width', 1.02); r.setAttribute('height', 1.02);
+    r.setAttribute('fill', colors[c]);
+    svg.appendChild(r);
+  }));
+  svg.setAttribute('shape-rendering', 'crispEdges');
+}
+// 돌봄이의 손 (아래에서 올라오는 손바닥) — data-hand 가 붙은 svg 마다
+document.querySelectorAll('[data-hand]').forEach(h => pixels(h, [
+  '....k..k..k.....',
+  '...kak.kak.kk...',
+  '...kak.kak.kak..',
+  '.k.kak.kak.kak..',
+  'kakkak.kak.kak..',
+  'kaakaakaakkak...',
+  '.kaaaaaaaaaaak..',
+  '.kaaaaaaaaaaak..',
+  '..kaaaaaaaaak...',
+  '..kaaaaaaaaak...',
+  '...kaaaaaaak....',
+  '...kaaaaaaak....',
+  '...kaaaaaaak....',
+  '...kaaaaaaak....',
+], { k: '#0d0b16', a: '#ffd8b0' }));
+// 하트 5칸 중 data-n 칸 (끝 카드에 하트가 있을 때만)
+const hearts = document.getElementById('hearts');
+const heartN = hearts ? +hearts.dataset.n : 0;
+for (let i = 0; hearts && i < 5; i++) {
+  const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  s.setAttribute('viewBox', '0 0 7 6'); s.setAttribute('width', 16); s.setAttribute('height', 14);
+  pixels(s, ['.kk.kk.', 'kaakaak', 'kaaaaak', '.kaaak.', '..kak..', '...k...'],
+    { k: '#0d0b16', a: i < heartN ? '#ff7a6b' : '#3a3260' });
+  hearts.appendChild(s);
+}
+const lockEl = document.getElementById('lock');
+if (lockEl) pixels(lockEl, [
+  '...kkkkk....', '..k.....k...', '..k.....k...', '..k.....k...', '.kkkkkkkkk..', '.kgggggggk..',
+  '.kggkkkggk..', '.kgggkgggk..', '.kgggkgggk..', '.kgggggggk..', '.kkkkkkkkk..', '............',
+], { k: '#0d0b16', g: '#9b91c4' });
+
+// 픽셀 구름
+document.querySelectorAll('[data-cloud]').forEach(s => pixels(s, [
+  '....kkkk.....', '..kkwwwwkkk..', '.kwwwwwwwwwk.', 'kwwwwwwwwwwwk', '.kkkkkkkkkkk.',
+], { k: '#6aa9cf', w: '#ffffff' }));
+
+// 칸이 화면에 들어오면 한 번 재생
+const panels = [...document.querySelectorAll('.panel')];
+function play(p) { p.classList.remove('play'); void p.offsetWidth; p.classList.add('play'); }
+if ('IntersectionObserver' in window) {
+  const io = new IntersectionObserver(es => es.forEach(e => {
+    if (e.isIntersecting && !e.target.dataset.seen) { e.target.dataset.seen = '1'; play(e.target); }
+  }), { threshold: .45 });
+  panels.forEach(p => io.observe(p));
+}
+document.getElementById('replay').addEventListener('click', () => {
+  panels.forEach(p => { delete p.dataset.seen; p.classList.remove('play'); });
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  setTimeout(() => panels.forEach(p => {
+    const r = p.getBoundingClientRect();
+    if (r.top < innerHeight * .6) { p.dataset.seen = '1'; play(p); }
+  }), 500);
+});
+</script>

@@ -1,0 +1,29 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>루틴몬 웹툰 · 편 목록</title>
+{{STYLE}}
+<style>
+/* 편 목록: 웹툰과 같은 밤 보라 바탕 + 크림/금빛 픽셀 카드 */
+.group { display: flex; flex-direction: column; gap: 10px; }
+.group h2 { margin: 0; font-family: var(--font-pixel); font-weight: 700; font-size: 16px; color: var(--gold-soft); }
+.group h2 small { font-weight: 400; font-size: 12px; color: var(--muted); margin-left: 6px; }
+.ep { display: flex; gap: 12px; align-items: center; text-decoration: none; color: var(--text); background: var(--raised);
+  border: 3px solid var(--panel-edge); box-shadow: 4px 4px 0 var(--panel-edge); padding: 12px 14px; }
+.ep:hover, .ep:focus-visible { outline: 3px solid var(--gold-soft); outline-offset: 2px; }
+.ep .no { flex: none; min-width: 44px; text-align: center; font-family: var(--font-pixel); font-weight: 700; font-size: 13px;
+  color: var(--brown); background: var(--gold); border: 3px solid var(--panel-edge); padding: 4px 6px; }
+.ep .t { font-family: var(--font-pixel); font-weight: 700; font-size: 15px; line-height: 1.5; }
+.ep .d { font-size: 12px; color: var(--muted); margin-top: 2px; }
+</style>
+
+<main class="strip">
+  <header class="cover">
+    <span class="village">루틴몬 웹툰</span>
+    <h1><small>편 목록</small>따끈마을 이야기</h1>
+    <p>종 이야기는 호감도와 레벨로, 마을 장은 그 마을 친구를 모으면 열려요.<br>편을 눌러 보세요.</p>
+  </header>
+
+{{LIST}}
+
+  <p class="foot">모아루틴 스토리 시안 · 편은 docs/design/webtoon/episodes.py 에서 만들어요</p>
+</main>
