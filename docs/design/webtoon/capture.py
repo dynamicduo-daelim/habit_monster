@@ -3,7 +3,7 @@
     python docs/design/webtoon/capture.py          (저장소 맨 위에서, build.py 를 먼저 돌린 뒤)
 
 - 편마다 한 줄 출력: 콘솔 오류 수 · 가로 넘침(scrollWidth > 390) · 칸 수 · 칸 밖으로 잘린 말풍선 수
-- 대표 4장을 docs/스크린샷/2026-11-04/ 에 저장 (목록 · 모닥이 3화 · 콩지 2화 · 따끈마을 3장)
+- 대표 9장을 docs/스크린샷/2026-11-04/ 에 저장 (목록 · 모닥이 3화 · 콩지 2화 · 여섯 마을 3장)
 - 인터넷이 없어도 돌도록 구글 글꼴 요청은 막는다 (Galmuri11 · Pretendard 는 파일 안에 들어 있다).
 - 문제가 있으면 종료 코드 1.
 """
@@ -21,6 +21,11 @@ FEATURED = {
     'monkey-3': '02-웹툰-모닥이-3화.png',
     'rabbit-2': '03-웹툰-콩지-2화.png',
     'village-hot-3': '04-웹툰-따끈마을-3장.png',
+    'village-bright-3': '05-웹툰-반짝마을-3장.png',
+    'village-yum-3': '06-웹툰-냠냠마을-3장.png',
+    'village-calm-3': '07-웹툰-잔잔마을-3장.png',
+    'village-whisper-3': '08-웹툰-소곤마을-3장.png',
+    'village-coin-3': '09-웹툰-알뜰마을-3장.png',
 }
 
 # 말풍선이 칸 틀 밖으로 나갔는지: 칸(.panel) 안쪽에서 벗어난 .bubble · .narr · .sfx 를 센다

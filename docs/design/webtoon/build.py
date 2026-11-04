@@ -231,17 +231,24 @@ def build_episode(e, tpl):
 
 
 def index_html(tpl_index, style):
-    groups = {}  # (이름) -> [편]; 마을 장은 '따끈마을 장' 묶음
+    villages = {}  # v_name -> {'village': village_str, 'groups': {g: [편, ...]}}
     for e in EPISODES:
+        v_name = e['village'].split('·')[0].strip()
+        v_entry = villages.setdefault(v_name, {'village': e['village'], 'groups': {}})
         g = f'{e["name"]} 장' if e['kind'] == 'chapter' else e['name']
-        groups.setdefault((e['village'], g), []).append(e)
+        v_entry['groups'].setdefault(g, []).append(e)
     rows = []
-    for (village, g), eps in groups.items():
-        rows.append(f'  <section class="group">\n    <h2>{esc(g)}<small>{esc(village)}</small></h2>')
-        for e in sorted(eps, key=lambda x: x['ep']):
-            no = f'{e["ep"]}장' if e['kind'] == 'chapter' else f'{e["ep"]}화'
-            rows.append(f'    <a class="ep" href="{e["id"]}-{e["ep"]}.html"><span class="no">{no}</span>'
-                        f'<div><div class="t">{esc(e["title"])}</div><div class="d">{esc(e["end_card"]["t"])}</div></div></a>')
+    for v_name, v_entry in villages.items():
+        v_sub = v_entry['village'].split('·', 1)[1].strip() if '·' in v_entry['village'] else ''
+        sub_html = f'<small>{esc(v_sub)}</small>' if v_sub else ''
+        rows.append(f'  <section class="village-group">\n    <h2>{esc(v_name)}{sub_html}</h2>')
+        for g, eps in v_entry['groups'].items():
+            rows.append(f'    <div class="group">\n      <h3>{esc(g)}</h3>')
+            for e in sorted(eps, key=lambda x: x['ep']):
+                no = f'{e["ep"]}장' if e['kind'] == 'chapter' else f'{e["ep"]}화'
+                rows.append(f'      <a class="ep" href="{e["id"]}-{e["ep"]}.html"><span class="no">{no}</span>'
+                            f'<div><div class="t">{esc(e["title"])}</div><div class="d">{esc(e["end_card"]["t"])}</div></div></a>')
+            rows.append('    </div>')
         rows.append('  </section>')
     t = tpl_index.replace('{{STYLE}}', style).replace('{{LIST}}', '\n'.join(rows))
     return fill(t)

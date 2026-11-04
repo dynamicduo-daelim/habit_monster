@@ -1129,3 +1129,22 @@ EPISODES = [
         },
     },
 ]
+
+
+# 다섯 마을(반짝 · 냠냠 · 잔잔 · 소곤 · 알뜰) 불러오기 고리
+import importlib
+from pathlib import Path
+import sys
+
+_HERE = Path(__file__).resolve().parent
+if str(_HERE) not in sys.path:
+    sys.path.insert(0, str(_HERE))
+
+for _code in ('bright', 'yum', 'calm', 'whisper', 'coin'):
+    try:
+        _mod = importlib.import_module(f'episodes_{_code}')
+        EPISODES.extend(_mod.EPISODES)
+    except ModuleNotFoundError as _e:
+        if _e.name == f'episodes_{_code}':
+            continue
+        raise
