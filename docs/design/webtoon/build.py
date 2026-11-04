@@ -168,7 +168,8 @@ def cover_html(e):
         a = f'<img class="cover-art" src="data:image/png;base64,{b64(art)}" alt="">'
     else:
         MISSING.add(e['cover_prop'])
-        a = '<div class="cover-art tmp-block" aria-hidden="true"></div>'
+        # 표지 소품이 아직 없으면 하루나무 섬으로 (빈 상자보다 낫다). 소품이 오면 저절로 바뀐다.
+        a = f'<img class="cover-art" src="data:image/png;base64,{b64(BG / "haru-tree.png")}" alt="">'
     return f'''  <header class="cover">
     {a}
     <span class="village">{esc(e["village"])}</span>
@@ -199,6 +200,7 @@ def end_html(e):
       </div>
     </div>{nxt}
     <button class="replay" id="replay" type="button">처음부터 다시 보기</button>
+    <a class="to-list" href="index.html">← 편 목록으로</a>
     <p class="foot">모아루틴 스토리 시안 · 몬스터는 앱 그림, 배경 소품은 Ludo.ai로 만든 픽셀 그림</p>
   </footer>'''
 
@@ -245,6 +247,14 @@ def index_html(tpl_index, style):
     return fill(t)
 
 
+# 아티팩트 서버는 <!DOCTYPE html>로 시작하는 문서만 받는다 (11-04) — 틀 앞에 문서 머리를 붙인다.
+HEAD = '<!DOCTYPE html>\n<html lang="ko">\n'
+
+
+def doc(page):
+    return page if page.lstrip().lower().startswith('<!doctype') else HEAD + page
+
+
 def main():
     tpl = (HERE / 'episode.template.html').read_text(encoding='utf-8')
     tpl_index = (HERE / 'index.template.html').read_text(encoding='utf-8')
@@ -257,13 +267,14 @@ def main():
         seen.add(key)
         page = build_episode(e, tpl)
         out = OUT / f'{e["id"]}-{e["ep"]}.html'
+        page = doc(page)
         out.write_text(page, encoding='utf-8')
         print(out, out.stat().st_size, 'bytes')
         if key in LEGACY:
             LEGACY[key].write_text(page, encoding='utf-8')
             print(LEGACY[key], '(예전 시안 경로)')
     idx = OUT / 'index.html'
-    idx.write_text(index_html(tpl_index, style), encoding='utf-8')
+    idx.write_text(doc(index_html(tpl_index, style)), encoding='utf-8')
     print(idx, idx.stat().st_size, 'bytes')
     if MISSING:
         print('임시로 그린 소품(Ludo 그림 없음):', ', '.join(sorted(MISSING)))

@@ -43,7 +43,9 @@ def check(browser, page_path, shot=None):
     page = ctx.new_page()
     page.route('**/fonts.googleapis.com/**', lambda r: r.abort())
     page.route('**/fonts.gstatic.com/**', lambda r: r.abort())
-    page.on('console', lambda m: errors.append(m.text) if m.type == 'error' else None)
+    # 위에서 일부러 막은 구글 글꼴 요청의 "Failed to load resource"는 오류로 치지 않는다
+    page.on('console', lambda m: errors.append(m.text)
+            if m.type == 'error' and not ('ERR_FAILED' in m.text and 'Failed to load resource' in m.text) else None)
     page.on('pageerror', lambda e: errors.append(str(e)))
     page.goto(page_path.as_uri())
     page.wait_for_timeout(300)
