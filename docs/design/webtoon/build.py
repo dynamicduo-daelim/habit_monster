@@ -96,7 +96,14 @@ def prop_html(p, ep_key):
     if path.exists():
         return img(cls, path, p['style']), False
     MISSING.add(p['key'])
-    return f'<div class="{cls} tmp-block" aria-hidden="true" style="{p["style"]}"></div>', True
+    fb = p.get('fallback')  # 있는 소품으로 대신 그린다 (예: 해돋이 언덕 → 돌바닥)
+    if fb:
+        return img(cls, BG / f'{fb["key"]}.png', fb['style']), True
+    return f'<div class="{cls} tmp-block" aria-hidden="true" style="{p["style"]} aspect-ratio: {p.get("ar", 1)};"></div>', True
+
+
+def glow_html(g):
+    return f'<div class="glow {g.get("cls", "")}" style="{g["style"]}"></div>'
 
 
 def panel_html(n, p, ep_key):
@@ -113,6 +120,11 @@ def panel_html(n, p, ep_key):
         h, t = prop_html(pr, ep_key)
         tmp = tmp or t
         L.append('    ' + h)
+    gl = p.get('glow') or []
+    gl = [gl] if isinstance(gl, dict) else gl  # 빛은 하나 또는 여러 개. behind:True 는 몬스터 뒤에 깐다
+    for g in gl:
+        if g.get('behind'):
+            L.append('    ' + glow_html(g))
     todo = p.get('todo_prop')
     if todo and not (BG / f'{todo}.png').exists():
         MISSING.add(todo)
@@ -135,9 +147,9 @@ def panel_html(n, p, ep_key):
     for b in p.get('bubbles', []):
         cls = ('bubble ' + b.get('cls', '')).strip()
         L.append(f'    <div class="{cls}" style="{b["style"]}">{esc(b["text"])}</div>')
-    if p.get('glow'):
-        g = p['glow']
-        L.append(f'    <div class="glow {g["cls"]}" style="{g["style"]}"></div>')
+    for g in gl:
+        if not g.get('behind'):
+            L.append('    ' + glow_html(g))
     if p.get('hand'):
         L.append(f'    <svg class="hand reach" data-hand style="{p["hand"]["style"]}" viewBox="0 0 16 14" aria-hidden="true"></svg>')
     for s in p.get('sparks', []):
