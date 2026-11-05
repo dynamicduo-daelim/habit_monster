@@ -21,6 +21,13 @@
 -- v1.7 보충 2026-10-28 (API 명세 v5 보충 10-28): 목표 기간 = 등록한 날부터 주간 7일 · 월간 30일
 --   * goal.goal.period_start = 등록한 날 (월요일 · 1일 제약 ck_goal_period_start 삭제). 끝 날은 시작 + 기간 − 1 (컬럼 없음)
 --   * 기간 일수는 config weekly_goal_days · monthly_goal_days
+-- v1.9 2026-11-04 (API 명세 v6 — AI 챗봇 체크인 · 습관 타이머, 결정 D-62 · D-63, 제안서 docs/제안/ 3차)
+--   * habit.habit_checkin: evidence(최신 근거) · rewarded_evidence(첫 확정 근거, 불변) · score_capped(최신 점수가 자기보고 상한에 걸림)
+--     자기보고(SHORT·DETAILED)는 최대 self_report_max_score(20), 확인됨(VERIFIED)은 score_max(25)까지. 경험치 계수는 config
+--   * habit.habit_timer 새로: 분 단위 시간 습관의 서버 타이머. 습관마다 끝나지 않은 것 1개, 도는 것은 사용자당 1개.
+--     기록은 끝난 날(business_date를 끝낼 때 다시 적음), 00시에 끊지 않음. 최대 timer_max_minutes(일시정지 뺀 경과)
+--   * ai.daily_call_count 새로: AI 해석 호출 수 (사용자 · 날짜 1행, 한도 ai_daily_call_limit). 대화 원문은 저장하지 않음
+--   * 헬스 연동(habit.health_daily)은 다음 단계 — 이 판에 넣지 않음 (제안서 DB 4장)
 -- 설계 문서: 04_논리물리모델.md (v1.7 반영 전)
 -- MVP 밖 구성요소(결제, 수치 변경 이력, AI 기억·호출 로그)는 schema_later.sql (이 파일 다음에 적용)
 --
@@ -331,6 +338,12 @@ CREATE TABLE habit.habit_checkin (
   rewarded_score    SMALLINT      NOT NULL CHECK (rewarded_score >= 0),  -- 첫 확정 점수 (불변) → 골드·EXP·기간 점수 기준
   is_counted        BOOLEAN       NOT NULL,     -- 첫 확정 때 점수 상위 N개 반영 여부 (불변, 동점은 등록 순서)
   is_filled         BOOLEAN       NOT NULL,     -- v1.7: 첫 확정에서 "했어"(값 > 0) → 기간 채운 날 1일 (불변)
+  -- v1.9 근거: SHORT·DETAILED = 자기보고(보상 같음, 표시용 라벨), VERIFIED = 서버가 타이머 기록으로 붙임 (앱이 보낼 수 없음)
+  evidence          TEXT          NOT NULL DEFAULT 'SHORT'
+                    CHECK (evidence IN ('SHORT','DETAILED','VERIFIED')),            -- 최신 근거 (다시 체크하면 바뀜)
+  rewarded_evidence TEXT          NOT NULL DEFAULT 'SHORT'
+                    CHECK (rewarded_evidence IN ('SHORT','DETAILED','VERIFIED')),   -- 첫 확정 근거 (불변) → 경험치 ×exp_coef_verified
+  score_capped      BOOLEAN       NOT NULL DEFAULT false,      -- v1.9: 최신 점수가 자기보고 상한에 걸려 깎였는지 (앱 안내용)
   PRIMARY KEY (daily_checkin_id, habit_id),
   CONSTRAINT fk_hc_period FOREIGN KEY (habit_id, period_seq)
     REFERENCES habit.habit_period (habit_id, seq),
@@ -354,7 +367,8 @@ BEGIN
        OR NEW.rewarded_score IS DISTINCT FROM OLD.rewarded_score
        OR NEW.rewarded_value IS DISTINCT FROM OLD.rewarded_value
        OR NEW.period_seq     IS DISTINCT FROM OLD.period_seq
-       OR NEW.target_snapshot IS DISTINCT FROM OLD.target_snapshot THEN
+       OR NEW.target_snapshot IS DISTINCT FROM OLD.target_snapshot
+       OR NEW.rewarded_evidence IS DISTINCT FROM OLD.rewarded_evidence THEN   -- v1.9
       RAISE EXCEPTION 'habit_checkin (%, %): reward fields are fixed at first confirmation',
         OLD.daily_checkin_id, OLD.habit_id USING ERRCODE = 'check_violation';
     END IF;
@@ -365,6 +379,35 @@ CREATE TRIGGER tg_daily_checkin_reward_fixed BEFORE UPDATE ON habit.daily_checki
   FOR EACH ROW EXECUTE FUNCTION habit.forbid_reward_change();
 CREATE TRIGGER tg_habit_checkin_reward_fixed BEFORE UPDATE ON habit.habit_checkin
   FOR EACH ROW EXECUTE FUNCTION habit.forbid_reward_change();
+
+-- v1.9 습관 타이머 (API 명세 v6 9장, D-62 · D-63): 분 단위 시간 습관(measure_type.unit = '분' · TARGET_RATIO)만 — 서버 규칙으로 검사
+--  * 시각은 서버 시각. 경과 = (끝 또는 지금) − started_at − paused_seconds − (일시정지 중이면 지금 − paused_at)
+--  * 최대 timer_max_minutes(config, 일시정지 뺀 경과)에 닿으면 MAX_DURATION. ended_at = 닿은 시각 (처리한 시각이 아님)
+--  * 00시에 끝내지 않는다. business_date = 기록되는 업무 날짜: 시작할 때 시작한 날, 끝낼 때 ended_at의 업무 날짜로 다시 적는다
+--  * 습관을 그만두거나 기간이 끝나면 HABIT_STOPPED (그만두기는 같은 트랜잭션, 기간 끝은 다음 요청 때 정리, ended_at = 그 00시)
+--  * counted_minutes = 끝낼 때의 경과 분(내림). 앱이 집중 분(focusMinutes)을 보냈으면 둘 중 작은 값 (D-63)
+--  * 자동 종료는 스케줄러 없이 다음 요청 때 처리 → 합계는 정리를 먼저 한 뒤 읽는다
+CREATE TABLE habit.habit_timer (
+  id               BIGINT       GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  user_id          BIGINT       NOT NULL REFERENCES habit.habit_user(user_id),
+  habit_id         BIGINT       NOT NULL REFERENCES habit.habit(id),
+  business_date    DATE         NOT NULL,     -- 기록되는 업무 날짜 (끝낼 때 확정)
+  status           TEXT         NOT NULL CHECK (status IN ('RUNNING','PAUSED','STOPPED')),
+  started_at       TIMESTAMPTZ  NOT NULL DEFAULT now(),
+  paused_at        TIMESTAMPTZ  NULL,         -- 지금 일시정지 중이면 그 시각
+  paused_seconds   INTEGER      NOT NULL DEFAULT 0 CHECK (paused_seconds >= 0),   -- 지난 일시정지 합
+  ended_at         TIMESTAMPTZ  NULL,
+  end_reason       TEXT         NULL CHECK (end_reason IN ('USER','MAX_DURATION','HABIT_STOPPED')),
+  counted_minutes  SMALLINT     NULL CHECK (counted_minutes BETWEEN 0 AND 1440),  -- 1440 = 하루 (정책값 240은 config, 원칙 4)
+  CONSTRAINT ck_timer_end    CHECK ((status = 'STOPPED') = (ended_at IS NOT NULL)),
+  CONSTRAINT ck_timer_result CHECK ((status = 'STOPPED') = (counted_minutes IS NOT NULL AND end_reason IS NOT NULL)),
+  CONSTRAINT ck_timer_paused CHECK ((status = 'PAUSED') = (paused_at IS NOT NULL)),
+  CONSTRAINT ck_timer_order  CHECK (ended_at IS NULL OR ended_at >= started_at)
+);
+-- 습관마다 끝나지 않은 타이머는 하나, 실제로 도는 타이머는 사용자당 하나 (위반 → 409 TIMER_ALREADY_RUNNING)
+CREATE UNIQUE INDEX uq_habit_timer_active  ON habit.habit_timer (habit_id) WHERE status IN ('RUNNING','PAUSED');
+CREATE UNIQUE INDEX uq_habit_timer_running ON habit.habit_timer (user_id)  WHERE status = 'RUNNING';
+CREATE INDEX ix_habit_timer_day ON habit.habit_timer (user_id, business_date);
 
 -- =====================================================================
 -- goal (목표) — 기간은 등록한 날부터 주간 7일 · 월간 30일 (v1.7 보충 10-28, config *_goal_days)
@@ -761,6 +804,8 @@ CREATE TABLE config.balance_config (
 --    (v1.3 스키마 간 FK 검사는 참조 테이블 소유자 권한으로 실행되므로 app_ai에 읽기 권한을 줄 필요 없음)
 --    필요한 문맥(습관 이름, 대화 상대 종, 호감도 단계)은 호출하는 쪽이 값으로 넘긴다.
 --  * 대화 원문은 보관 기간(config chat_message_retention_days) 후 삭제 (A-2). 탈퇴 시 전부 삭제.
+--  * v1.9 대화 해석(POST /checkins/today/interpret)은 대화를 저장하지 않는다 — 앱이 앞 대화를 보내고 서버는 답만 돌려준다.
+--    chat_session · chat_message는 이 기능에서 쓰지 않는다. 호출 수만 ai.daily_call_count에 센다.
 --  * v1.2: 개인화 기억(memory_item)·호출 로그(llm_call_log)는 schema_later.sql
 -- =====================================================================
 CREATE TABLE ai.chat_session (
@@ -806,6 +851,18 @@ CREATE TABLE ai.checkin_dialogue (
     REFERENCES habit.checkin_submission (daily_checkin_id, revision)
 );
 CREATE INDEX ix_checkin_dialogue_user ON ai.checkin_dialogue (user_id);
+
+-- v1.9 AI 해석 호출 수: 사용자 · 업무 날짜 1행. 한도(ai_daily_call_limit)는 config (원칙 4)
+-- 올리기와 한도 검사는 한 문장: INSERT … ON CONFLICT (user_id, call_date) DO UPDATE SET call_count = call_count + 1
+--   WHERE call_count < 한도 RETURNING call_count  → 행이 안 돌아오면 한도 초과 (429)
+-- 개인정보가 없는 숫자라 탈퇴 때 지우지 않는다
+CREATE TABLE ai.daily_call_count (
+  user_id     BIGINT       NOT NULL REFERENCES identity.users(id),
+  call_date   DATE         NOT NULL,      -- 업무 날짜 (00:00 경계)
+  call_count  SMALLINT     NOT NULL DEFAULT 0 CHECK (call_count >= 0),
+  updated_at  TIMESTAMPTZ  NOT NULL DEFAULT now(),
+  PRIMARY KEY (user_id, call_date)
+);
 
 -- =====================================================================
 -- api (요청 처리 공통) — v1.7

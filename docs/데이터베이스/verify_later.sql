@@ -1,6 +1,7 @@
 -- =====================================================================
 -- schema_later.sql 검증 (verify.sql과 같은 psql 세션에서 이어서 실행)
 -- v1.7: 스키마 간 FK 허용 목록이 MVP 19쌍 + 나중 블록 5쌍 = 24쌍
+-- v1.9: MVP에 ai.daily_call_count → identity.users 1쌍 → 20 + 5 = 25쌍
 -- 실행: psql -v ON_ERROR_STOP=1 -f schema.sql -f seed.sql -f schema_later.sql -f verify.sql -f verify_later.sql
 -- =====================================================================
 TRUNCATE _result;
@@ -27,8 +28,8 @@ SELECT pg_temp.expect_fail('L-A4 같은 권한으로 슬롯 두 번 지급 불�
 SELECT pg_temp.expect_fail('L-A4b 없는 권한으로 슬롯 지급 불가 (v1.3 스키마 간 FK)',
   $$INSERT INTO goal.goal_slot_grant (user_id, entitlement_id, slots) VALUES (1,999999,1)$$);
 INSERT INTO _result
-SELECT 'L-A5 스키마 간 FK 24쌍 = 허용 목록 (MVP 19 + 나중 블록 5)',
-       (SELECT count(*) FROM _cross_fk_actual) = 24
+SELECT 'L-A5 스키마 간 FK 25쌍 = 허용 목록 (MVP 20 + 나중 블록 5, v1.9)',
+       (SELECT count(*) FROM _cross_fk_actual) = 25
        AND NOT EXISTS (SELECT * FROM _cross_fk_actual EXCEPT SELECT * FROM _cross_fk_expected),
        (SELECT count(*) FROM _cross_fk_actual) || '쌍';
 SELECT pg_temp.expect_ok  ('L-A7 새 권한 종류 = INSERT 한 줄',

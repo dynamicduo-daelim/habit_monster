@@ -43,7 +43,10 @@ public class BalanceConfig {
 	 */
 	static final Set<String> NOT_USED_BY_SERVER = Set.of(
 		"service_timezone", "day_boundary_hour", "freeze_after_days", "idempotency_ttl_hours", "idempotency_lock_seconds",
-		"chat_message_retention_days", "llm_timeout_ms", "llm_model");
+		"chat_message_retention_days", "llm_timeout_ms", "llm_model",
+		// 시드 v1.9 (D-62 · D-63) — 서버 구현(타이머 · 근거 · 상한 · 계수 · 해석 보강) 때 REQUIRED로 옮긴다
+		"self_report_max_score", "exp_coef_ratio", "exp_coef_range", "exp_coef_binary", "exp_coef_verified",
+		"timer_max_minutes", "ai_daily_call_limit", "ai_min_confidence");
 
 	private final Map<String, JsonNode> values;
 

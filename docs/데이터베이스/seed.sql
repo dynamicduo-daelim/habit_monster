@@ -5,6 +5,7 @@
 -- v1.8 2026-10-17: 몬스터를 앱의 새 픽셀 그림 28종으로 교체 (옛 5종 삭제), id는 카테고리 순서,
 --                  6개 카테고리 모두 스타터, 대사 전부 적재
 -- v1.8 보충 2026-10-28: 목표 기간 일수 weekly_goal_days 7 · monthly_goal_days 30 (등록한 날부터, API 명세 v5 보충 10-28)
+-- v1.9 2026-11-04: 자기보고 상한 · 경험치 계수 (D-62) · 타이머 최대 분 · AI 호출 한도 · 확신 기준 (API 명세 v6)
 -- =====================================================================
 
 -- 카테고리 (HTML CATS)
@@ -405,5 +406,14 @@ INSERT INTO config.balance_config (key, value, description) VALUES
  ('idempotency_lock_seconds',   '30',         '처리 중(IN_PROGRESS) 키를 다른 요청이 다시 잡을 수 있게 되는 시간 [임시값] (v1.7)'),
  ('chat_message_retention_days','30',         '챗봇 대화 원문 보관 일수 (A-2)'),
  ('llm_timeout_ms',             '3000',       'Gemini 대사 생성 제한 시간, 초과 시 템플릿 대사'),
- ('llm_model',                  '"gemini"',   '대사 생성 모델 식별자 (배포 시 확정)');
+ ('llm_model',                  '"gemini"',   '대사 생성 모델 식별자 (배포 시 확정)'),
+ -- v1.9 (API 명세 v6, D-62 · D-63)
+ ('self_report_max_score',      '20',         '자기보고(SHORT·DETAILED) 습관 점수 상한. 확인됨(VERIFIED)은 score_max까지 (v1.9)'),
+ ('exp_coef_ratio',             '1.0',        '카테고리 경험치 계수 — 시간·양(TARGET_RATIO) (v1.9)'),
+ ('exp_coef_range',             '0.9',        '카테고리 경험치 계수 — 범위(RANGE, 수면) (v1.9)'),
+ ('exp_coef_binary',            '0.8',        '카테고리 경험치 계수 — O·X(BINARY) (v1.9)'),
+ ('exp_coef_verified',          '1.2',        '확인된 기록(타이머) 경험치 배수 — 위 계수에 곱하고 습관마다 반올림 (v1.9)'),
+ ('timer_max_minutes',          '240',        '습관 타이머 한 번 최대 분 — 일시정지 뺀 경과, 닿으면 자동 종료 (v1.9)'),
+ ('ai_daily_call_limit',        '60',         '사용자당 하루 AI 해석 호출 한도 (v1.9, 베타에서 조정)'),
+ ('ai_min_confidence',          '0.6',        '이보다 확신이 낮은 해석은 다시 묻기 (v1.9, 근거 없는 시작값 — 구현 뒤 조정)');
 -- memory_prompt_max_items는 schema_later.sql C 블록 (v1.2)

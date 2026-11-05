@@ -9,6 +9,8 @@
 -- v1.8: 시드 몬스터 28종 (id = 카테고리 순서). 검사가 쓰는 종 id를 새 번호로 —
 --       1 운동 스타터(그대로) · 6 공부 스타터(옛 2) · 7 공부 비스타터(옛 3) · 10 식습관 스타터(옛 4) · 19 수면 스타터(옛 5).
 --       S-2를 "스타터 없는 카테고리 0개" 검사로 (6개 카테고리 모두 스타터)
+-- v1.9: 체크인 근거(evidence · rewarded_evidence 불변 · score_capped), 습관 타이머(habit_timer — 습관마다 하나 · 도는 것은
+--       사용자당 하나 · 상태-시각 일치 · 끝난 날 기록), AI 호출 수(daily_call_count), 설정 키 8개
 -- =====================================================================
 CREATE TEMP TABLE _result (id text, ok boolean, note text);
 
@@ -47,7 +49,9 @@ INSERT INTO _cross_fk_expected VALUES
  ('monster.starter_grant','habit.user_category'),
  -- v1.7
  ('ai.checkin_dialogue','identity.users'), ('ai.checkin_dialogue','habit.checkin_submission'),
- ('api.idempotency_record','identity.users');
+ ('api.idempotency_record','identity.users'),
+ -- v1.9
+ ('ai.daily_call_count','identity.users');
 -- schema_later.sql을 적용한 DB라면 그 블록의 FK도 허용 목록에 포함
 INSERT INTO _cross_fk_expected
 SELECT * FROM (VALUES
@@ -295,6 +299,63 @@ WHERE p.filled_days <> (SELECT count(*) FROM habit.habit_checkin c
                         WHERE c.habit_id = p.habit_id AND c.period_seq = p.seq AND c.is_filled)
    OR p.counted_score_sum <> (SELECT coalesce(sum(c.rewarded_score),0) FROM habit.habit_checkin c
                               WHERE c.habit_id = p.habit_id AND c.period_seq = p.seq AND c.is_counted);
+
+-- ---------- v1.9 habit: 체크인 근거 · 점수 상한 ----------
+INSERT INTO _result
+SELECT 'v1.9 기존 체크인 행의 근거 기본값 = SHORT · 상한 안 걸림 (지금 보상과 같음)',
+       NOT EXISTS (SELECT 1 FROM habit.habit_checkin
+                   WHERE evidence <> 'SHORT' OR rewarded_evidence <> 'SHORT' OR score_capped), '';
+SELECT pg_temp.expect_fail('v1.9 근거는 SHORT·DETAILED·VERIFIED만',
+  $$UPDATE habit.habit_checkin SET evidence = 'PHOTO'$$);
+SELECT pg_temp.expect_ok  ('v1.9 재제출로 최신 근거 · 상한 여부는 바뀔 수 있음',
+  $$UPDATE habit.habit_checkin hc SET evidence = 'DETAILED', score_capped = true
+    FROM habit.habit h WHERE h.id = hc.habit_id AND h.name = '아침 러닝'$$);
+SELECT pg_temp.expect_fail('v1.9 재제출로 첫 확정 근거(rewarded_evidence) 변경 불가',
+  $$UPDATE habit.habit_checkin SET rewarded_evidence = 'VERIFIED'$$);
+
+-- ---------- v1.9 habit: 습관 타이머 ----------
+-- 아침 러닝(운동 시간, 분) · 전공 공부(공부 시간, 분) 습관 사용
+SELECT pg_temp.expect_ok  ('v1.9 타이머 시작 (RUNNING)',
+  $$INSERT INTO habit.habit_timer (user_id, habit_id, business_date, status, started_at)
+    SELECT 1, id, '2026-10-05', 'RUNNING', '2026-10-05 19:00+09' FROM habit.habit WHERE name = '아침 러닝'$$);
+SELECT pg_temp.expect_fail('v1.9 같은 습관에 끝나지 않은 타이머 두 개 불가',
+  $$INSERT INTO habit.habit_timer (user_id, habit_id, business_date, status, started_at, paused_at)
+    SELECT 1, id, '2026-10-05', 'PAUSED', '2026-10-05 19:10+09', '2026-10-05 19:20+09' FROM habit.habit WHERE name = '아침 러닝'$$);
+SELECT pg_temp.expect_fail('v1.9 도는 타이머는 사용자당 하나 (다른 습관도)',
+  $$INSERT INTO habit.habit_timer (user_id, habit_id, business_date, status, started_at)
+    SELECT 1, id, '2026-10-05', 'RUNNING', '2026-10-05 19:10+09' FROM habit.habit WHERE name = '전공 공부'$$);
+SELECT pg_temp.expect_ok  ('v1.9 다른 습관에 일시정지한 타이머는 남아 있어도 됨',
+  $$INSERT INTO habit.habit_timer (user_id, habit_id, business_date, status, started_at, paused_at)
+    SELECT 1, id, '2026-10-05', 'PAUSED', '2026-10-05 18:00+09', '2026-10-05 18:30+09' FROM habit.habit WHERE name = '전공 공부'$$);
+SELECT pg_temp.expect_fail('v1.9 일시정지 상태는 일시정지 시각 필수',
+  $$UPDATE habit.habit_timer t SET paused_at = NULL FROM habit.habit h WHERE h.id = t.habit_id AND h.name = '전공 공부'$$);
+SELECT pg_temp.expect_fail('v1.9 끝났는데 끝난 시각 · 기록 분 · 이유 없음 불가',
+  $$UPDATE habit.habit_timer t SET status = 'STOPPED' FROM habit.habit h WHERE h.id = t.habit_id AND h.name = '아침 러닝'$$);
+SELECT pg_temp.expect_fail('v1.9 끝난 이유에 MIDNIGHT 없음 (00시에 끊지 않음)',
+  $$UPDATE habit.habit_timer t SET status = 'STOPPED', ended_at = '2026-10-06 00:00+09', counted_minutes = 60, end_reason = 'MIDNIGHT'
+    FROM habit.habit h WHERE h.id = t.habit_id AND h.name = '아침 러닝'$$);
+SELECT pg_temp.expect_fail('v1.9 기록 분은 하루(1440) 이하',
+  $$UPDATE habit.habit_timer t SET status = 'STOPPED', ended_at = '2026-10-07 00:00+09', counted_minutes = 1441, end_reason = 'USER'
+    FROM habit.habit h WHERE h.id = t.habit_id AND h.name = '아침 러닝'$$);
+SELECT pg_temp.expect_fail('v1.9 끝난 시각은 시작 시각 이후',
+  $$UPDATE habit.habit_timer t SET status = 'STOPPED', ended_at = '2026-10-05 18:00+09', counted_minutes = 0, end_reason = 'USER'
+    FROM habit.habit h WHERE h.id = t.habit_id AND h.name = '아침 러닝'$$);
+SELECT pg_temp.expect_ok  ('v1.9 날을 넘겨 끝내면 끝난 날 기록 (23:30 ~ 00:12 → 다음 날 42분)',
+  $$UPDATE habit.habit_timer t SET started_at = '2026-10-05 23:30+09', status = 'STOPPED', ended_at = '2026-10-06 00:12+09',
+      business_date = '2026-10-06', counted_minutes = 42, end_reason = 'USER'
+    FROM habit.habit h WHERE h.id = t.habit_id AND h.name = '아침 러닝'$$);
+SELECT pg_temp.expect_ok  ('v1.9 일시정지한 타이머를 습관 그만두기로 끝냄 · 끝난 습관은 새로 시작 가능',
+  $$UPDATE habit.habit_timer t SET status = 'STOPPED', paused_seconds = 1800, paused_at = NULL,
+      ended_at = '2026-10-05 19:00+09', counted_minutes = 30, end_reason = 'HABIT_STOPPED'
+    FROM habit.habit h WHERE h.id = t.habit_id AND h.name = '전공 공부';
+    INSERT INTO habit.habit_timer (user_id, habit_id, business_date, status, started_at)
+    SELECT 1, id, '2026-10-06', 'RUNNING', '2026-10-06 07:00+09' FROM habit.habit WHERE name = '아침 러닝'$$);
+INSERT INTO _result
+SELECT 'v1.9 그날 기록 = 그날 끝난 타이머 합 (10-06 아침 러닝 42분, 도는 타이머는 안 셈)',
+       (SELECT sum(counted_minutes) FROM habit.habit_timer t JOIN habit.habit h ON h.id = t.habit_id
+        WHERE h.name = '아침 러닝' AND t.business_date = '2026-10-06' AND t.status = 'STOPPED') = 42, '';
+UPDATE habit.habit_timer SET status = 'STOPPED', ended_at = '2026-10-06 07:30+09', counted_minutes = 30, end_reason = 'USER'
+WHERE status = 'RUNNING';   -- 뒤 검사에 영향 없게 정리
 
 -- ---------- habit: 기간 채움·연장·그만두기 (v1.7) ----------
 -- 아래는 상태 전이 테스트라 체크인 행 없이 캐시 값을 직접 넣는다 (S-24 대사 이후에 실행)
@@ -654,6 +715,42 @@ SELECT pg_temp.expect_fail('v1.7 없는 제출 차수에는 대사 불가',
 SELECT pg_temp.expect_fail('v1.7 대사 출처는 LLM·TEMPLATE만',
   $$INSERT INTO ai.checkin_dialogue (daily_checkin_id, revision, user_id, line_text, source)
     SELECT id, 2, 1, '대사', 'WIDGET' FROM habit.daily_checkin WHERE checkin_date = '2026-10-05'$$);
+
+-- ---------- v1.9 ai: 해석 호출 수 ----------
+SELECT pg_temp.expect_ok  ('v1.9 호출 수: 첫 호출은 1행, 같은 날 다시 부르면 +1 (한 문장 올리기)',
+  $$INSERT INTO ai.daily_call_count (user_id, call_date, call_count) VALUES (1, '2026-10-05', 1)
+    ON CONFLICT (user_id, call_date) DO UPDATE SET call_count = ai.daily_call_count.call_count + 1, updated_at = now()
+      WHERE ai.daily_call_count.call_count < 60;
+    INSERT INTO ai.daily_call_count (user_id, call_date, call_count) VALUES (1, '2026-10-05', 1)
+    ON CONFLICT (user_id, call_date) DO UPDATE SET call_count = ai.daily_call_count.call_count + 1, updated_at = now()
+      WHERE ai.daily_call_count.call_count < 60$$);
+INSERT INTO _result
+SELECT 'v1.9 호출 수 = 2', (SELECT call_count FROM ai.daily_call_count WHERE user_id = 1 AND call_date = '2026-10-05') = 2, '';
+UPDATE ai.daily_call_count SET call_count = 60 WHERE user_id = 1 AND call_date = '2026-10-05';
+SELECT pg_temp.expect_ok  ('v1.9 한도(60)에 닿은 뒤 올리기 시도 (오류 없이 0행)',
+  $$INSERT INTO ai.daily_call_count (user_id, call_date, call_count) VALUES (1, '2026-10-05', 1)
+    ON CONFLICT (user_id, call_date) DO UPDATE SET call_count = ai.daily_call_count.call_count + 1, updated_at = now()
+      WHERE ai.daily_call_count.call_count < 60$$);
+INSERT INTO _result
+SELECT 'v1.9 한도에 닿으면 더 올라가지 않음 (행이 안 돌아옴 → 429)',
+       (SELECT call_count FROM ai.daily_call_count WHERE user_id = 1 AND call_date = '2026-10-05') = 60, '';
+SELECT pg_temp.expect_fail('v1.9 호출 수 음수 불가',
+  $$UPDATE ai.daily_call_count SET call_count = -1$$);
+SELECT pg_temp.expect_fail('v1.9 같은 사용자 · 같은 날 호출 수는 1행',
+  $$INSERT INTO ai.daily_call_count (user_id, call_date, call_count) VALUES (1, '2026-10-05', 1)$$);
+-- S-28 (v1.9) 설정 키
+INSERT INTO _result
+SELECT 'S-28 설정값 v1.9 (상한 20 · 계수 1.0/0.9/0.8 · 확인됨 1.2 · 타이머 240 · 호출 60 · 확신 0.6)',
+       (SELECT value FROM config.balance_config WHERE key = 'self_report_max_score') = '20'::jsonb
+   AND (SELECT value FROM config.balance_config WHERE key = 'exp_coef_ratio') = '1.0'::jsonb
+   AND (SELECT value FROM config.balance_config WHERE key = 'exp_coef_range') = '0.9'::jsonb
+   AND (SELECT value FROM config.balance_config WHERE key = 'exp_coef_binary') = '0.8'::jsonb
+   AND (SELECT value FROM config.balance_config WHERE key = 'exp_coef_verified') = '1.2'::jsonb
+   AND (SELECT value FROM config.balance_config WHERE key = 'timer_max_minutes') = '240'::jsonb
+   AND (SELECT value FROM config.balance_config WHERE key = 'ai_daily_call_limit') = '60'::jsonb
+   AND (SELECT value FROM config.balance_config WHERE key = 'ai_min_confidence') = '0.6'::jsonb
+   AND (SELECT (value #>> '{}')::numeric FROM config.balance_config WHERE key = 'self_report_max_score')
+       <= (SELECT (value #>> '{}')::numeric FROM config.balance_config WHERE key = 'score_max'), '';
 
 -- ---------- api: 중복 요청 방지 키 (v1.7) ----------
 SELECT pg_temp.expect_ok  ('v1.7 키 등록 (처리 중)',
