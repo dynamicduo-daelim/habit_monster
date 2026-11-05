@@ -126,7 +126,7 @@ body {
 .prop { position: absolute; height: auto; max-width: none; image-rendering: pixelated; }
 .prop.far { filter: saturate(.75) brightness(1.05); opacity: .9; }
 .cloud { position: absolute; z-index: 1; opacity: .95; }
-.cover-art { width: 62%; max-width: 260px; image-rendering: pixelated; align-self: center; margin-bottom: 6px; }
+.cover-art { width: auto; height: auto; max-width: min(62%, 260px); max-height: 170px; object-fit: contain; image-rendering: pixelated; align-self: center; margin-bottom: 6px; }
 
 /* 임시 소품: Ludo 그림이 아직 없을 때 단색 블록 + 컷 구석 '임시' 표시 */
 .tmp-block { aspect-ratio: 1; background: #cfc3ea; border: 3px dashed #6b5aa8; opacity: .85; box-sizing: border-box; }
