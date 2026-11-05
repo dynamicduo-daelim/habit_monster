@@ -36,7 +36,8 @@ public class BalanceConfig {
 		"explore_unowned_multiplier", "duplicate_gold", "capture_rate",
 		"monster_exp_per_level", "monster_max_level", "evolve_levels", "field_max", "field_min",
 		"affection_max", "affection_tiers", "affection_pet_gain", "affection_play_gain", "starter_affection",
-		"timer_max_minutes");
+		"timer_max_minutes", "self_report_max_score", "exp_coef_ratio", "exp_coef_range", "exp_coef_binary",
+		"exp_coef_verified");
 
 	/**
 	 * 시드에 있지만 이 클래스가 읽지 않는 키 — 다른 곳에서 정하거나(업무 날짜는 {@code application.properties}),
@@ -46,7 +47,6 @@ public class BalanceConfig {
 		"service_timezone", "day_boundary_hour", "freeze_after_days", "idempotency_ttl_hours", "idempotency_lock_seconds",
 		"chat_message_retention_days", "llm_timeout_ms", "llm_model",
 		// 시드 v1.9 (D-62 · D-63) — 서버 구현(타이머 · 근거 · 상한 · 계수 · 해석 보강) 때 REQUIRED로 옮긴다
-		"self_report_max_score", "exp_coef_ratio", "exp_coef_range", "exp_coef_binary", "exp_coef_verified",
 		"ai_daily_call_limit", "ai_min_confidence");
 
 	private final Map<String, JsonNode> values;
@@ -103,6 +103,19 @@ public class BalanceConfig {
 	public Map<String, Integer> periodDays() { return intMap("period_days"); }
 	/** 습관 타이머 한 번 최대 분 — 일시정지를 뺀 경과 기준 (명세 v6 9장). */
 	public int timerMaxMinutes() { return integer("timer_max_minutes"); }
+	/** 자기보고(SHORT · DETAILED) 점수 상한 — 확인됨(VERIFIED)은 {@link #scoreMax()}까지 (명세 v6 4-1, D-62). */
+	public int selfReportMaxScore() { return integer("self_report_max_score"); }
+	/** 카테고리 경험치 계수 — 측정 방식(TARGET_RATIO · RANGE · BINARY)별 (명세 v6 4-1, D-62). */
+	public java.math.BigDecimal expCoef(String scoringMode) {
+		String key = switch (scoringMode) {
+			case "BINARY" -> "exp_coef_binary";
+			case "RANGE" -> "exp_coef_range";
+			default -> "exp_coef_ratio";
+		};
+		return values.get(key).decimalValue();
+	}
+	/** 확인된 기록(타이머)의 경험치 배수 — 위 계수에 곱한다. */
+	public java.math.BigDecimal expCoefVerified() { return values.get("exp_coef_verified").decimalValue(); }
 
 	// ---------- 목표 ----------
 	public int weeklyGoalSlots() { return integer("weekly_goal_slots"); }

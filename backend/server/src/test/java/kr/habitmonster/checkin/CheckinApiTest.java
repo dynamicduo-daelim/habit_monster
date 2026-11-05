@@ -184,16 +184,19 @@ class CheckinApiTest extends PostgresTest {
 	void 레벨업으로_새_종이_탐색_후보가_된다() throws Exception {
 		String access = user("a@habit.kr", DEFAULT_ONBOARDING); // 운동 · 공부, 아침 러닝 30분
 		jdbc.update("update habit.user_category set exp_total = 25 where user_id = ? and category_code = 'ex'", userIdOf("a@habit.kr"));
-		// Lv.1 누적 25 + 25 = 50 → Lv.3 (누적 30) — 출현 레벨 3인 깡총 불토끼(2번)가 새로 나온다
+		// 60분(목표 30)을 직접 적음 → 자기보고 상한 20 (명세 v6). Lv.1 누적 25 + 20 = 45 → Lv.3 (누적 30)
+		// — 출현 레벨 3인 깡총 불토끼(2번)가 새로 나온다
 		submit(access, done(habit("a@habit.kr", "아침 러닝"), 60)).andExpect(status().isCreated())
-			.andExpect(jsonPath("$.habits[0].score").value(25))
+			.andExpect(jsonPath("$.habits[0].score").value(20))
+			.andExpect(jsonPath("$.habits[0].scoreCapped").value(true))
+			.andExpect(jsonPath("$.habits[0].evidence").value("SHORT"))
 			.andExpect(jsonPath("$.categoryExp[0].levelBefore").value(1))
 			.andExpect(jsonPath("$.categoryExp[0].levelAfter").value(3))
 			.andExpect(jsonPath("$.categoryExp[0].levelUpGold").value(40))
 			.andExpect(jsonPath("$.unlockedSpecies.length()").value(1))
 			.andExpect(jsonPath("$.unlockedSpecies[0].speciesId").value(2))
 			.andExpect(jsonPath("$.unlockedSpecies[0].categoryCode").value("ex"))
-			.andExpect(jsonPath("$.goldEarned").value(65));
+			.andExpect(jsonPath("$.goldEarned").value(60));
 	}
 
 	@Test
@@ -299,11 +302,12 @@ class CheckinApiTest extends PostgresTest {
 		String again = body(dates.today(), String.join(",", done(habit(e, "스쿼트"), 5), missed(habit(e, "걷기")),
 				done(habit(e, "전공 공부"), 60), done(habit(e, "영양제"), 1)));
 
-		// 명세 예시: 40분 → 23점 (여기선 스쿼트 5회 = 20 + 10 × (5/3 − 1) = 26.7 → 최대 25)
+		// 명세 예시: 40분 → 23점 (여기선 스쿼트 5회 = 20 + 10 × (5/3 − 1) = 26.7 → 25인데, 직접 적은 값이라 상한 20 — 명세 v6)
 		String first = send(access, put("/checkins/today"), key, again).andExpect(status().isOk())
 			.andExpect(jsonPath("$.revision").value(2))
 			.andExpect(jsonPath("$.habits[0].value").value(5))
-			.andExpect(jsonPath("$.habits[0].score").value(25))
+			.andExpect(jsonPath("$.habits[0].score").value(20))
+			.andExpect(jsonPath("$.habits[0].scoreCapped").value(true))
 			.andExpect(jsonPath("$.habits[1].value").value(0))
 			.andExpect(jsonPath("$.overallRate").value(100))
 			.andReturn().getResponse().getContentAsString();
@@ -314,9 +318,9 @@ class CheckinApiTest extends PostgresTest {
 		assertThat(gold(e)).isEqualTo(693);
 		assertThat(jdbc.queryForObject("select count(*) from wallet.wallet_ledger where user_id = ?", Integer.class, user)).isEqualTo(3);
 		assertThat(jdbc.queryForMap("select revision, total_score, counted_score from habit.daily_checkin where user_id = ?", user))
-			.containsEntry("revision", 2).containsEntry("total_score", 65).containsEntry("counted_score", 53);
+			.containsEntry("revision", 2).containsEntry("total_score", 60).containsEntry("counted_score", 53);
 		assertThat(jdbc.queryForMap("select value, score, rewarded_score from habit.habit_checkin where habit_id = ?", habit(e, "스쿼트")))
-			.containsEntry("score", 25).containsEntry("rewarded_score", 13);
+			.containsEntry("score", 20).containsEntry("rewarded_score", 13);
 		assertThat(jdbc.queryForObject("select level from habit.user_category where user_id = ? and category_code = 'ex'", Integer.class, user))
 			.isEqualTo(4);
 		assertThat(jdbc.queryForObject("select count(*) from habit.checkin_submission", Integer.class)).isEqualTo(2);

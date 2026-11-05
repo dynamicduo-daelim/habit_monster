@@ -73,7 +73,8 @@ public class CheckinService {
 		this.dates = dates;
 	}
 
-	@Transactional(readOnly = true)
+	/** 쓰기 트랜잭션 — 습관 모듈이 타이머 자동 종료 정리를 먼저 한다 (명세 v6 5장 {@code timerMinutes}). */
+	@Transactional
 	public TodayCheckin today(long userId) {
 		Board board = habits.board(userId);
 		return new TodayCheckin(dates.today(), board.submitted(), board.revision(), monsters.partner(userId).orElse(null),

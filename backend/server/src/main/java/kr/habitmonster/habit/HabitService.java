@@ -351,13 +351,23 @@ public class HabitService {
 	}
 
 	// ---------- 체크인 (3-3, API 명세 v5 "5. 챗봇") ----------
-	/** 체크인 답 하나. {@code done:false}("못했어")면 {@code value}는 보지 않고 0으로 저장한다. */
-	public record Answer(Long habitId, Boolean done, BigDecimal value) {
+	/**
+	 * 체크인 답 하나. {@code done:false}("못했어")면 {@code value}는 보지 않고 0으로 저장한다.
+	 * {@code evidence}(명세 v6): SHORT · DETAILED(자기보고, 없으면 SHORT). VERIFIED는 서버만 붙인다 — 보내면 400.
+	 */
+	public record Answer(Long habitId, Boolean done, BigDecimal value, String evidence) {
+		public Answer(Long habitId, Boolean done, BigDecimal value) {
+			this(habitId, done, value, null);
+		}
 	}
 
+	/** 앱이 보낼 수 있는 근거 (명세 v6 5장). */
+	static final Set<String> CLAIMABLE_EVIDENCE = Set.of("SHORT", "DETAILED");
+
 	/** {@code GET /checkins/today}의 습관 한 줄. {@code previousValue}는 제출 후의 최신 값 (다시 체크할 때 미리 채움). */
+	/** {@code timerMinutes}(명세 v6): 오늘 기록된 타이머 분. 타이머를 못 쓰는 습관은 null, 쓸 수 있는데 없으면 0. */
 	public record BoardHabit(long habitId, String name, String unit, String scoringMode, List<Number> options,
-			Number previousValue, int filledDays, int periodDays) {
+			Number previousValue, int filledDays, int periodDays, Integer timerMinutes) {
 	}
 
 	/** 카테고리 탭 하나 (카테고리 순서, 안은 등록 순서). */
@@ -367,7 +377,8 @@ public class HabitService {
 	public record Board(boolean submitted, int revision, List<Tab> tabs) {
 	}
 
-	public record ScoredHabit(long habitId, int score, boolean counted) {
+	/** 첫 제출의 습관 한 줄 (명세 v6): 근거 · 상한에 걸렸는지 · 이 습관이 준 카테고리 경험치(반영 아니면 0). */
+	public record ScoredHabit(long habitId, int score, boolean counted, String evidence, boolean scoreCapped, int expGained) {
 	}
 
 	/**
@@ -388,7 +399,7 @@ public class HabitService {
 			int countedScore, List<CategoryGain> categories, List<PeriodBonus> periodBonuses, boolean allMissed) {
 	}
 
-	public record RevisedHabit(long habitId, Number value, int score) {
+	public record RevisedHabit(long habitId, Number value, int score, String evidence, boolean scoreCapped) {
 	}
 
 	public record Revision(int revision, List<RevisedHabit> habits, int overallRate) {
@@ -412,10 +423,14 @@ public class HabitService {
 			.toList();
 	}
 
-	/** 오늘 체크인 화면: 제출 전이면 대상 습관, 제출 후면 제출에 들어간 습관(최신 값과 함께). */
-	@Transactional(readOnly = true)
+	/**
+	 * 오늘 체크인 화면: 제출 전이면 대상 습관, 제출 후면 제출에 들어간 습관(최신 값과 함께).
+	 * 쓰기 트랜잭션 — 타이머 자동 종료 정리를 먼저 하고 오늘 타이머 분을 붙인다 (명세 v6 5장).
+	 */
+	@Transactional
 	public Board board(long userId) {
 		LocalDate today = dates.today();
+		Map<Long, Integer> timed = timers.todayMinutes(userId);
 		Optional<DailyCheckinRow> checkin = habits.dailyCheckin(userId, today);
 		List<CheckinHabitRow> rows = checkin.map(c -> habits.submittedHabits(c.id()))
 			.orElseGet(() -> habits.targetHabits(userId, today));
@@ -426,7 +441,8 @@ public class HabitService {
 			.map(list -> new Tab(list.get(0).categoryCode(), list.get(0).categoryName(), list.stream()
 				.map(r -> new BoardHabit(r.habitId(), r.name(), r.unit(), r.scoringMode(),
 						scoring.options(measure(r)).stream().map(Decimals::plain).toList(), Decimals.plain(r.value()),
-						r.filledDays(), r.periodDays()))
+						r.filledDays(), r.periodDays(),
+						TimerService.isTimerMeasure(r.unit(), r.scoringMode()) ? timed.getOrDefault(r.habitId(), 0) : null))
 				.toList()))
 			.toList();
 		return new Board(checkin.isPresent(), checkin.map(DailyCheckinRow::revision).orElse(0), tabs);
@@ -448,11 +464,21 @@ public class HabitService {
 		if (targets.isEmpty()) {
 			throw new ApiException(ErrorCode.NO_ACTIVE_HABIT);
 		}
-		Map<Long, BigDecimal> values = validate(targets, answers);
+		Map<Long, String> claimed = new LinkedHashMap<>();
+		Map<Long, BigDecimal> values = validate(targets, answers, claimed);
+		Map<Long, String> evidence = judge(userId, targets, values, claimed);
 
-		// 점수와 반영 습관: 점수 높은 순, 같으면 습관 id(등록 순서)가 작은 쪽
+		// 점수(자기보고는 상한 20)와 반영 습관: 점수 높은 순, 같으면 습관 id(등록 순서)가 작은 쪽
 		Map<Long, Integer> scores = new LinkedHashMap<>();
-		targets.forEach(t -> scores.put(t.habitId(), scoring.score(measure(t), values.get(t.habitId()))));
+		Set<Long> capped = new java.util.HashSet<>();
+		for (CheckinHabitRow t : targets) {
+			int raw = scoring.score(measure(t), values.get(t.habitId()));
+			int score = scoring.cap(raw, isVerified(evidence.get(t.habitId())));
+			if (score < raw) {
+				capped.add(t.habitId());
+			}
+			scores.put(t.habitId(), score);
+		}
 		Set<Long> counted = targets.stream()
 			.sorted(Comparator.comparingInt((CheckinHabitRow t) -> -scores.get(t.habitId())).thenComparingLong(CheckinHabitRow::habitId))
 			.limit(config.dailyCountedHabits()).map(CheckinHabitRow::habitId).collect(Collectors.toSet());
@@ -465,14 +491,21 @@ public class HabitService {
 		}
 		for (CheckinHabitRow t : targets) {
 			habits.insertHabitCheckin(checkinId, t.habitId(), t.periodSeq(), values.get(t.habitId()), t.target(),
-					scores.get(t.habitId()), counted.contains(t.habitId()));
+					scores.get(t.habitId()), counted.contains(t.habitId()), evidence.get(t.habitId()),
+					capped.contains(t.habitId()));
 		}
 
-		List<CategoryGain> categories = addCategoryExp(userId, targets, scores, counted);
+		// 카테고리 경험치: 반영 습관마다 점수 × 방식 계수 × (확인됨 1.2), 습관마다 반올림 (명세 v6 4-1)
+		Map<Long, Integer> exp = new LinkedHashMap<>();
+		targets.forEach(t -> exp.put(t.habitId(), counted.contains(t.habitId())
+				? scoring.exp(scores.get(t.habitId()), t.scoringMode(), isVerified(evidence.get(t.habitId()))) : 0));
+		List<CategoryGain> categories = addCategoryExp(userId, targets, exp, counted);
 		List<PeriodBonus> bonuses = fillPeriods(userId, today, targets, values, scores, counted);
 
 		List<ScoredHabit> scored = targets.stream()
-			.map(t -> new ScoredHabit(t.habitId(), scores.get(t.habitId()), counted.contains(t.habitId()))).toList();
+			.map(t -> new ScoredHabit(t.habitId(), scores.get(t.habitId()), counted.contains(t.habitId()),
+					evidence.get(t.habitId()), capped.contains(t.habitId()), exp.get(t.habitId())))
+			.toList();
 		int overall = scoring.overallRate(List.copyOf(scores.values()));
 		boolean allMissed = values.values().stream().allMatch(v -> v.signum() == 0);
 		return new FirstCheckin(checkinId, 1, scored, overall, countedScore, categories, bonuses, allMissed);
@@ -490,14 +523,18 @@ public class HabitService {
 		DailyCheckinRow checkin = habits.dailyCheckin(userId, today)
 			.orElseThrow(() -> new ApiException(ErrorCode.CHECKIN_NOT_FOUND));
 		List<CheckinHabitRow> rows = habits.submittedHabits(checkin.id());
-		Map<Long, BigDecimal> values = validate(rows, answers);
+		Map<Long, String> claimed = new LinkedHashMap<>();
+		Map<Long, BigDecimal> values = validate(rows, answers, claimed);
+		Map<Long, String> evidence = judge(userId, rows, values, claimed);
 
 		List<RevisedHabit> revised = new ArrayList<>();
 		for (CheckinHabitRow r : rows) {
 			BigDecimal v = values.get(r.habitId());
-			int score = scoring.score(measure(r), v);
-			habits.updateHabitCheckin(checkin.id(), r.habitId(), v, score);
-			revised.add(new RevisedHabit(r.habitId(), Decimals.plain(v), score));
+			int raw = scoring.score(measure(r), v);
+			String e = evidence.get(r.habitId());
+			int score = scoring.cap(raw, isVerified(e));
+			habits.updateHabitCheckin(checkin.id(), r.habitId(), v, score, e, score < raw);
+			revised.add(new RevisedHabit(r.habitId(), Decimals.plain(v), score, e, score < raw));
 		}
 		int revision = habits.reviseDailyCheckin(checkin.id(), revised.stream().mapToInt(RevisedHabit::score).sum());
 		if (!habits.insertSubmission(key, checkin.id(), revision)) {
@@ -510,7 +547,7 @@ public class HabitService {
 	 * 답 검사 (400 + 틀린 항목 전부): 대상 습관을 빠짐없이 · 한 번씩, 대상이 아닌 습관(남의 습관 · 없는 습관 포함)은 안 됨,
 	 * {@code done}은 필수, {@code done:true}면 값이 선택지 중 하나. 습관 id → 저장할 값("못했어"는 0).
 	 */
-	private Map<Long, BigDecimal> validate(List<CheckinHabitRow> targets, List<Answer> answers) {
+	private Map<Long, BigDecimal> validate(List<CheckinHabitRow> targets, List<Answer> answers, Map<Long, String> claimed) {
 		Map<Long, CheckinHabitRow> byId = targets.stream().collect(Collectors.toMap(CheckinHabitRow::habitId, t -> t));
 		Map<Long, BigDecimal> values = new LinkedHashMap<>();
 		List<FieldError> errors = new ArrayList<>();
@@ -539,7 +576,12 @@ public class HabitService {
 				errors.add(new FieldError(f + ".value", "선택지 중에서 골라 주세요."));
 				continue;
 			}
+			if (a.evidence() != null && !CLAIMABLE_EVIDENCE.contains(a.evidence())) {
+				errors.add(new FieldError(f + ".evidence", "SHORT · DETAILED 중 하나예요."));
+				continue;
+			}
 			values.put(a.habitId(), a.done() ? a.value() : BigDecimal.ZERO);
+			claimed.put(a.habitId(), a.evidence() == null ? "SHORT" : a.evidence());
 		}
 		List<Long> missing = targets.stream().map(CheckinHabitRow::habitId)
 			.filter(id -> list.stream().noneMatch(a -> a != null && id.equals(a.habitId()))).toList();
@@ -553,15 +595,38 @@ public class HabitService {
 	}
 
 	/**
-	 * 반영 습관의 점수를 그 카테고리 경험치에. 레벨 N → N+1에 {@code category_exp_base × N}, 최대 {@code category_max_level},
+	 * 근거 판정 (명세 v6 5장): 분 단위 시간 습관에서 오늘 기록된(끝난) 타이머 분이 제출 값 이상이면 VERIFIED, 아니면 앱이 보낸
+	 * 자기보고 근거 그대로. 확인된 기록보다 많이 적으면 그 습관 전체가 자기보고다 (확인된 만큼만 따로 인정하지 않음).
+	 * 도는 · 일시정지한 타이머는 넣지 않는다. 부르는 쪽이 사용자 잠금을 잡고 있다.
+	 */
+	private Map<Long, String> judge(long userId, List<CheckinHabitRow> rows, Map<Long, BigDecimal> values,
+			Map<Long, String> claimed) {
+		Map<Long, Integer> timed = timers.todayMinutes(userId);
+		Map<Long, String> evidence = new LinkedHashMap<>();
+		for (CheckinHabitRow r : rows) {
+			BigDecimal v = values.get(r.habitId());
+			int minutes = timed.getOrDefault(r.habitId(), 0);
+			boolean verified = TimerService.isTimerMeasure(r.unit(), r.scoringMode()) && v.signum() > 0 && minutes > 0
+					&& v.compareTo(BigDecimal.valueOf(minutes)) <= 0;
+			evidence.put(r.habitId(), verified ? "VERIFIED" : claimed.get(r.habitId()));
+		}
+		return evidence;
+	}
+
+	private static boolean isVerified(String evidence) {
+		return "VERIFIED".equals(evidence);
+	}
+
+	/**
+	 * 반영 습관의 경험치({@code exp} — 점수 × 계수, 반영 아니면 0)를 그 카테고리 경험치에. 레벨 N → N+1에 {@code category_exp_base × N}, 최대 {@code category_max_level},
 	 * 한 번에 여러 레벨이 오를 수 있다. 반영 습관이 있는 카테고리만 돌려준다 (카테고리 순서).
 	 */
-	private List<CategoryGain> addCategoryExp(long userId, List<CheckinHabitRow> targets, Map<Long, Integer> scores,
+	private List<CategoryGain> addCategoryExp(long userId, List<CheckinHabitRow> targets, Map<Long, Integer> habitExp,
 			Set<Long> counted) {
 		Map<String, Integer> gained = new LinkedHashMap<>();
 		targets.stream().filter(t -> counted.contains(t.habitId()))
 			.sorted(Comparator.comparingInt(CheckinHabitRow::categorySort))
-			.forEach(t -> gained.merge(t.categoryCode(), scores.get(t.habitId()), Integer::sum));
+			.forEach(t -> gained.merge(t.categoryCode(), habitExp.get(t.habitId()), Integer::sum));
 		Map<String, CategoryExpRow> rows = habits.categoryExp(userId).stream()
 			.collect(Collectors.toMap(CategoryExpRow::categoryCode, r -> r));
 		List<CategoryGain> result = new ArrayList<>();

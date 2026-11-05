@@ -312,19 +312,25 @@ class HabitRepository {
 			.params(key, checkinId, revision).update() == 1;
 	}
 
+	/** 첫 확정: 최신 값 = 보상 기준값 (근거도 {@code evidence} = {@code rewarded_evidence}, v1.9). */
 	void insertHabitCheckin(long checkinId, long habitId, int periodSeq, BigDecimal value, BigDecimal target, int score,
-			boolean counted) {
+			boolean counted, String evidence, boolean capped) {
 		db.sql("""
 			insert into habit.habit_checkin (daily_checkin_id, habit_id, period_seq, value, target_snapshot, score,
-			                                 rewarded_value, rewarded_score, is_counted, is_filled)
-			values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""")
-			.params(checkinId, habitId, periodSeq, value, target, score, value, score, counted, value.signum() > 0)
+			                                 rewarded_value, rewarded_score, is_counted, is_filled,
+			                                 evidence, rewarded_evidence, score_capped)
+			values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""")
+			.params(checkinId, habitId, periodSeq, value, target, score, value, score, counted, value.signum() > 0,
+					evidence, evidence, capped)
 			.update();
 	}
 
-	void updateHabitCheckin(long checkinId, long habitId, BigDecimal value, int score) {
-		db.sql("update habit.habit_checkin set value = ?, score = ? where daily_checkin_id = ? and habit_id = ?")
-			.params(value, score, checkinId, habitId).update();
+	/** 다시 체크: 최신 값 · 점수 · 근거 · 상한 여부만 (보상 기준값은 트리거가 막는다). */
+	void updateHabitCheckin(long checkinId, long habitId, BigDecimal value, int score, String evidence, boolean capped) {
+		db.sql("""
+			update habit.habit_checkin set value = ?, score = ?, evidence = ?, score_capped = ?
+			 where daily_checkin_id = ? and habit_id = ?""")
+			.params(value, score, evidence, capped, checkinId, habitId).update();
 	}
 
 	/** 기간의 채운 날 · 반영 점수 합. 기간을 채웠으면 {@code endedOn} · {@code bonus}도 같은 문장에서 (DB CHECK가 같이 요구). */

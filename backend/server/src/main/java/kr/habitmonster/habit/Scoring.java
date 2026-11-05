@@ -63,6 +63,23 @@ class Scoring {
 		};
 	}
 
+	/** 자기보고 상한 (명세 v6 4-1, D-62): 확인됨이 아니면 최대 {@code self_report_max_score}(20). O·X · 범위는 원래 20이 최대. */
+	int cap(int score, boolean verified) {
+		return verified ? score : Math.min(score, config.selfReportMaxScore());
+	}
+
+	/**
+	 * 카테고리 경험치 (명세 v6 4-1, D-62) = 점수 × 방식 계수 × (확인됨이면 {@code exp_coef_verified}), 습관마다 반올림.
+	 * 예: O·X 20 → 16, 수면 20 → 18, 시간 25(확인됨) → 30.
+	 */
+	int exp(int score, String scoringMode, boolean verified) {
+		BigDecimal e = BigDecimal.valueOf(score).multiply(config.expCoef(scoringMode));
+		if (verified) {
+			e = e.multiply(config.expCoefVerified());
+		}
+		return e.setScale(0, RoundingMode.HALF_UP).intValueExact();
+	}
+
 	/** 달성률 % = min(점수 ÷ 20, 1) × 100 (반올림한 점수로). */
 	double rate(int score) {
 		return Math.min(score / (double) config.scoreTargetHit(), 1.0) * 100;
