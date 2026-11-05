@@ -7,17 +7,20 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 import com.jayway.jsonpath.JsonPath;
 
 import kr.habitmonster.ai.LlmClient;
 import kr.habitmonster.common.BusinessDates;
+import kr.habitmonster.idempotency.IdempotencyFilter;
 import kr.habitmonster.support.PostgresTest;
 
 import org.junit.jupiter.api.Test;
@@ -67,13 +70,13 @@ class InterpretApiTest extends PostgresTest {
 		String a = onboardedUser("ai1@habit.kr");
 		long run = running("ai1@habit.kr");
 		modelSays("""
-			{"reply": "와, 30분이나 뛰었구나!", "safety": false,
+			{"reply": "와, 31분이나 뛰었구나!", "safety": false,
 			 "answers": [
 			   {"habitId": %d, "done": true, "value": 31, "evidence": "DETAILED", "confidence": 0.95},
 			   {"habitId": 999999, "done": true, "value": 5, "evidence": "SHORT", "confidence": 1}]}""".formatted(run));
 		String res = interpret(a, "아침에 공원에서 31분 뛰었어").andExpect(status().isOk())
 			.andExpect(jsonPath("$.source").value("LLM"))
-			.andExpect(jsonPath("$.reply").value("와, 30분이나 뛰었구나!"))
+			.andExpect(jsonPath("$.reply").value("와, 31분이나 뛰었구나!")) // 사용자가 말한 숫자의 맞장구는 된다 (명세 v6)
 			.andExpect(jsonPath("$.answers.length()").value(1))
 			.andExpect(jsonPath("$.answers[0].habitId").value(run))
 			.andExpect(jsonPath("$.answers[0].evidence").value("DETAILED"))
@@ -141,5 +144,100 @@ class InterpretApiTest extends PostgresTest {
 		interpret(a, "가".repeat(301)).andExpect(status().isBadRequest());
 		interpret(a, dates.today().minusDays(1).toString(), "뛰었어").andExpect(status().isConflict())
 			.andExpect(jsonPath("$.code").value("BUSINESS_DATE_CHANGED"));
+	}
+
+	ResultActions interpretRaw(String access, String body) throws Exception {
+		return mvc.perform(post("/checkins/today/interpret").header("Authorization", "Bearer " + access)
+			.contentType(MediaType.APPLICATION_JSON).content(body));
+	}
+
+	@Test
+	void 대답에_사용자가_말하지_않은_숫자가_있으면_대본형_대답으로() throws Exception {
+		String a = onboardedUser("ai5@habit.kr");
+		long run = running("ai5@habit.kr");
+		modelSays("""
+			{"reply": "30분 뛰었네! 25점이야!", "safety": false,
+			 "answers": [{"habitId": %d, "done": true, "value": 30, "evidence": "SHORT", "confidence": 0.9}]}""".formatted(run));
+		interpret(a, "30분 뛰었어").andExpect(status().isOk())
+			.andExpect(jsonPath("$.reply").value("알려줘서 고마워! 아래에서 기록을 확인해 줘."))
+			.andExpect(jsonPath("$.answers.length()").value(1)) // 기록 후보는 그대로
+			.andExpect(jsonPath("$.source").value("LLM"));
+	}
+
+	@Test
+	void 위기_키워드는_AI가_놓치거나_실패해도_걸리고_일상_표현은_안_걸린다() throws Exception {
+		String a = onboardedUser("ai6@habit.kr");
+		modelSays("""
+			{"reply": "오늘도 고생했어", "safety": false, "answers": []}""");
+		interpret(a, "요즘 너무 힘들어서 죽고 싶어").andExpect(status().isOk())
+			.andExpect(jsonPath("$.safety").value(true))
+			.andExpect(jsonPath("$.reply").value(org.hamcrest.Matchers.containsString("혼자 견디지")));
+		interpret(a, "피곤해 죽겠어 그래도 뛰었어").andExpect(jsonPath("$.safety").value(false));
+
+		when(llm.generateJson(anyString(), anyList(), any())).thenReturn(Optional.empty());
+		interpret(a, "살기싫다").andExpect(jsonPath("$.source").value("TEMPLATE")).andExpect(jsonPath("$.safety").value(true));
+	}
+
+	@Test
+	void 하루_호출_한도는_DB에서_센다() throws Exception {
+		String a = onboardedUser("ai7@habit.kr");
+		modelSays("""
+			{"reply": "좋아", "safety": false, "answers": []}""");
+		interpret(a, "뛰었어").andExpect(status().isOk());
+		long user = userIdOf("ai7@habit.kr");
+		assertThat(jdbc.queryForObject("select call_count from ai.daily_call_count where user_id = ? and call_date = ?",
+				Integer.class, user, dates.today())).isEqualTo(1);
+		jdbc.update("update ai.daily_call_count set call_count = 60 where user_id = ?", user);
+		interpret(a, "뛰었어").andExpect(status().isTooManyRequests()).andExpect(jsonPath("$.code").value("AI_RATE_LIMITED"));
+		assertThat(jdbc.queryForObject("select call_count from ai.daily_call_count where user_id = ?", Integer.class, user))
+			.isEqualTo(60);
+	}
+
+	@Test
+	void 이미_다시_물어본_습관은_또_묻지_않는다() throws Exception {
+		String a = onboardedUser("ai8@habit.kr");
+		long run = running("ai8@habit.kr");
+		modelSays("""
+			{"reply": "음…", "safety": false, "askAgain": {"habitId": %d, "question": "몇 분?"},
+			 "answers": [{"habitId": %d, "done": true, "value": 30, "evidence": "SHORT", "confidence": 0.3}]}""".formatted(run, run));
+		interpretRaw(a, "{\"businessDate\": \"" + dates.today() + "\", \"message\": \"좀 뛰었나\", \"history\": [], \"draft\": [], "
+				+ "\"askedAgainHabitIds\": [" + run + "]}")
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.askAgain").value(org.hamcrest.Matchers.nullValue()))
+			.andExpect(jsonPath("$.answers.length()").value(0));
+	}
+
+	@Test
+	void 타이머_기록이_있으면_기록_이하인_가장_큰_선택지로() throws Exception {
+		String a = onboardedUser("ai9@habit.kr");
+		long run = running("ai9@habit.kr");
+		// 타이머 40분 (선택지 10 · 15 · 25 · 30 · 45 · 60) — 가장 가까운 45가 아니라 30 (45면 확인됨을 잃음)
+		String res = mvc.perform(post("/timers").header("Authorization", "Bearer " + a)
+				.header(IdempotencyFilter.HEADER, UUID.randomUUID().toString()).contentType(MediaType.APPLICATION_JSON)
+				.content("{\"businessDate\": \"" + dates.today() + "\", \"habitId\": " + run + "}"))
+			.andReturn().getResponse().getContentAsString();
+		long timer = ((Number) JsonPath.read(res, "$.timerId")).longValue();
+		jdbc.update("update habit.habit_timer set started_at = started_at - interval '40 minutes' where id = ?", timer);
+		mvc.perform(patch("/timers/" + timer).header("Authorization", "Bearer " + a)
+			.header(IdempotencyFilter.HEADER, UUID.randomUUID().toString()).contentType(MediaType.APPLICATION_JSON)
+			.content("{\"action\": \"STOP\"}")).andExpect(status().isOk());
+
+		modelSays("""
+			{"reply": "40분 뛰었구나", "safety": false,
+			 "answers": [{"habitId": %d, "done": true, "value": 40, "evidence": "SHORT", "confidence": 0.9}]}""".formatted(run));
+		interpret(a, "타이머로 40분 뛰었어").andExpect(jsonPath("$.answers[0].value").value(30));
+		// 타이머보다 많이 말하면 가장 가까운 값 (자기보고)
+		modelSays("""
+			{"reply": "50분!", "safety": false,
+			 "answers": [{"habitId": %d, "done": true, "value": 50, "evidence": "SHORT", "confidence": 0.9}]}""".formatted(run));
+		interpret(a, "50분 뛰었어").andExpect(jsonPath("$.answers[0].value").value(45));
+	}
+
+	@Test
+	void 빈_대화_줄은_막는다() throws Exception {
+		String a = onboardedUser("ai10@habit.kr");
+		interpretRaw(a, "{\"businessDate\": \"" + dates.today() + "\", \"message\": \"뛰었어\", "
+				+ "\"history\": [{\"role\": \"BOT\", \"text\": \" \"}], \"draft\": []}")
+			.andExpect(status().isBadRequest());
 	}
 }

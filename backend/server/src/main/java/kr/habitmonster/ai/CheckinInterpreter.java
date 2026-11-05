@@ -8,9 +8,11 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-import org.springframework.beans.factory.annotation.Value;
+import kr.habitmonster.config.BalanceConfig;
+
 import org.springframework.stereotype.Service;
 
 import tools.jackson.databind.JsonNode;
@@ -28,9 +30,12 @@ import tools.jackson.databind.json.JsonMapper;
 @Service
 public class CheckinInterpreter {
 
-	/** 오늘 체크할 습관 하나 (부르는 쪽이 넘기는 값). {@code options}는 고를 수 있는 값, O·X는 {@code [1]}. */
+	/**
+	 * 오늘 체크할 습관 하나 (부르는 쪽이 넘기는 값). {@code options}는 고를 수 있는 값, O·X는 {@code [1]}.
+	 * {@code timerMinutes}: 오늘 끝난 타이머 분 (타이머를 못 쓰는 습관은 null) — 값 맞추기에 쓴다 (명세 v6).
+	 */
 	public record HabitContext(long habitId, String name, String categoryName, String unit, String scoringMode,
-			Number target, Number maxValue, List<Number> options) {
+			Number target, Number maxValue, List<Number> options, Integer timerMinutes) {
 	}
 
 	/** 대화 상대 몬스터. {@code affectionTier}: LOW · MID · HIGH (말투가 달라진다). */
@@ -45,8 +50,9 @@ public class CheckinInterpreter {
 	public record DraftAnswer(long habitId, boolean done, Number value) {
 	}
 
+	/** {@code askedAgain}: 오늘 이미 한 번 다시 물어본 습관 — 또 {@code askAgain}으로 돌려주지 않는다 (앱이 버튼을 보여 줌). */
 	public record Request(Partner partner, List<HabitContext> habits, String message, List<HistoryLine> history,
-			List<DraftAnswer> draft, Long askingHabitId) {
+			List<DraftAnswer> draft, Long askingHabitId, Set<Long> askedAgain) {
 	}
 
 	/** 기록 후보. {@code evidence}: SHORT(짧은 자기보고) · DETAILED(구체적). VERIFIED는 제출 때 서버가 붙인다. */
@@ -83,14 +89,22 @@ public class CheckinInterpreter {
 			"safety", Map.of("type", "BOOLEAN")),
 		"required", List.of("reply", "answers", "safety"));
 
+	/** 위기 신호가 키워드로만 걸렸을 때 (AI가 놓쳤거나 실패) 몬스터 대답 대신. 숫자 · 상담 번호 같은 안내 문구는 넣지 않는다 (사용자 11-02). */
+	static final String SAFETY_REPLY = "많이 힘들었구나. 혼자 견디지 말고 믿을 수 있는 사람에게 꼭 이야기해 줘.";
+
+	/** {@code reply}에 사용자가 말하지 않은 숫자가 있을 때 대신하는 대본형 대답. */
+	static final String NUMBER_FREE_REPLY = "알려줘서 고마워! 아래에서 기록을 확인해 줘.";
+
+	private static final Pattern NUMBER = Pattern.compile("\\d+(?:\\.\\d+)?");
+
 	private final LlmClient llm;
 	private final JsonMapper json;
-	private final double minConfidence;
+	private final BalanceConfig config;
 
-	CheckinInterpreter(LlmClient llm, JsonMapper json, @Value("${app.llm.min-confidence:0.6}") double minConfidence) {
+	CheckinInterpreter(LlmClient llm, JsonMapper json, BalanceConfig config) {
 		this.llm = llm;
 		this.json = json;
-		this.minConfidence = minConfidence;
+		this.config = config;
 	}
 
 	public Result interpret(Request req) {
@@ -100,15 +114,23 @@ public class CheckinInterpreter {
 		}
 		turns.add(new LlmClient.Turn("user", req.message()));
 		Optional<String> raw = llm.generateJson(systemPrompt(req), turns, SCHEMA);
+		Result r;
 		if (raw.isEmpty()) {
-			return template(req);
+			r = template(req);
 		}
-		try {
-			return check(json.readTree(raw.get()), req);
+		else {
+			try {
+				r = check(json.readTree(raw.get()), req);
+			}
+			catch (Exception e) {
+				r = template(req); // 모델이 형식을 어겼다
+			}
 		}
-		catch (Exception e) {
-			return template(req); // 모델이 형식을 어겼다
+		// 위기 신호: AI 판단과 따로 서버 키워드 검사 (AI가 실패한 대본형에서도). 키워드로만 걸리면 대답을 걱정하는 말로
+		if (SafetyKeywords.flagged(req.message()) && !r.safety()) {
+			return new Result(SAFETY_REPLY, r.answers(), r.askAgain(), true, r.source());
 		}
+		return r;
 	}
 
 	// ---------- 프롬프트 ----------
@@ -181,8 +203,8 @@ public class CheckinInterpreter {
 			String evidence = Set.of("SHORT", "DETAILED").contains(a.path("evidence").asString("")) ? a.path("evidence").asString()
 					: "SHORT";
 			Number value = done ? fit(h, a.path("value")) : 0;
-			if (confidence < minConfidence || value == null) {
-				if (ask == null) {
+			if (confidence < config.aiMinConfidence() || value == null) {
+				if (ask == null && !req.askedAgain().contains(h.habitId())) {
 					ask = new AskAgain(h.habitId(), "'" + h.name() + "' 얼마나 했는지 알려줄래?");
 				}
 				continue;
@@ -191,7 +213,7 @@ public class CheckinInterpreter {
 		}
 		JsonNode q = root.path("askAgain");
 		if (ask == null && q.isObject() && byId.containsKey(q.path("habitId").asLong(-1))
-				&& !answers.containsKey(q.path("habitId").asLong())) {
+				&& !answers.containsKey(q.path("habitId").asLong()) && !req.askedAgain().contains(q.path("habitId").asLong())) {
 			ask = new AskAgain(q.path("habitId").asLong(), cut(q.path("question").asString(""), MAX_QUESTION));
 			if (ask.question().isBlank()) {
 				ask = new AskAgain(ask.habitId(), "'" + byId.get(ask.habitId()).name() + "' 얼마나 했어?");
@@ -201,11 +223,30 @@ public class CheckinInterpreter {
 		if (reply.isBlank()) {
 			return template(req);
 		}
+		if (!numbersFromUser(reply, req.message())) {
+			reply = NUMBER_FREE_REPLY; // 지어낸 숫자(점수 · 골드 등)를 막는다. 사용자가 말한 숫자의 맞장구는 된다
+		}
 		return new Result(reply, List.copyOf(answers.values()), ask, root.path("safety").asBoolean(false), "LLM");
 	}
 
 	/**
+	 * {@code reply}의 숫자가 모두 사용자가 이번 말에 쓴 숫자인지 (명세 v6 5장 검사 6). AI는 해석 단계에서 점수 · 골드를 모르므로
+	 * 그 밖의 숫자는 지어낸 것이다. 한글로 쓴 숫자("이십오 점")는 못 막는다.
+	 */
+	static boolean numbersFromUser(String reply, String message) {
+		Set<String> said = NUMBER.matcher(message == null ? "" : message).results().map(m -> normalize(m.group()))
+			.collect(Collectors.toSet());
+		return NUMBER.matcher(reply).results().map(m -> normalize(m.group())).allMatch(said::contains);
+	}
+
+	private static String normalize(String n) {
+		return new BigDecimal(n).stripTrailingZeros().toPlainString();
+	}
+
+	/**
 	 * 값 맞추기: O·X는 1, 그 밖에는 고를 수 있는 값 중 가장 가까운 값(결정 D-42).
+	 * 오늘 타이머 기록이 있고 말한 값이 기록 이하면 <b>기록 이하인 가장 큰 선택지</b> (명세 v6 — 가장 가까운 값이 기록보다 크면
+	 * 확인됨을 잃기 때문. 타이머 40분 → 45가 아니라 30). 기록이 가장 작은 선택지보다 적으면 가장 가까운 값 (자기보고).
 	 * 값이 없거나, 음수거나, 측정 항목 상한({@code maxValue})을 넘으면 null → 다시 묻는다.
 	 */
 	static Number fit(HabitContext h, JsonNode v) {
@@ -219,10 +260,21 @@ public class CheckinInterpreter {
 		if (x < 0 || (h.maxValue() != null && x > h.maxValue().doubleValue()) || h.options().isEmpty()) {
 			return null;
 		}
-		Number best = h.options().get(0);
-		for (Number o : h.options()) {
-			if (Math.abs(o.doubleValue() - x) < Math.abs(best.doubleValue() - x)) {
-				best = o;
+		Number best = null;
+		Integer timer = h.timerMinutes();
+		if (timer != null && timer > 0 && x <= timer) {
+			for (Number o : h.options()) {
+				if (o.doubleValue() <= timer && (best == null || o.doubleValue() > best.doubleValue())) {
+					best = o;
+				}
+			}
+		}
+		if (best == null) {
+			best = h.options().get(0);
+			for (Number o : h.options()) {
+				if (Math.abs(o.doubleValue() - x) < Math.abs(best.doubleValue() - x)) {
+					best = o;
+				}
 			}
 		}
 		return best instanceof BigDecimal b ? b.stripTrailingZeros() : best;

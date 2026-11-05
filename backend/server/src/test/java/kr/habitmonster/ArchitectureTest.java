@@ -44,7 +44,7 @@ class ArchitectureTest {
 	static final Map<String, String> SCHEMA_OF = Map.of(
 		"identity", "identity", "auth", "identity", // auth = 회원 모듈의 서비스 · 컨트롤러
 		"habit", "habit", "goal", "goal", "wallet", "wallet", "shop", "shop", "monster", "monster",
-		"config", "config", "idempotency", "api");
+		"config", "config", "idempotency", "api", "ai", "ai");
 
 	static final Pattern TABLE_REF = Pattern.compile("\\b(identity|habit|goal|wallet|shop|monster|config|ai|api)\\.([a-z_]+)\\b");
 
@@ -54,7 +54,7 @@ class ArchitectureTest {
 
 	@Test
 	void 저장소는_자기_모듈_안에서만_쓴다() {
-		for (String module : List.of("habit", "goal", "wallet", "shop", "monster", "idempotency")) {
+		for (String module : List.of("habit", "goal", "wallet", "shop", "monster", "idempotency", "ai")) {
 			classes().that().resideInAPackage(ROOT + "." + module + "..").and().haveSimpleNameEndingWith("Repository")
 				.should().onlyHaveDependentClassesThat().resideInAPackage(ROOT + "." + module + "..")
 				.allowEmptyShould(true)

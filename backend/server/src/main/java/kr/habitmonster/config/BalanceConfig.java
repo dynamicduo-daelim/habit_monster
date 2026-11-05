@@ -37,7 +37,7 @@ public class BalanceConfig {
 		"monster_exp_per_level", "monster_max_level", "evolve_levels", "field_max", "field_min",
 		"affection_max", "affection_tiers", "affection_pet_gain", "affection_play_gain", "starter_affection",
 		"timer_max_minutes", "self_report_max_score", "exp_coef_ratio", "exp_coef_range", "exp_coef_binary",
-		"exp_coef_verified");
+		"exp_coef_verified", "ai_daily_call_limit", "ai_min_confidence");
 
 	/**
 	 * 시드에 있지만 이 클래스가 읽지 않는 키 — 다른 곳에서 정하거나(업무 날짜는 {@code application.properties}),
@@ -45,9 +45,7 @@ public class BalanceConfig {
 	 */
 	static final Set<String> NOT_USED_BY_SERVER = Set.of(
 		"service_timezone", "day_boundary_hour", "freeze_after_days", "idempotency_ttl_hours", "idempotency_lock_seconds",
-		"chat_message_retention_days", "llm_timeout_ms", "llm_model",
-		// 시드 v1.9 (D-62 · D-63) — 서버 구현(타이머 · 근거 · 상한 · 계수 · 해석 보강) 때 REQUIRED로 옮긴다
-		"ai_daily_call_limit", "ai_min_confidence");
+		"chat_message_retention_days", "llm_timeout_ms", "llm_model");
 
 	private final Map<String, JsonNode> values;
 
@@ -114,6 +112,10 @@ public class BalanceConfig {
 		};
 		return values.get(key).decimalValue();
 	}
+	/** 하루 AI 해석 호출 한도 (명세 v6 5장). */
+	public int aiDailyCallLimit() { return integer("ai_daily_call_limit"); }
+	/** 이보다 확신이 낮은 해석은 기록 후보에서 빼고 다시 묻는다. */
+	public double aiMinConfidence() { return values.get("ai_min_confidence").asDouble(); }
 	/** 확인된 기록(타이머)의 경험치 배수 — 위 계수에 곱한다. */
 	public java.math.BigDecimal expCoefVerified() { return values.get("exp_coef_verified").decimalValue(); }
 
