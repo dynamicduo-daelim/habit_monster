@@ -35,7 +35,8 @@ public class BalanceConfig {
 		"explore_daily_free", "explore_daily_all_missed", "explore_miss_rate", "explore_rarity_weight",
 		"explore_unowned_multiplier", "duplicate_gold", "capture_rate",
 		"monster_exp_per_level", "monster_max_level", "evolve_levels", "field_max", "field_min",
-		"affection_max", "affection_tiers", "affection_pet_gain", "affection_play_gain", "starter_affection");
+		"affection_max", "affection_tiers", "affection_pet_gain", "affection_play_gain", "starter_affection",
+		"timer_max_minutes");
 
 	/**
 	 * 시드에 있지만 이 클래스가 읽지 않는 키 — 다른 곳에서 정하거나(업무 날짜는 {@code application.properties}),
@@ -46,7 +47,7 @@ public class BalanceConfig {
 		"chat_message_retention_days", "llm_timeout_ms", "llm_model",
 		// 시드 v1.9 (D-62 · D-63) — 서버 구현(타이머 · 근거 · 상한 · 계수 · 해석 보강) 때 REQUIRED로 옮긴다
 		"self_report_max_score", "exp_coef_ratio", "exp_coef_range", "exp_coef_binary", "exp_coef_verified",
-		"timer_max_minutes", "ai_daily_call_limit", "ai_min_confidence");
+		"ai_daily_call_limit", "ai_min_confidence");
 
 	private final Map<String, JsonNode> values;
 
@@ -100,6 +101,8 @@ public class BalanceConfig {
 	public Map<String, Double> periodMultiplier() { return doubleMap("period_multiplier"); }
 	/** 기간 코드 → 채워야 할 날 수. */
 	public Map<String, Integer> periodDays() { return intMap("period_days"); }
+	/** 습관 타이머 한 번 최대 분 — 일시정지를 뺀 경과 기준 (명세 v6 9장). */
+	public int timerMaxMinutes() { return integer("timer_max_minutes"); }
 
 	// ---------- 목표 ----------
 	public int weeklyGoalSlots() { return integer("weekly_goal_slots"); }

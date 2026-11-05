@@ -69,12 +69,14 @@ public class HabitService {
 	private final BusinessDates dates;
 	private final BalanceConfig config;
 	private final Scoring scoring;
+	private final TimerService timers;
 
-	HabitService(HabitRepository habits, BusinessDates dates, BalanceConfig config, Scoring scoring) {
+	HabitService(HabitRepository habits, BusinessDates dates, BalanceConfig config, Scoring scoring, TimerService timers) {
 		this.habits = habits;
 		this.dates = dates;
 		this.config = config;
 		this.scoring = scoring;
+		this.timers = timers;
 	}
 
 	// ---------- 마스터 ----------
@@ -273,6 +275,7 @@ public class HabitService {
 			throw new ApiException(ErrorCode.LAST_HABIT);
 		}
 		habits.stopHabit(habitId);
+		timers.endForHabit(userId, habitId); // 도는 · 일시정지한 타이머도 함께 끝낸다 (명세 v6 4장 · 9장)
 		return new Stopped(habitId, "STOPPED");
 	}
 
@@ -466,7 +469,7 @@ public class HabitService {
 		}
 
 		List<CategoryGain> categories = addCategoryExp(userId, targets, scores, counted);
-		List<PeriodBonus> bonuses = fillPeriods(today, targets, values, scores, counted);
+		List<PeriodBonus> bonuses = fillPeriods(userId, today, targets, values, scores, counted);
 
 		List<ScoredHabit> scored = targets.stream()
 			.map(t -> new ScoredHabit(t.habitId(), scores.get(t.habitId()), counted.contains(t.habitId()))).toList();
@@ -592,7 +595,7 @@ public class HabitService {
 	 * 기간 채운 날 · 반영 점수 합을 더하고, 채운 날이 기간에 닿으면 보너스를 정하고 습관을 ENDED로 (결정 B1).
 	 * "했어"(값 > 0)면 반영 여부와 상관없이 채운 날 +1, 반영 습관이면 점수 합에 더한다.
 	 */
-	private List<PeriodBonus> fillPeriods(LocalDate today, List<CheckinHabitRow> targets, Map<Long, BigDecimal> values,
+	private List<PeriodBonus> fillPeriods(long userId, LocalDate today, List<CheckinHabitRow> targets, Map<Long, BigDecimal> values,
 			Map<Long, Integer> scores, Set<Long> counted) {
 		Map<String, Double> multipliers = config.periodMultiplier();
 		List<PeriodBonus> bonuses = new ArrayList<>();
@@ -609,6 +612,7 @@ public class HabitService {
 				.setScale(0, RoundingMode.HALF_UP).intValueExact();
 			habits.updatePeriod(t.periodId(), days, sum, today, bonus);
 			habits.endHabit(t.habitId());
+			timers.endForHabit(userId, t.habitId()); // 기간을 채운 습관은 체크인 대상이 아니라 타이머도 끝낸다 (명세 v6 9장)
 			bonuses.add(new PeriodBonus(t.habitId(), t.periodId(), t.periodCode(), multiplier, sum, bonus));
 		}
 		return bonuses;

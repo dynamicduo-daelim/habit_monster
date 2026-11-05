@@ -50,6 +50,10 @@ public enum ErrorCode {
 	GOAL_PERIOD_ENDED(HttpStatus.CONFLICT, "기간이 끝난 목표예요"),
 	/** 등록한 날에는 완료할 수 없다 (C1 — 등록 → 바로 완료로 골드 벌기 방지). 명세 v5 보충 10-28에 사용자 요청으로 추가. */
 	GOAL_TOO_EARLY(HttpStatus.CONFLICT, "목표는 다음 날부터 완료할 수 있어요"),
+	/** 같은 습관에 끝나지 않은 타이머가 있거나, 다른 습관 타이머가 도는 중 (명세 v6 9장). 응답에 그 타이머의 {@code timerId}. */
+	TIMER_ALREADY_RUNNING(HttpStatus.CONFLICT, "이미 재고 있는 타이머가 있어요"),
+	/** 끝난 타이머에 일시정지 · 이어서 · 끝내기. 응답에 {@code endReason}. */
+	TIMER_NOT_RUNNING(HttpStatus.CONFLICT, "이미 끝난 타이머예요"),
 	// 422
 	IDEMPOTENCY_KEY_REUSED(HttpStatus.UNPROCESSABLE_CONTENT, "요청을 확인해 주세요"),
 	NOT_ENOUGH_GOLD(HttpStatus.UNPROCESSABLE_CONTENT, "골드가 모자라요"),
@@ -69,8 +73,10 @@ public enum ErrorCode {
 	LAST_HABIT(HttpStatus.UNPROCESSABLE_CONTENT, "습관은 1개 이상 있어야 해요"),
 	/** 기간이 남은 목표(진행 중 · 완료)가 칸을 다 차지함. 기간이 끝나거나 삭제하면 빈다. */
 	GOAL_SLOT_FULL(HttpStatus.UNPROCESSABLE_CONTENT, "목표 칸이 꽉 찼어요"),
+	/** 타이머는 분 단위 시간 습관(진행 중)만 (명세 v6 9장). */
+	NOT_TIMER_HABIT(HttpStatus.UNPROCESSABLE_CONTENT, "시간(분)으로 재는 습관에서만 타이머를 쓸 수 있어요"),
 	// 429
-	/** 챗봇 대화 해석의 하루 호출 한도 (제안 docs/제안/2026-10-30-AI챗봇-API.md). 앱은 버튼(대본형)으로 이어 간다. */
+	/** 챗봇 대화 해석의 하루 호출 한도 (명세 v6 5장, {@code ai_daily_call_limit}). 앱은 버튼(대본형)으로 이어 간다. */
 	AI_RATE_LIMITED(HttpStatus.TOO_MANY_REQUESTS, "오늘은 대화를 많이 했어요. 버튼으로 이어서 체크해요"),
 	// 503
 	SOCIAL_NOT_CONFIGURED(HttpStatus.SERVICE_UNAVAILABLE, "아직 준비 중인 로그인 방식이에요");

@@ -11,6 +11,9 @@ public class ApiException extends RuntimeException {
 	private final List<FieldError> errors;
 	/** {@code EMAIL_REGISTERED_WITH_OTHER_METHOD}일 때 원래 가입 방법 (kakao · google · email). */
 	private final String provider;
+	/** 타이머 오류(명세 v6 9장)일 때 — 이미 있는 타이머 번호 · 끝난 이유. */
+	private final Long timerId;
+	private final String endReason;
 
 	public ApiException(ErrorCode code) {
 		this(code, code.message);
@@ -26,10 +29,29 @@ public class ApiException extends RuntimeException {
 	}
 
 	private ApiException(ErrorCode code, String message, List<FieldError> errors, String provider) {
+		this(code, message, errors, provider, null, null);
+	}
+
+	private ApiException(ErrorCode code, String message, List<FieldError> errors, String provider, Long timerId,
+			String endReason) {
 		super(message);
 		this.code = code;
 		this.errors = List.copyOf(errors);
 		this.provider = provider;
+		this.timerId = timerId;
+		this.endReason = endReason;
+	}
+
+	/** 409 {@code TIMER_ALREADY_RUNNING} — 앱이 그 타이머를 이어서 쓰거나 멈추게 번호를 알려 준다. */
+	public static ApiException timerAlreadyRunning(long timerId) {
+		return new ApiException(ErrorCode.TIMER_ALREADY_RUNNING, ErrorCode.TIMER_ALREADY_RUNNING.message, List.of(), null,
+				timerId, null);
+	}
+
+	/** 409 {@code TIMER_NOT_RUNNING} — 어떻게 끝났는지(USER · MAX_DURATION · HABIT_STOPPED)도 알려 준다. */
+	public static ApiException timerNotRunning(String endReason) {
+		return new ApiException(ErrorCode.TIMER_NOT_RUNNING, ErrorCode.TIMER_NOT_RUNNING.message, List.of(), null, null,
+				endReason);
 	}
 
 	/** 다른 방법으로 가입된 이메일 — 사용자에게 원래 가입 방법을 알려 준다. */
@@ -47,5 +69,13 @@ public class ApiException extends RuntimeException {
 
 	public String provider() {
 		return provider;
+	}
+
+	public Long timerId() {
+		return timerId;
+	}
+
+	public String endReason() {
+		return endReason;
 	}
 }
