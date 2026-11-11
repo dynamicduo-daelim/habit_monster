@@ -24,7 +24,7 @@ import tools.jackson.databind.json.JsonMapper;
  * Gemini API ({@code generateContent}) 호출. 키 · 모델은 환경변수 {@code GEMINI_API_KEY} · {@code GEMINI_MODEL}
  * (로컬은 {@code backend/.env} — 커밋하지 않는다). 앱에는 키를 두지 않는다 (앱 파일을 풀면 꺼낼 수 있어서, D-57).
  *
- * <p>응답이 늦으면 기다리지 않는다: 제한 시간({@code app.llm.timeout-ms}, 기본 3초)을 넘기거나 실패하면 빈 값 → 대본형으로.
+ * <p>응답이 늦으면 기다리지 않는다: 제한 시간({@code app.llm.timeout-ms}, 기본 5초 — D-66)을 넘기거나 실패하면 빈 값 → 대본형으로.
  */
 @Component
 class GeminiClient implements LlmClient {
@@ -39,7 +39,7 @@ class GeminiClient implements LlmClient {
 	private final HttpClient http;
 
 	GeminiClient(@Value("${app.llm.gemini.api-key:}") String apiKey, @Value("${app.llm.gemini.model}") String model,
-			@Value("${app.llm.timeout-ms:3000}") long timeoutMs, JsonMapper json) {
+			@Value("${app.llm.timeout-ms:5000}") long timeoutMs, JsonMapper json) {
 		this.apiKey = apiKey;
 		this.model = model;
 		this.timeout = Duration.ofMillis(timeoutMs);

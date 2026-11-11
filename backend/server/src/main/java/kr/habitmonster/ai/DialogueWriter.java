@@ -17,7 +17,7 @@ import tools.jackson.databind.json.JsonMapper;
  * 제출 · 다시 체크 뒤 몬스터가 오늘 기록에 반응하는 한마디.
  *
  * <p>모델은 <b>말만</b> 한다 — 점수 · 골드를 모르고(넘기지 않음), 대사에 기록에 없는 숫자가 있으면 버리고 템플릿으로 바꾼다.
- * 모델이 실패하거나 제한 시간(3초)을 넘겨도 템플릿. DB는 건드리지 않는다 (저장은 {@link CheckinDialogues}).
+ * 모델이 실패하거나 제한 시간(5초)을 넘겨도 템플릿. DB는 건드리지 않는다 (저장은 {@link CheckinDialogues}).
  * 프롬프트 원문 설명: {@code docs/AI-프롬프트.md} 4장.
  */
 @Service

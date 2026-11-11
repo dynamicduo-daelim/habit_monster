@@ -7,7 +7,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 저장한 체크인 대사 {@code ai.checkin_dialogue} (스키마 v1.7) — 체크인 revision당 1개.
- * 읽기 · 저장이 각각 짧은 트랜잭션이라, 모델 호출(최대 3초)은 그 사이 트랜잭션 밖에서 한다.
+ * 읽기 · 저장이 각각 짧은 트랜잭션이라, 모델 호출(최대 5초)은 그 사이 트랜잭션 밖에서 한다.
  */
 @Service
 public class CheckinDialogues {
