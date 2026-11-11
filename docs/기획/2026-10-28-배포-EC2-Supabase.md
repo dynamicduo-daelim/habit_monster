@@ -68,3 +68,10 @@
 - [ ] AWS 콘솔 작업처럼 Claude가 직접 할 수 없는 단계는 사용자가 하고, Claude는 단계별 안내 문서를 쓴다 **[가정]**
 
 ## 8. 결과 (구현 뒤에 쓴다)
+
+### 2026-11-11 — EC2 서버를 systemd 서비스로 (D-65)
+- 그전: `export`로 비밀값을 넣고 `nohup java -jar ~/app-new.jar &`로 손으로 띄움 → SSH를 새로 열 때마다 다시 입력, 11-06에 **메모리 부족으로 강제 종료**된 뒤 11-11까지 꺼져 있었다.
+- 지금: 서비스 `habit-monster` (`Restart=on-failure`, 부팅 시 시작), 비밀값은 `/etc/habit-monster/app.env`(root 600), `-Xmx256m`, 포트 8080. 명령은 `backend/server/README.md` "EC2 배포 서버".
+- 2장 표의 [가정] "systemd · jar 직접 실행" → 확정. 구성도의 `:8081`은 실제로는 **8080** (기본 프로필).
+- 같은 날 `GEMINI_API_KEY` · `KAKAO_APP_ID` · `GOOGLE_CLIENT_IDS`도 넣음 (소셜 설정 · Gemini 키 유효 확인).
+- 아직: HTTPS(도메인 · nginx 연결 — nginx는 80에 떠 있으나 서버로 넘기는 설정은 못 찾음), 재부팅 시험, 새 jar(v1.9) 배포.
