@@ -428,6 +428,25 @@ public class HabitService {
 			.toList();
 	}
 
+	/** 체크인 대사에 넘길 습관 한 줄 — 최신 revision의 값 (못했어면 0). 점수 · 골드는 넣지 않는다 (AI는 보상을 모른다, D-57). */
+	public record DialogueHabit(String name, String categoryName, String unit, String scoringMode, Number target,
+			Number value) {
+	}
+
+	/** 체크인 대사 문맥: 오늘 체크인 id · 최신 revision · 습관들 (명세 v6 {@code POST /checkins/today/dialogue}). */
+	public record DialogueContext(long checkinId, int revision, List<DialogueHabit> habits) {
+	}
+
+	/** 오늘 체크인의 대사 문맥. 오늘 제출 전이면 비어 있다. 짧은 읽기 트랜잭션 — 모델 호출은 이 밖에서 한다. */
+	@Transactional(readOnly = true)
+	public Optional<DialogueContext> dialogueContext(long userId) {
+		return habits.dailyCheckin(userId, dates.today())
+			.map(c -> new DialogueContext(c.id(), c.revision(), habits.submittedHabits(c.id()).stream()
+				.map(r -> new DialogueHabit(r.name(), r.categoryName(), r.unit(), r.scoringMode(),
+						Decimals.plain(r.target()), Decimals.plain(r.value())))
+				.toList()));
+	}
+
 	/**
 	 * 오늘 체크인 화면: 제출 전이면 대상 습관, 제출 후면 제출에 들어간 습관(최신 값과 함께).
 	 * 쓰기 트랜잭션 — 타이머 자동 종료 정리를 먼저 하고 오늘 타이머 분을 붙인다 (명세 v6 5장).
