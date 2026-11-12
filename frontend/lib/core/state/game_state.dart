@@ -7,6 +7,9 @@ import '../../data/models.dart';
 import '../../data/results.dart';
 import '../constants/economy.dart';
 
+/// 그날 습관을 얼마나 했는지: 전부 목표 달성 / 일부만.
+enum DayHabitResult { all, partial }
+
 /// 앱 전체 게임 상태. 지금은 메모리에만 있고, 나중에 로컬 저장소/백엔드와 연결한다.
 class GameState extends ChangeNotifier {
   GameState({
@@ -282,6 +285,21 @@ class GameState extends ChangeNotifier {
     if (ago < 0) return false;
     return ago == 0 ? attendedToday : ago <= streakDays;
   }
+
+  /// 오늘 습관을 얼마나 했는지 (출석부 오늘 칸). 체크인 전이면 null.
+  /// 전부 = 오늘 물은 습관을 모두 기록했고, 모두 목표를 채웠다(점수 ≥ [Economy.targetHitScore]).
+  /// 지난 날은 앱에 날짜별 기록이 없어 알 수 없다 (서버 API 제안 — 기획 2026-11-12-UI-다듬기).
+  DayHabitResult? get todayHabitResult {
+    if (!checkedInToday) return null;
+    final hs = checkinHabits;
+    if (hs.isEmpty) return null;
+    final done = hs.where((h) => (scoreOf(h) ?? 0) >= Economy.targetHitScore).length;
+    return done == hs.length ? DayHabitResult.all : DayHabitResult.partial;
+  }
+
+  /// 오늘 목표를 다 채우지 못한 습관 수 (출석부 문구).
+  int get todayHabitsLeft =>
+      checkinHabits.where((h) => (scoreOf(h) ?? 0) < Economy.targetHitScore).length;
 
   /// 이 습관이 오늘 반영됐는지 (확정 후에만 의미 있음).
   bool isCounted(Habit h) => countedToday.contains(h.id);

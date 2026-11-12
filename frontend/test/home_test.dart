@@ -88,8 +88,8 @@ void main() {
     await tester.pump();
 
     // 슬라이드 시트
-    expect(find.text('위로 밀어 습관 리스트 보기'), findsOneWidget);
-    await tester.tap(find.text('위로 밀어 습관 리스트 보기'));
+    expect(find.byKey(const ValueKey('habit-sheet-summary')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('habit-sheet-summary')));
     await tester.pump(const Duration(milliseconds: 400));
     expect(find.text('챗봇에게 오늘 습관 체크받기'), findsOneWidget);
     await tester.tap(find.bySemanticsLabel('시트 접기'));

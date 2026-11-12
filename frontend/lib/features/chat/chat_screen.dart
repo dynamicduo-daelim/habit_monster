@@ -21,10 +21,14 @@ import 'study_timer_view.dart';
 
 /// 챗봇 탭: [챗봇 | 공부 타이머] 칸 전환. 챗봇 = 대화 상대 고르기 + 습관 체크 대화(버튼 또는 말 — AI 해석, D-57) + 탐색.
 class ChatScreen extends StatefulWidget {
-  const ChatScreen({super.key, this.active = true, this.controllerBuilder});
+  const ChatScreen({super.key, this.active = true, this.keyboardOpen, this.controllerBuilder});
 
   /// 챗봇 탭이 보이는 중인지 (탐색 화면 애니메이션 타이머용).
   final bool active;
+
+  /// 자판이 올라와 있는지 (셸이 알려 준다. 없으면 이 화면의 MediaQuery로 본다).
+  /// 올라와 있으면 [챗봇 | 공부 타이머] 줄을 숨기고 대화 상대 줄을 얇게 해 대화가 보이게 한다 (11-12).
+  final bool? keyboardOpen;
 
   /// 테스트나 AI 챗봇 연결 때 다른 [ChatController]를 넣을 수 있다.
   final ChatController Function(GameState state)? controllerBuilder;
@@ -216,11 +220,12 @@ class _ChatScreenState extends State<ChatScreen> {
         WidgetsBinding.instance.addPostFrameCallback((_) => c.start());
       }
     }
+    final keyboard = widget.keyboardOpen ?? MediaQuery.viewInsetsOf(context).bottom > 0;
     return Stack(
       children: [
         Column(
           children: [
-            if (c.step != ChatStep.explore) _paneTabs(),
+            if (c.step != ChatStep.explore && !(keyboard && _pane == 0)) _paneTabs(),
             if (_pane == 1 && c.step != ChatStep.explore)
               Expanded(
                 child: StudyTimerView(
@@ -239,7 +244,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 ),
               )
             else ...[
-            _partnerBar(s, c),
+            _partnerBar(s, c, compact: keyboard),
             Expanded(
               child: c.step == ChatStep.explore
                   ? ExploreView(controller: c, bobUp: _bobUp, onNeedBall: _openBallShop)
@@ -275,9 +280,11 @@ class _ChatScreenState extends State<ChatScreen> {
     MainShell.of(context).toast('성실볼 $n개를 샀어요 · 던질 수 있어요!');
   }
 
-  Widget _partnerBar(GameState s, ChatController c) {
+  /// [compact]: 자판이 올라온 동안 얇게 (칸 46 → 32).
+  Widget _partnerBar(GameState s, ChatController c, {bool compact = false}) {
+    final box = compact ? 32.0 : 46.0;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      padding: EdgeInsets.symmetric(horizontal: 12, vertical: compact ? 4 : 10),
       decoration: const BoxDecoration(
         color: AppColors.nightPanel,
         border: Border(bottom: BorderSide(color: AppColors.nightLine, width: 3)),
@@ -300,13 +307,14 @@ class _ChatScreenState extends State<ChatScreen> {
                       child: GestureDetector(
                         onTap: () => _pickPartner(s, m.uid),
                         child: Container(
-                          width: 46,
-                          height: 46,
-                          padding: const EdgeInsets.all(3),
+                          width: box,
+                          height: box,
+                          padding: EdgeInsets.all(compact ? 2 : 3),
                           decoration: BoxDecoration(
                             color: m.uid == s.chatPartnerUid ? AppColors.purpleDeep : AppColors.nightDeep,
                             border: Border.all(
-                                color: m.uid == s.chatPartnerUid ? AppColors.gold : AppColors.nightLine, width: 3),
+                                color: m.uid == s.chatPartnerUid ? AppColors.gold : AppColors.nightLine,
+                                width: compact ? 2 : 3),
                           ),
                           child: PixelImage(Catalog.speciesById(m.speciesId).assetAt(m.level)),
                         ),

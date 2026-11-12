@@ -381,12 +381,23 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
+  /// 교감 창이 열려 있으면 셸의 상단 바를 숨긴다 (창이 화면 위 끝까지, 11-12).
+  bool _topBarHidden = false;
+  void _syncTopBar(bool hide) {
+    if (hide == _topBarHidden) return;
+    _topBarHidden = hide;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) MainShell.maybeOf(context)?.setTopBarHidden(MainShell.homeTab, hide);
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     _syncShopMusic();
     final s = GameScope.of(context);
     final mons = s.fieldMonsters;
     final sel = s.monsterByUid(_selUid);
+    _syncTopBar(_overlay == HomeOverlayKind.monster && sel != null);
     final bobUp = _tick.isOdd;
 
     // 아래쪽(앞)에 있는 몬스터를 나중에 그린다. 끌고 있는 몬스터는 맨 위.

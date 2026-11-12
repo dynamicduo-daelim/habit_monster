@@ -67,6 +67,15 @@ class MainShellState extends State<MainShell> {
     _syncMusic();
   }
 
+  /// 상단 바를 잠깐 숨긴 탭 (홈의 교감 창이 화면 위 끝까지 차게, 11-12).
+  final Set<int> _topBarHidden = {};
+
+  /// [tab] 안의 화면이 상단 바를 숨기거나(true) 되돌린다(false). 그 탭이 보일 때만 숨는다.
+  void setTopBarHidden(int tab, bool hidden) {
+    if (_topBarHidden.contains(tab) == hidden || !mounted) return;
+    setState(() => hidden ? _topBarHidden.add(tab) : _topBarHidden.remove(tab));
+  }
+
   /// [tab] 안의 화면이 곡을 바꾸거나(track) 되돌린다(null). 그 탭이 보일 때만 들린다.
   void setMusicOverride(int tab, BgmTrack? track) {
     if (_musicOverrides[tab] == track) return;
@@ -194,12 +203,15 @@ class MainShellState extends State<MainShell> {
   }
 
   Widget _scaffold(BuildContext context) {
+    // 챗봇에서 자판이 올라오면 상단 바를 숨겨 대화가 보이게 한다 (11-12).
+    final keyboardOpen = MediaQuery.viewInsetsOf(context).bottom > 0;
+    final hideTopBar = _topBarHidden.contains(_tab) || (_tab == MainShell.chatTab && keyboardOpen);
     return Scaffold(
       body: SafeArea(
         bottom: false,
         child: Column(
           children: [
-            _TopBar(walletKey: _walletKey),
+            if (!hideTopBar) _TopBar(walletKey: _walletKey),
             Expanded(
               child: Stack(
                 children: [
@@ -214,7 +226,7 @@ class MainShellState extends State<MainShell> {
                           iconsKey: _iconsKey,
                           sheetKey: _sheetKey,
                         ),
-                        ChatScreen(active: _tab == MainShell.chatTab),
+                        ChatScreen(active: _tab == MainShell.chatTab, keyboardOpen: keyboardOpen),
                         const GoalsScreen(),
                         DexScreen(active: _tab == MainShell.dexTab),
                         StatsScreen(active: _tab == MainShell.statsTab),
