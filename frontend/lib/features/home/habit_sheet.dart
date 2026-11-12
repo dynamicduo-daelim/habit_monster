@@ -13,7 +13,7 @@ import '../../core/widgets/help_button.dart';
 import 'home_parts.dart';
 import '../../core/theme/app_theme.dart';
 
-/// 홈 아래 슬라이드 시트. 접히면 오늘의 성실도 요약, 펼치면 [습관 리스트 | 오늘의 성실도] 두 쪽.
+/// 홈 아래 슬라이드 시트. 접히면 손잡이 + 오늘의 성실도 막대만 (글자 없이, 11-12), 펼치면 [습관 리스트 | 오늘의 성실도] 두 쪽.
 class HabitSheet extends StatefulWidget {
   const HabitSheet({super.key, required this.maxHeight, required this.onGoChat});
 
@@ -21,7 +21,7 @@ class HabitSheet extends StatefulWidget {
   final double maxHeight;
   final VoidCallback onGoChat;
 
-  static const double closedHeight = 108;
+  static const double closedHeight = 44; // 테두리 4 + 손잡이 24 + 막대 8 + 아래 여백 8
   static const double openHeight = 470;
 
   @override
@@ -189,6 +189,7 @@ class _ProgressBar extends StatelessWidget {
   }
 }
 
+/// 접힌 시트: 글자 없이 오늘의 성실도 막대만. 읽기 도우미에는 점수 · 체크 수를 말로 알린다.
 class _Summary extends StatelessWidget {
   const _Summary({required this.s, required this.pct, required this.onTap});
   final GameState s;
@@ -197,46 +198,18 @@ class _Summary extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final countable = s.activeHabits.length;
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Expanded(
-                  child: Row(
-                    children: [
-                      Flexible(
-                        child: Text('오늘의 성실도 · 습관 ${s.checkedCount}/$countable 체크',
-                            style: const TextStyle(fontSize: 11, color: AppColors.textMuted)),
-                      ),
-                      const SizedBox(width: 2),
-                      const SincerityHelp(),
-                    ],
-                  ),
-                ),
-                Text.rich(
-                  TextSpan(children: [
-                    TextSpan(text: '${s.todayScore}'),
-                    const TextSpan(
-                        text: ' / ${GameState.maxDailyScore}',
-                        style: TextStyle(fontSize: 10, fontWeight: FontWeight.w400, color: AppColors.textMuted)),
-                  ]),
-                  style: const TextStyle(fontFamily: AppTheme.pixelFont, fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.gold),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            _ProgressBar(pct: pct, color: AppColors.gold),
-            const SizedBox(height: 8),
-            const Text('위로 밀어 습관 리스트 보기', style: TextStyle(fontSize: 9.5, color: AppColors.lavender)),
-          ],
+    return Semantics(
+      button: true,
+      label: '오늘의 성실도 ${s.todayScore}/${GameState.maxDailyScore}, '
+          '습관 ${s.checkedCount}/${s.activeHabits.length} 체크. 눌러서 습관 리스트 보기',
+      excludeSemantics: true,
+      child: GestureDetector(
+        key: const ValueKey('habit-sheet-summary'),
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 0, 14, 8),
+          child: _ProgressBar(pct: pct, color: AppColors.gold, height: 8),
         ),
       ),
     );

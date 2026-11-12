@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:habit_monster/core/state/game_state.dart';
 import 'package:habit_monster/features/home/attendance_popup.dart';
+import 'package:habit_monster/features/home/habit_sheet.dart';
 import 'package:habit_monster/features/shell/main_shell.dart';
 import 'game_harness.dart';
 
@@ -94,7 +95,6 @@ void main() {
     await tester.pump();
     expect(find.text('탐색 기회 3번 남음'), findsOneWidget);
     for (final (label, head) in [
-      ('성실도란? 설명', '성실도가 뭐예요?'),
       ('탐색이란? 설명', '탐색이 뭐예요?'),
       ('나의 필드 설명', '필드가 뭐예요?'),
     ]) {
@@ -103,8 +103,12 @@ void main() {
       await tapAndWait(tester, find.text('확인'));
       expect(find.text(head), findsNothing);
     }
-    // ? 를 눌러도 시트는 펼쳐지지 않는다
-    expect(find.text('위로 밀어 습관 리스트 보기'), findsOneWidget);
+    // 성실도 ? 는 시트를 펼친 "오늘의 성실도" 쪽에 있다 (접힌 시트는 글자 없이 막대만, 11-12)
+    await tapAndWait(tester, find.byKey(const ValueKey('habit-sheet-summary')));
+    await tapAndWait(tester, find.text('오늘의 성실도').first); // 위쪽 쪽 전환 탭
+    await tapAndWait(tester, find.byType(SincerityHelp));
+    expect(find.text('성실도가 뭐예요?'), findsOneWidget);
+    await tapAndWait(tester, find.text('확인'));
   });
 
   testWidgets('출석부: 연속 출석과 이번 달 도장', (tester) async {
@@ -113,7 +117,7 @@ void main() {
     // 홈에 들어온 것만으로 오늘 출석 (체크인 전)
     expect(state.checkedInToday, isFalse);
     expect(find.text('연속 12일'), findsOneWidget);
-    expect(find.text('오늘 출석 완료! 내일도 만나요.'), findsOneWidget);
+    expect(find.text('오늘 출석 완료! 습관 체크도 해 볼까요?'), findsOneWidget);
     expect(find.text('연속 12일째'), findsOneWidget); // 상단 바도 같은 숫자
     await tapAndWait(tester, find.text('오늘 습관 체크하러 가기')); // 닫고 챗봇 탭으로
     expect(find.text('연속 12일'), findsNothing);
@@ -123,6 +127,9 @@ void main() {
     await tapAndWait(tester, find.text('홈'));
     await tapAndWait(tester, find.bySemanticsLabel('출석부'));
     expect(find.text('연속 12일'), findsOneWidget); // 체크인해도 더 오르지 않는다
+    // 습관 하나만 체크 → 일부 완료 (11-12)
+    expect(state.todayHabitResult, DayHabitResult.partial);
+    expect(find.textContaining('목표까지 조금 남았어요'), findsOneWidget);
     expect(find.text('오늘 습관 체크하러 가기'), findsNothing);
     expect(find.text('확인'), findsOneWidget);
   });
