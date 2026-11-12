@@ -136,6 +136,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
   /// 아이콘 줄을 오른쪽으로 밀어 숨겼는지.
   bool _iconsHidden = false;
+
+  /// 오른쪽 아이콘이 위아래로 흔들리는 높이.
+  static const double _iconBob = 2;
   double _iconSwipe = 0;
 
   /// 아이콘 줄의 높이를 재는 키 (튜토리얼이 키를 주면 그것을 쓴다).
@@ -399,6 +402,8 @@ class _HomeScreenState extends State<HomeScreen> {
     final sel = s.monsterByUid(_selUid);
     _syncTopBar(_overlay == HomeOverlayKind.monster && sel != null);
     final bobUp = _tick.isOdd;
+    // 오른쪽 아이콘은 몬스터보다 느리고 얕게 흔든다 (1초마다 2px — 4px · 0.5초는 거슬림, 11-12)
+    final iconUp = (_tick ~/ 2).isOdd;
 
     // 아래쪽(앞)에 있는 몬스터를 나중에 그린다. 끌고 있는 몬스터는 맨 위.
     int depth(int i) => mons[i].uid == _dragUid ? 1000 : 0;
@@ -485,7 +490,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     semantic: '상점',
                     icon: PixelIcons.shopStall,
                     labelColor: AppColors.goldLight,
-                    bob: bobUp ? -4 : 0,
+                    bob: iconUp ? -_iconBob : 0,
                     badge: true,
                     onTap: _openShop,
                   ),
@@ -495,7 +500,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     semantic: '내 가방',
                     icon: PixelIcons.fieldBag,
                     labelColor: AppColors.text,
-                    bob: bobUp ? 0 : -4,
+                    bob: iconUp ? 0 : -_iconBob,
                     onTap: () => setState(() => _overlay = HomeOverlayKind.bag),
                   ),
                   const SizedBox(height: 6),
@@ -504,7 +509,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     semantic: '출석부',
                     icon: PixelIcons.fieldCalendar,
                     labelColor: AppColors.text,
-                    bob: bobUp ? -4 : 0,
+                    bob: iconUp ? -_iconBob : 0,
                     onTap: () => showAttendancePopup(
                       context,
                       onGoChat: () => MainShell.of(context).goTab(MainShell.chatTab),
@@ -516,7 +521,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     semantic: '습관 관리',
                     icon: PixelIcons.fieldQuest,
                     labelColor: AppColors.text,
-                    bob: bobUp ? 0 : -4,
+                    bob: iconUp ? 0 : -_iconBob,
                     onTap: () => Navigator.of(context).push(
                       MaterialPageRoute<void>(builder: (_) => const HabitManageScreen()),
                     ),

@@ -1,0 +1,370 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>밝은 화면 시안</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/galmuri@2.39.3/dist/galmuri.css">
+<style>
+/* ============ 1층: 원시 토큰 (값만) ============ */
+:root {
+  --p-cream-50: #FFFBF2;
+  --p-cream-100: #FFF4DF;
+  --p-parchment-200: #F4E6C8;
+  --p-wood-300: #E3C08D;
+  --p-wood-500: #C98A4B;
+  --p-wood-700: #8A5A2B;
+  --p-ink-900: #3A2618;
+  --p-ink-600: #8A6E58;
+  --p-sky-100: #E6F5FF;
+  --p-sky-300: #A8DBF5;
+  --p-sky-500: #5AAEE0;
+  --p-mint-200: #C9F2DA;
+  --p-mint-500: #4FB487;
+  --p-purple-200: #E4DDFF;
+  --p-purple-600: #6D5EC4;
+  --p-gold-200: #FFE7A8;
+  --p-gold-400: #F0B23C;
+  --p-gold-700: #B8780F;
+  --p-coral-400: #FF8A7A;
+  --p-white: #FFFFFF;
+
+  --p-space-1: 4px; --p-space-2: 8px; --p-space-3: 12px; --p-space-4: 16px;
+  --p-radius-card: 10px; --p-radius-bubble: 14px;
+  --p-line: 2px;
+
+  /* ============ 2층: 의미 토큰 (밝은 화면) ============ */
+  --c-bg: var(--p-cream-100);
+  --c-surface: var(--p-cream-50);
+  --c-surface-raised: var(--p-white);
+  --c-surface-sunken: var(--p-parchment-200);
+  --c-outline: var(--p-ink-900);
+  --c-text: var(--p-ink-900);
+  --c-text-muted: var(--p-ink-600);
+  --c-primary: var(--p-purple-600);
+  --c-primary-soft: var(--p-purple-200);
+  --c-accent: var(--p-mint-500);
+  --c-currency: var(--p-gold-400);
+  --c-currency-text: var(--p-gold-700);
+  --c-danger: var(--p-coral-400);
+  --c-chat-bg: var(--p-sky-100);
+  --shadow-hard: 0 3px 0 var(--c-outline);
+
+  /* ============ 3층: 부품 토큰 ============ */
+  --topbar-bg: var(--c-surface);
+  --nav-bg: var(--c-surface);
+  --nav-active-bg: var(--p-gold-200);
+  --card-bg: var(--c-surface);
+  --btn-primary-bg: var(--p-gold-400);
+  --btn-secondary-bg: var(--c-surface-raised);
+  --bubble-them-bg: var(--p-white);
+  --bubble-me-bg: var(--p-mint-200);
+  --chip-bg: var(--c-surface-raised);
+  --cal-all-bg: var(--p-gold-400);
+  --cal-part-bg: var(--p-gold-200);
+  --cal-none-bg: var(--p-parchment-200);
+
+  --font-pixel: 'Galmuri11', 'Pretendard', monospace;
+  --font-body: 'Pretendard', system-ui, sans-serif;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; font-family: var(--font-body); }
+.wrap { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
+.cap { font-size: 13px; color: var(--foreground); opacity: .8; margin: 8px 2px 0; line-height: 1.5; }
+.cap b { opacity: 1; }
+h2 { font-size: 15px; margin: 22px 2px 10px; color: var(--foreground); }
+
+/* 폰 틀 */
+.phone {
+  width: 100%; max-width: 340px; height: 640px; margin: 0 auto;
+  border: 3px solid var(--c-outline); border-radius: 26px; overflow: hidden;
+  background: var(--c-bg); position: relative; display: flex; flex-direction: column;
+  color: var(--c-text); box-shadow: 0 6px 0 var(--c-outline);
+  image-rendering: pixelated;
+}
+img { image-rendering: pixelated; }
+.pix { font-family: var(--font-pixel); }
+
+/* 공통: 상단 바 */
+.topbar { background: var(--topbar-bg); border-bottom: var(--p-line) solid var(--c-outline); padding: 10px 12px 9px; }
+.topbar .row { display: flex; align-items: center; gap: 8px; }
+.topbar .day { font-size: 10px; color: var(--c-text-muted); }
+.topbar .date { font-size: 19px; font-weight: 700; }
+.coin { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px 3px 4px; background: var(--c-surface-raised);
+  border: var(--p-line) solid var(--c-outline); border-radius: 999px; box-shadow: 0 2px 0 var(--c-outline); font-size: 13px; font-weight: 700; color: var(--c-currency-text); }
+.coin i { width: 16px; height: 16px; border-radius: 50%; background: var(--c-currency); border: 2px solid var(--p-gold-700); display: inline-block; }
+.chip { font-size: 10.5px; font-weight: 700; padding: 3px 8px; border: var(--p-line) solid var(--c-outline); border-radius: 8px; }
+
+/* 공통: 하단 탭 */
+.nav { display: flex; background: var(--nav-bg); border-top: var(--p-line) solid var(--c-outline); padding: 5px 6px 8px; }
+.nav div { flex: 1; text-align: center; font-size: 10px; color: var(--c-text-muted); padding: 5px 0; border-radius: 10px; }
+.nav div.on { background: var(--nav-active-bg); color: var(--c-text); font-weight: 700; border: 2px solid var(--c-outline); }
+.nav span { display: block; width: 16px; height: 16px; margin: 0 auto 3px; background: currentColor; opacity: .75;
+  clip-path: polygon(0 40%, 50% 0, 100% 40%, 100% 100%, 0 100%); }
+
+/* 홈 */
+.field { flex: 1; position: relative; margin: 10px; border: var(--p-line) solid var(--c-outline); border-radius: 12px; overflow: hidden;
+  background: url('C:/habit_monster/frontend/assets/images/backgrounds/home_field.png') center/cover; }
+.field .mon { position: absolute; width: 64px; }
+.field .tag { position: absolute; font-size: 9.5px; background: var(--c-surface); border: 2px solid var(--c-outline); border-radius: 6px; padding: 1px 5px; }
+.field .bubble { position: absolute; font-size: 10.5px; background: var(--c-surface-raised); border: 2px solid var(--c-outline); border-radius: 10px; padding: 5px 8px; box-shadow: var(--shadow-hard); }
+.icons { position: absolute; right: 8px; top: 8px; display: grid; gap: 6px; }
+.icons div { width: 40px; height: 40px; background: var(--c-surface); border: 2px solid var(--c-outline); border-radius: 10px; box-shadow: 0 2px 0 var(--c-outline);
+  font-size: 9px; display: grid; place-items: center; font-weight: 700; }
+.sheet { margin: 0 10px 8px; background: var(--card-bg); border: var(--p-line) solid var(--c-outline); border-radius: 12px; padding: 6px 12px 9px; box-shadow: var(--shadow-hard); }
+.sheet .handle { width: 40px; height: 4px; background: var(--p-wood-300); margin: 0 auto 7px; }
+.bar { height: 8px; background: var(--c-surface-sunken); border: 2px solid var(--c-outline); }
+.bar > i { display: block; height: 100%; width: 38%; background: var(--c-currency); }
+
+/* 챗봇: 메신저 */
+.room-head { display: flex; align-items: center; gap: 10px; padding: 9px 12px; background: var(--c-surface); border-bottom: var(--p-line) solid var(--c-outline); }
+.room-head .back { font-size: 18px; font-weight: 700; width: 18px; }
+.avatar { width: 38px; height: 38px; border-radius: 14px; background: var(--p-sky-300); border: 2px solid var(--c-outline); display: grid; place-items: center; overflow: hidden; flex: none; }
+.avatar img { width: 32px; }
+.room-head .name { font-weight: 700; font-size: 14px; }
+.room-head .sub { font-size: 10px; color: var(--c-text-muted); }
+.room-head .swap { margin-left: auto; font-size: 10px; color: var(--c-text-muted); display: flex; gap: 3px; align-items: center; }
+.room-head .dots { display: flex; gap: 3px; }
+.room-head .dots i { width: 5px; height: 5px; background: var(--p-wood-300); display: block; }
+.room-head .dots i.on { background: var(--c-primary); }
+.tabs { display: flex; gap: 6px; padding: 6px 10px; background: var(--c-surface); border-bottom: 2px solid var(--c-outline); }
+.tabs div { flex: 1; text-align: center; font-size: 11.5px; padding: 6px 0; border-radius: 9px; color: var(--c-text-muted); }
+.tabs div.on { background: var(--c-primary-soft); color: var(--c-text); font-weight: 700; border: 2px solid var(--c-outline); }
+.chat { flex: 1; overflow: hidden; padding: 10px 10px 6px; display: flex; flex-direction: column; gap: 8px;
+  background: var(--c-chat-bg);
+  background-image: radial-gradient(var(--p-sky-300) 1px, transparent 1.4px); background-size: 14px 14px; }
+.daydiv { align-self: center; font-size: 10px; color: var(--c-text-muted); background: rgba(255,255,255,.75); border: 1.5px solid var(--p-sky-300); border-radius: 999px; padding: 2px 10px; }
+.msg { display: flex; gap: 6px; align-items: flex-start; }
+.msg .avatar { width: 32px; height: 32px; border-radius: 12px; }
+.msg .avatar img { width: 26px; }
+.msg .who { font-size: 10.5px; color: var(--c-text-muted); margin: 0 0 3px 2px; }
+.line { display: flex; align-items: flex-end; gap: 4px; }
+.b { max-width: 196px; font-size: 12.5px; line-height: 1.45; padding: 7px 10px; border: 2px solid var(--c-outline); border-radius: var(--p-radius-bubble); box-shadow: 0 2px 0 var(--c-outline); }
+.them .b { background: var(--bubble-them-bg); border-top-left-radius: 4px; }
+.me { justify-content: flex-end; }
+.me .b { background: var(--bubble-me-bg); border-top-right-radius: 4px; }
+.t { font-size: 9px; color: var(--c-text-muted); white-space: nowrap; }
+.t .read { color: var(--c-primary); font-weight: 700; display: block; text-align: right; }
+.card { background: var(--p-white); border: 2px solid var(--c-outline); border-radius: 12px; padding: 8px 10px; font-size: 11.5px; box-shadow: 0 2px 0 var(--c-outline); max-width: 210px; }
+.card .ttl { font-weight: 700; margin-bottom: 4px; }
+.quick { display: flex; gap: 6px; padding: 7px 10px 0; background: var(--c-surface); border-top: 2px solid var(--c-outline); overflow: hidden; }
+.qr { font-size: 11.5px; font-weight: 700; padding: 6px 12px; border: 2px solid var(--c-outline); border-radius: 999px; background: var(--chip-bg); box-shadow: 0 2px 0 var(--c-outline); white-space: nowrap; }
+.qr.go { background: var(--btn-primary-bg); }
+.composer { display: flex; gap: 6px; align-items: center; padding: 7px 10px 9px; background: var(--c-surface); }
+.composer .plus { width: 30px; height: 30px; border: 2px solid var(--c-outline); border-radius: 10px; display: grid; place-items: center; font-weight: 700; background: var(--c-surface-raised); }
+.composer .input { flex: 1; height: 34px; border: 2px solid var(--c-outline); border-radius: 999px; background: var(--c-surface-raised); font-size: 11.5px; color: var(--c-text-muted); display: flex; align-items: center; padding: 0 12px; }
+.composer .send { padding: 0 12px; height: 34px; border: 2px solid var(--c-outline); border-radius: 10px; background: var(--c-primary); color: var(--p-white); font-weight: 700; font-size: 12px; display: grid; place-items: center; box-shadow: 0 2px 0 var(--c-outline); }
+
+/* 상대 고르기 (프로필 누르면) */
+.scrim { position: absolute; inset: 0; background: rgba(58,38,24,.45); display: flex; flex-direction: column; justify-content: flex-end; }
+.picker { background: var(--c-surface); border-top: 3px solid var(--c-outline); border-radius: 20px 20px 0 0; padding: 10px 0 14px; }
+.picker .handle { width: 40px; height: 4px; background: var(--p-wood-300); margin: 0 auto 8px; }
+.picker .ttl { text-align: center; font-size: 13px; font-weight: 700; }
+.picker .hint { text-align: center; font-size: 10px; color: var(--c-text-muted); margin-top: 2px; }
+.carousel { display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory; padding: 14px calc(50% - 75px) 10px; scrollbar-width: none; }
+.carousel::-webkit-scrollbar { display: none; }
+.pcard { flex: none; width: 150px; scroll-snap-align: center; background: var(--p-white); border: 2px solid var(--c-outline); border-radius: 14px; padding: 10px; text-align: center;
+  box-shadow: var(--shadow-hard); transition: transform .2s, opacity .2s; opacity: .55; transform: scale(.88); cursor: grab; }
+.pcard.on { opacity: 1; transform: scale(1); }
+.pcard .stage { height: 96px; border-radius: 10px; border: 2px solid var(--c-outline); display: grid; place-items: center; }
+.pcard img { width: 78px; }
+.pcard .nm { font-weight: 700; font-size: 14px; margin-top: 7px; }
+.pcard .lv { font-size: 10px; color: var(--c-text-muted); }
+.pcard .hearts { color: var(--c-danger); font-size: 11px; letter-spacing: 1px; }
+.pcard .last { font-size: 10px; color: var(--c-text-muted); margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pdots { display: flex; justify-content: center; gap: 5px; }
+.pdots i { width: 6px; height: 6px; background: var(--p-wood-300); display: block; }
+.pdots i.on { background: var(--c-primary); width: 14px; }
+.cta { margin: 12px 16px 0; text-align: center; padding: 11px; border: 2px solid var(--c-outline); border-radius: 10px; background: var(--btn-primary-bg); font-weight: 700; font-size: 13px; box-shadow: var(--shadow-hard); }
+
+/* 출석부 */
+.pop { position: absolute; inset: 0; background: rgba(58,38,24,.35); display: grid; place-items: center; padding: 16px; }
+.popcard { width: 100%; background: var(--c-surface); border: 3px solid var(--c-outline); border-radius: 14px; padding: 18px 14px 14px; position: relative; box-shadow: 0 5px 0 var(--c-outline); }
+.ribbon { position: absolute; top: -14px; left: 50%; transform: translateX(-50%); background: var(--c-danger); color: #fff; font-weight: 700; font-size: 13px; padding: 4px 14px; border: 2px solid var(--c-outline); }
+.cal { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; margin-top: 8px; }
+.cal div { height: 28px; border: 2px solid var(--p-wood-300); background: var(--c-surface-raised); font-size: 8px; padding: 1px 2px; color: var(--c-text-muted); position: relative; }
+.cal .none { background: var(--cal-none-bg); border-color: var(--p-wood-500); }
+.cal .part { background: var(--cal-part-bg); border-color: var(--p-gold-700); color: var(--c-text); }
+.cal .all { background: var(--cal-all-bg); border-color: var(--p-gold-700); color: var(--c-text); }
+.cal .today { border: 3px solid var(--c-primary); }
+.cal div::after { position: absolute; right: 2px; bottom: 0; font-size: 10px; color: var(--c-text); }
+.cal .none::after { content: '✓'; color: var(--p-wood-500); font-size: 9px; }
+.cal .part::after { content: '✓'; font-weight: 700; }
+.cal .all::after { content: '★'; }
+.btn { margin-top: 12px; text-align: center; padding: 10px; border: 2px solid var(--c-outline); border-radius: 10px; background: var(--p-mint-200); font-weight: 700; font-size: 12px; box-shadow: var(--shadow-hard); }
+
+/* 토큰 표 */
+.tokens { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.tok { display: flex; gap: 8px; align-items: center; font-size: 11.5px; color: var(--foreground); }
+.tok i { width: 28px; height: 28px; border-radius: 6px; border: 2px solid var(--c-outline); flex: none; }
+.tok small { display: block; opacity: .65; font-size: 10px; }
+</style>
+</head>
+<body>
+
+<h2>① 홈 · ② 챗봇(메신저) · ③ 프로필 눌러 상대 고르기 · ④ 출석부</h2>
+<div class="wrap">
+
+  <!-- ① 홈 -->
+  <div>
+    <div class="phone">
+      <div class="topbar">
+        <div class="row">
+          <div style="flex:1"><div class="day">DAY 12 · 목요일</div><div class="date pix">11월 12일</div></div>
+          <span class="coin"><i></i><span class="pix">1,240</span></span>
+          <span class="coin" style="color:var(--c-text)"><i style="background:var(--c-danger);border-color:#B5443A"></i><span class="pix">×3</span></span>
+        </div>
+        <div class="row" style="margin-top:7px">
+          <span class="chip" style="background:var(--c-primary-soft)">연속 12일째</span>
+          <span class="chip" style="background:var(--p-gold-200)">탐색 기회 3번 남음</span>
+        </div>
+      </div>
+      <div class="field">
+        <div class="icons"><div>상점</div><div>가방</div><div>출석</div><div>습관</div></div>
+        <div class="bubble" style="left:30px;top:120px">너 오면 불이 저절로 방방해져!</div>
+        <img class="mon" style="left:42px;top:160px" src="C:/habit_monster/frontend/assets/images/monsters/monkey.png">
+        <div class="tag" style="left:44px;top:226px">모닥이 Lv.7</div>
+        <img class="mon" style="left:150px;top:230px" src="C:/habit_monster/frontend/assets/images/monsters/mouse.png">
+        <div class="tag" style="left:156px;top:296px">토독 Lv.4</div>
+      </div>
+      <div class="sheet"><div class="handle"></div><div class="bar"><i></i></div></div>
+      <div class="nav"><div class="on"><span></span>홈</div><div><span></span>챗봇</div><div><span></span>목표</div><div><span></span>도감</div><div><span></span>통계</div></div>
+    </div>
+    <p class="cap"><b>홈.</b> 상단 바 · 탭 바 · 시트를 크림색 판으로. 굵은 갈색 테두리 + 아래로 3px 딱딱한 그림자로 픽셀 느낌은 유지.</p>
+  </div>
+
+  <!-- ② 챗봇 -->
+  <div>
+    <div class="phone">
+      <div class="tabs"><div class="on">챗봇</div><div>공부 타이머</div></div>
+      <div class="room-head">
+        <div class="avatar" style="background:#FFD7C2"><img src="C:/habit_monster/frontend/assets/images/monsters/monkey.png"></div>
+        <div><div class="name">모닥이 ▾</div><div class="sub">Lv.7 · 친해진 사이</div></div>
+        <div class="swap">프로필을 눌러 바꾸기</div>
+      </div>
+      <div class="chat">
+        <div class="daydiv">2026년 11월 12일 목요일</div>
+        <div class="msg them">
+          <div class="avatar" style="background:#FFD7C2"><img src="C:/habit_monster/frontend/assets/images/monsters/monkey.png"></div>
+          <div><div class="who">모닥이</div>
+            <div class="line"><div class="b">안녕! 오늘 습관 체크하러 왔어</div><span class="t">오후 2:13</span></div>
+            <div class="line" style="margin-top:4px"><div class="b">[운동] '아침 러닝' 오늘 했어?</div><span class="t">오후 2:13</span></div>
+          </div>
+        </div>
+        <div class="msg me"><div class="line"><span class="t"><span class="read">1</span>오후 2:14</span><div class="b">30분 뛰었어!</div></div></div>
+        <div class="msg them">
+          <div class="avatar" style="background:#FFD7C2"><img src="C:/habit_monster/frontend/assets/images/monsters/monkey.png"></div>
+          <div><div class="who">모닥이</div>
+            <div class="line"><div class="card"><div class="ttl">운동 · 아침 러닝</div>목표 30분 → <b>30분</b> 달성!<div class="bar" style="margin-top:6px"><i style="width:100%;background:var(--c-accent)"></i></div></div><span class="t">오후 2:14</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="quick"><span class="qr go">했어!</span><span class="qr">못 했어</span></div>
+      <div class="composer"><div class="plus">+</div><div class="input">말로 알려줘도 돼</div><div class="send">보내기</div></div>
+      <div class="nav"><div><span></span>홈</div><div class="on"><span></span>챗봇</div><div><span></span>목표</div><div><span></span>도감</div><div><span></span>통계</div></div>
+    </div>
+    <p class="cap"><b>챗봇.</b> 메신저 채팅방 구조: 위에 상대 프로필 · 이름, 날짜 줄, 상대 말은 왼쪽(프로필 + 이름), 내 말은 오른쪽 민트 말풍선 + 시간 · 읽음. 기록 결과는 카드 말풍선. 버튼은 입력칸 위 빠른 답장으로.</p>
+  </div>
+
+  <!-- ③ 상대 고르기 -->
+  <div>
+    <div class="phone">
+      <div class="tabs"><div class="on">챗봇</div><div>공부 타이머</div></div>
+      <div class="room-head">
+        <div class="avatar" style="background:#FFD7C2"><img src="C:/habit_monster/frontend/assets/images/monsters/monkey.png"></div>
+        <div><div class="name">모닥이 ▾</div><div class="sub">Lv.7 · 친해진 사이</div></div>
+      </div>
+      <div class="chat"><div class="daydiv">2026년 11월 12일 목요일</div></div>
+      <div class="scrim">
+        <div class="picker">
+          <div class="handle"></div>
+          <div class="ttl">누구랑 이야기할까?</div>
+          <div class="hint">← 옆으로 밀어서 고르기 →</div>
+          <div class="carousel" id="car">
+            <div class="pcard"><div class="stage" style="background:#FFD7C2"><img src="C:/habit_monster/frontend/assets/images/monsters/monkey.png"></div><div class="nm">모닥이</div><div class="lv">운동 · Lv.7</div><div class="hearts">♥♥♥♡♡</div><div class="last">러닝 30분 대단해!</div></div>
+            <div class="pcard"><div class="stage" style="background:#FFF0B8"><img src="C:/habit_monster/frontend/assets/images/monsters/mouse.png"></div><div class="nm">토독</div><div class="lv">공부 · Lv.4</div><div class="hearts">♥♥♡♡♡</div><div class="last">오늘 몇 쪽 읽었어?</div></div>
+            <div class="pcard"><div class="stage" style="background:#D6F2C8"><img src="C:/habit_monster/frontend/assets/images/monsters/turtle.png"></div><div class="nm">오물</div><div class="lv">식습관 · Lv.2</div><div class="hearts">♥♡♡♡♡</div><div class="last">물 마셨어?</div></div>
+            <div class="pcard"><div class="stage" style="background:#DDE6FF"><img src="C:/habit_monster/frontend/assets/images/monsters/owl.png"></div><div class="nm">부엉</div><div class="lv">수면 · Lv.3</div><div class="hearts">♥♥♡♡♡</div><div class="last">어제 몇 시에 잤어?</div></div>
+          </div>
+          <div class="pdots" id="dots"><i></i><i></i><i></i><i></i></div>
+          <div class="cta" id="cta">모닥이와 대화하기</div>
+        </div>
+      </div>
+    </div>
+    <p class="cap"><b>상대 고르기.</b> 채팅방 위 프로필을 누르면 아래에서 올라옴. 양옆으로 밀어 캐릭터를 고르고(가운데가 커짐), 버튼으로 바꿈. <b>이 시안에서 직접 밀어 볼 수 있어요.</b></p>
+  </div>
+
+  <!-- ④ 출석부 -->
+  <div>
+    <div class="phone">
+      <div class="topbar"><div class="row"><div style="flex:1"><div class="day">DAY 12 · 목요일</div><div class="date pix">11월 12일</div></div><span class="coin"><i></i><span class="pix">1,240</span></span></div></div>
+      <div class="field" style="filter:saturate(.8)"></div>
+      <div class="nav"><div class="on"><span></span>홈</div><div><span></span>챗봇</div><div><span></span>목표</div><div><span></span>도감</div><div><span></span>통계</div></div>
+      <div class="pop">
+        <div class="popcard">
+          <div class="ribbon">출석부</div>
+          <div style="display:flex;align-items:flex-end"><div class="pix" style="font-size:20px;font-weight:700;color:var(--c-currency-text);flex:1">연속 12일</div><div style="font-size:10px;color:var(--c-text-muted)">함께한 지 12일째</div></div>
+          <div style="font-size:11px;color:var(--c-accent);margin-top:3px;font-weight:700">오늘 습관 전부 완료! 최고예요.</div>
+          <div class="cal" id="cal"></div>
+          <div style="display:flex;gap:10px;margin-top:8px;font-size:9.5px;color:var(--c-text-muted)"><span>★ 전부 완료</span><span>✓ 일부 완료</span><span style="color:var(--p-wood-500)">✓ 출석만</span></div>
+          <div class="btn">확인</div>
+        </div>
+      </div>
+    </div>
+    <p class="cap"><b>출석부.</b> 어제 만든 "전부 · 일부 · 출석만" 칸을 밝은 판에 맞춘 모습.</p>
+  </div>
+</div>
+
+<h2>토큰 (3층: 원시 → 의미 → 부품)</h2>
+<div class="tokens">
+  <div class="tok"><i style="background:var(--c-bg)"></i><span>c-bg<small>cream-100 #FFF4DF</small></span></div>
+  <div class="tok"><i style="background:var(--c-surface)"></i><span>c-surface<small>cream-50 #FFFBF2</small></span></div>
+  <div class="tok"><i style="background:var(--c-surface-sunken)"></i><span>c-surface-sunken<small>parchment #F4E6C8</small></span></div>
+  <div class="tok"><i style="background:var(--c-outline)"></i><span>c-outline / c-text<small>ink-900 #3A2618</small></span></div>
+  <div class="tok"><i style="background:var(--c-text-muted)"></i><span>c-text-muted<small>ink-600 #8A6E58</small></span></div>
+  <div class="tok"><i style="background:var(--c-primary)"></i><span>c-primary<small>purple-600 (지금 보라 그대로)</small></span></div>
+  <div class="tok"><i style="background:var(--c-accent)"></i><span>c-accent<small>mint-500 #4FB487</small></span></div>
+  <div class="tok"><i style="background:var(--c-currency)"></i><span>c-currency<small>gold-400 (골드 그대로)</small></span></div>
+  <div class="tok"><i style="background:var(--c-chat-bg)"></i><span>c-chat-bg<small>sky-100 #E6F5FF</small></span></div>
+  <div class="tok"><i style="background:var(--bubble-me-bg)"></i><span>bubble-me-bg<small>mint-200 #C9F2DA</small></span></div>
+  <div class="tok"><i style="background:var(--bubble-them-bg)"></i><span>bubble-them-bg<small>white</small></span></div>
+  <div class="tok"><i style="background:var(--nav-active-bg)"></i><span>nav-active-bg<small>gold-200 #FFE7A8</small></span></div>
+</div>
+
+<script>
+// 출석 달력
+(function () {
+  const cal = document.getElementById('cal');
+  const lead = 6; // 2026-11-01은 일요일 (월요일 시작)
+  for (let i = 0; i < lead; i++) cal.appendChild(document.createElement('span'));
+  for (let d = 1; d <= 30; d++) {
+    const c = document.createElement('div');
+    c.textContent = d;
+    if (d < 12) c.className = 'none';
+    if (d === 12) c.className = 'all today';
+    cal.appendChild(c);
+  }
+})();
+// 상대 고르기: 가운데 카드 표시
+(function () {
+  const car = document.getElementById('car');
+  const cards = [...car.children];
+  const dots = [...document.getElementById('dots').children];
+  const cta = document.getElementById('cta');
+  function update() {
+    const mid = car.scrollLeft + car.clientWidth / 2;
+    let best = 0, bd = 1e9;
+    cards.forEach((c, i) => { const d = Math.abs(c.offsetLeft + c.offsetWidth / 2 - mid); if (d < bd) { bd = d; best = i; } });
+    cards.forEach((c, i) => c.classList.toggle('on', i === best));
+    dots.forEach((d, i) => d.classList.toggle('on', i === best));
+    cta.textContent = cards[best].querySelector('.nm').textContent + '와 대화하기';
+  }
+  car.addEventListener('scroll', update, { passive: true });
+  cards.forEach(c => c.addEventListener('click', () => car.scrollTo({ left: c.offsetLeft - (car.clientWidth - c.offsetWidth) / 2, behavior: 'smooth' })));
+  update();
+})();
+</script>
+</body>
+</html>

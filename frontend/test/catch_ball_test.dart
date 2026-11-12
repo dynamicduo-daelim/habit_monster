@@ -21,9 +21,11 @@ Future<void> _checkAllNo(WidgetTester tester) async {
   await tester.pump();
   await tester.pump();
   for (var i = 0; i < 3; i++) {
-    await tester.tap(find.text('못 했어'));
-    await tester.pump();
+    await say(tester, '못 했어');
   }
+  await tester.tap(find.text('맞아!')); // 말로 답하면 확인 카드로 한 번 확인
+  await tester.pump();
+  await tester.pump();
   await tester.pump();
 }
 

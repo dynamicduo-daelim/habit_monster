@@ -233,24 +233,21 @@ void main() {
     // 체크인 전: 탐색 횟수 없음
     expect(find.textContaining('탐색 기회'), findsNothing);
 
-    // 아침 러닝: 했어 → 빠른 선택 30분 (보상은 아직 — 마지막에 한 번에 확정)
-    await tester.tap(find.text('했어!').last); // 말풍선이 아닌 버튼
-    await tester.pump();
+    // 아침 러닝: "했어" → 얼마나? → "30분" (보상은 아직 — 마지막에 한 번에 확정). 버튼 없이 말로만 (11-12)
+    await say(tester, '했어');
     expect(find.text('좋아! 운동 시간은 얼마나 했어? 목표는 30분이야.'), findsOneWidget);
-    await tester.tap(find.text('30분'));
-    await tester.pump();
+    await say(tester, '30분');
     expect(s.gold, 1240);
     expect(s.todayRecords, isEmpty);
 
     // 전공 공부: 못 했어
-    await tester.tap(find.text('못 했어'));
-    await tester.pump();
+    await say(tester, '못 했어');
 
-    // 물 2L: 직접 입력 3 → 마지막 답이라 확정
-    await tester.tap(find.text('했어!').last);
+    // 물 2L: "3L 마셨어" → 마지막 답이라 확정
+    await say(tester, '3L 마셨어');
+    expect(find.text('이대로 기록할까?'), findsOneWidget); // 말로 답했으니 한 번 확인
+    await tester.tap(find.text('맞아!'));
     await tester.pump();
-    await tester.enterText(find.byType(TextField), '3');
-    await tester.tap(find.text('전송'));
     await tester.pump();
     await tester.pump(); // 맨 아래로 스크롤된 프레임
     expect(find.textContaining('오늘 체크 끝! 오늘의 성실도는 45/75야.'), findsOneWidget);
@@ -273,20 +270,32 @@ void main() {
     await tester.pump();
     expect(find.text('성실볼을 던졌다! 과연…'), findsOneWidget);
     expect(s.balls, 0);
-    // 결과 팝업을 닫기 전엔 대화 상대 줄에 안 보인다
-    expect(find.bySemanticsLabel(RegExp('^깡총 불토끼와 대화')), findsNothing);
     await tester.pump(const Duration(milliseconds: 1000));
     expect(find.text('잡았다!'), findsOneWidget);
     await tester.tap(find.text('확인'));
     await tester.pump();
     expect(find.text('NEW!'), findsOneWidget);
     expect(find.textContaining('깡총 불토끼(흔함)를 잡았어요!'), findsOneWidget);
-    expect(find.bySemanticsLabel(RegExp('^깡총 불토끼와 대화')), findsOneWidget);
     await tester.tap(find.text('그만'));
     await tester.pump();
     await tester.pump();
     expect(find.text('탐색하기 (2회 남음)'), findsOneWidget);
     expect(find.textContaining('깡총 불토끼를 잡았어! 새 친구가 생겼네.'), findsOneWidget);
+    // 채팅방 위 프로필을 누르면 대화 상대 고르기 창 — 방금 잡은 친구도 있다 (11-12 메신저형)
+    await tester.tap(find.bySemanticsLabel('대화 상대 바꾸기'));
+    await tester.pump();
+    expect(find.text('누구랑 이야기할까?'), findsOneWidget);
+    // 옆으로 밀어 맨 끝(방금 잡은 친구)까지 → 버튼이 그 친구로 바뀐다
+    for (var i = 0; i < s.monsters.length; i++) {
+      await tester.drag(find.byType(PageView), const Offset(-200, 0));
+      await tester.pumpAndSettle();
+    }
+    expect(find.text('깡총 불토끼와 대화하기'), findsOneWidget);
+    final before = s.chatPartnerUid;
+    await tester.tap(find.text('깡총 불토끼와 대화하기'));
+    await tester.pump();
+    expect(find.text('누구랑 이야기할까?'), findsNothing);
+    expect(s.chatPartnerUid, isNot(before));
 
     // 다시 체크: 기록만 고치고 보상 · 탐색 횟수는 그대로
     final goldBefore = s.gold;
@@ -294,13 +303,10 @@ void main() {
     await tester.pump();
     await tester.pump();
     expect(find.textContaining('처음부터 다시 물어볼게'), findsOneWidget);
-    await tester.tap(find.text('했어!').last); // 아침 러닝 30 → 45분
-    await tester.pump();
-    await tester.tap(find.text('45분'));
-    await tester.pump();
-    await tester.tap(find.text('못 했어')); // 전공 공부
-    await tester.pump();
-    await tester.tap(find.text('못 했어')); // 물 3L → 못 함
+    await say(tester, '45분 뛰었어'); // 아침 러닝 30 → 45분
+    await say(tester, '못 했어'); // 전공 공부
+    await say(tester, '못 했어'); // 물 3L → 못 함
+    await tester.tap(find.text('맞아!'));
     await tester.pump();
     await tester.pump();
     expect(find.text('기록을 고쳐 뒀어! 보상은 처음 확정한 그대로야.'), findsOneWidget);
@@ -313,9 +319,9 @@ void main() {
 }
 
 
-/// "얼마나 했어?" 칸은 숫자도 말도 받는다 (11-11 — 전엔 숫자 키패드만이라 AI에게 말로 답할 수 없었다).
+/// 채팅방처럼 말로만 답한다 (11-12 빠른 답장 버튼 없앰). 시연 모드는 AI 대신 말을 직접 읽는다.
 void _amountFieldTests() {
-  testWidgets('"얼마나 했어?" 칸: 글이 섞이면 말로 답하기, 숫자만이면 바로 기록', (tester) async {
+  testWidgets('말로만 답하기: 했어 → 얼마나? / 숫자 섞인 말 / 숫자만 / 못 알아들으면 말하는 법', (tester) async {
     tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
@@ -324,27 +330,22 @@ void _amountFieldTests() {
     await tester.tap(find.text('챗봇'));
     await tester.pump();
     await tester.pump();
+    expect(find.text('했어!'), findsNothing); // 빠른 답장 버튼이 없다
+    expect(find.text('메시지 보내기 (예: 했어 / 못 했어)'), findsOneWidget);
 
-    await tester.tap(find.text('했어!').last);
-    await tester.pump();
-    expect(find.text('숫자 또는 말로 (예: 30 / 30분 뛰었어)'), findsOneWidget);
+    await say(tester, '음…');
+    expect(find.textContaining('잘 못 알아들었어'), findsOneWidget);
+
+    await say(tester, '응 했지');
+    expect(find.text('메시지 보내기 (예: 30분 했어)'), findsOneWidget); // 얼마나? 단계
     final field = tester.widget<TextField>(find.byType(TextField));
-    expect(field.keyboardType, isNot(const TextInputType.numberWithOptions(decimal: true))); // 한글 키보드가 뜬다
+    expect(field.keyboardType, isNot(const TextInputType.numberWithOptions(decimal: true))); // 한글 키보드
 
-    // 말로: 시연 모드라 AI 대신 말 속 숫자를 읽는다 (서버 모드면 AI 해석)
-    await tester.enterText(find.byType(TextField), '25분 뛰었어');
-    await tester.tap(find.text('전송'));
-    await tester.pump();
-    await tester.pump();
+    await say(tester, '25분 뛰었어');
     expect(find.text('25분 뛰었어'), findsOneWidget); // 내 말풍선
     expect(find.textContaining("'전공 공부' 오늘 했어?"), findsOneWidget); // 다음 습관으로
 
-    // 숫자만: 지금처럼 바로 기록
-    await tester.tap(find.text('했어!').last);
-    await tester.pump();
-    await tester.enterText(find.byType(TextField), '60');
-    await tester.tap(find.text('전송'));
-    await tester.pump();
+    await say(tester, '60'); // 숫자만
     expect(find.textContaining("'물 2L 마시기' 오늘 했어?"), findsOneWidget);
   });
 }
