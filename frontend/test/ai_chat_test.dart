@@ -105,12 +105,12 @@ void main() {
       expect(c.step, ChatStep.yesNo);
     });
 
-    test('시연 모드(AI 없음): 말 속 숫자 · "못 했어"만 읽고, 모르면 버튼으로', () async {
+    test('시연 모드(AI 없음): 말 속 숫자 · "못 했어"만 읽고, 모르면 말하는 법을 알려 준다', () async {
       final s = GameState.sample(gold: 1240, balls: 1);
       final c = ChatController(state: s, repository: LocalGameRepository(s));
       await c.start();
       await c.sendText('오늘은 그냥 그랬어');
-      expect(c.messages.last.text, contains('버튼'));
+      expect(c.messages.last.text, contains('말해 줄래'));
       expect(c.currentHabit!.id, 'h1');
 
       await c.sendText('30분 뛰었어');
@@ -259,7 +259,7 @@ void main() {
       // 챗봇으로 돌아가면 대화가 그대로 있다
       await tester.tap(find.text('챗봇에 기록하러'));
       await tester.pump();
-      expect(find.text('했어!'), findsOneWidget);
+      expect(find.byType(TextField), findsOneWidget); // 채팅 입력칸이 그대로
       await tester.pump(const Duration(seconds: 3));
     });
 

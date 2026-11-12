@@ -1,9 +1,11 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
 import '../../core/audio/bgm.dart';
 import '../../core/constants/app_assets.dart';
+import '../../core/constants/economy.dart';
 import '../../core/state/game_repository.dart';
 import '../../core/state/game_state.dart';
 import '../../core/state/study_timer.dart';
@@ -11,6 +13,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/utils/format.dart';
 import '../../core/widgets/pixel_widgets.dart';
 import '../../data/catalog.dart';
+import '../../data/models.dart';
 import '../home/home_parts.dart' show DashedBorderPainter;
 import '../home/purchase_popups.dart' show QuantityPopup;
 import '../shell/game_action.dart';
@@ -45,7 +48,6 @@ class _ChatScreenState extends State<ChatScreen> {
   String? _habitSig;
   static String _sigOf(GameState s) => s.habits.map((h) => h.id).join(',');
   final _scroll = ScrollController();
-  final _amount = TextEditingController();
 
   /// 말로 답하기 입력칸 (AI 해석).
   final _text = TextEditingController();
@@ -70,6 +72,12 @@ class _ChatScreenState extends State<ChatScreen> {
 
   /// 성실볼 사기 팝업 (탐색을 다 썼는데 볼이 없을 때).
   bool _buyingBall = false;
+
+  /// 대화 상대 고르기 창 (채팅방 위 프로필을 누르면, 11-12).
+  bool _picking = false;
+
+  /// 메시지마다 처음 화면에 나온 시각 (메신저처럼 말풍선 옆에 시간을 붙인다). 모델은 건드리지 않는다.
+  final _times = Expando<DateTime>();
 
   @override
   void didChangeDependencies() {
@@ -124,7 +132,6 @@ class _ChatScreenState extends State<ChatScreen> {
     _c?.removeListener(_onChange);
     _c?.dispose();
     _scroll.dispose();
-    _amount.dispose();
     _text.dispose();
     _ownTimer?.dispose();
     super.dispose();
@@ -137,22 +144,6 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   /// "얼마나 했어?" 칸: 숫자만이면(`30`, `1.5`) 바로 기록, 글이 섞이면(`30분 뛰었어`) 말로 답하기(AI 해석)로.
-  Future<void> _sendAmount() async {
-    final raw = _amount.text.trim();
-    if (raw.isNotEmpty && double.tryParse(raw) == null) {
-      _amount.clear();
-      await _c!.sendText(raw);
-      return;
-    }
-    final ok = await _c!.sendAmount(raw);
-    if (!mounted) return;
-    if (!ok) {
-      MainShell.of(context).toast('숫자를 입력해 주세요');
-      return;
-    }
-    _amount.clear();
-  }
-
   Future<void> _sendText() async {
     final t = _text.text;
     if (t.trim().isEmpty) return;
@@ -244,7 +235,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 ),
               )
             else ...[
-            _partnerBar(s, c, compact: keyboard),
+            _roomHeader(s, c, compact: keyboard),
             Expanded(
               child: c.step == ChatStep.explore
                   ? ExploreView(controller: c, bobUp: _bobUp, onNeedBall: _openBallShop)
@@ -258,6 +249,18 @@ class _ChatScreenState extends State<ChatScreen> {
             ],
           ],
         ),
+        if (_picking)
+          Positioned.fill(
+            child: _PartnerPicker(
+              monsters: [for (final m in s.monsters.where((m) => m.uid != c.hiddenMonsterUid)) m],
+              currentUid: s.chatPartnerUid,
+              onPick: (uid) {
+                setState(() => _picking = false);
+                _pickPartner(s, uid);
+              },
+              onClose: () => setState(() => _picking = false),
+            ),
+          ),
         if (_buyingBall)
           Positioned.fill(
             child: QuantityPopup(
@@ -280,75 +283,102 @@ class _ChatScreenState extends State<ChatScreen> {
     MainShell.of(context).toast('성실볼 $n개를 샀어요 · 던질 수 있어요!');
   }
 
-  /// [compact]: 자판이 올라온 동안 얇게 (칸 46 → 32).
-  Widget _partnerBar(GameState s, ChatController c, {bool compact = false}) {
-    final box = compact ? 32.0 : 46.0;
-    return Container(
-      padding: EdgeInsets.symmetric(horizontal: 12, vertical: compact ? 4 : 10),
-      decoration: const BoxDecoration(
-        color: AppColors.nightPanel,
-        border: Border(bottom: BorderSide(color: AppColors.nightLine, width: 3)),
-      ),
-      child: Row(
-        children: [
-          const Text('대화 상대', style: TextStyle(fontSize: 10, color: AppColors.textMuted)),
-          const SizedBox(width: 8),
-          Expanded(
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  // 방금 잡은 몬스터는 결과 팝업을 닫은 뒤에 보인다.
-                  for (final m in s.monsters.where((m) => m.uid != c.hiddenMonsterUid)) ...[
-                    Semantics(
-                      button: true,
-                      selected: m.uid == s.chatPartnerUid,
-                      label: '${withWa(Catalog.speciesById(m.speciesId).name)} 대화',
-                      child: GestureDetector(
-                        onTap: () => _pickPartner(s, m.uid),
-                        child: Container(
-                          width: box,
-                          height: box,
-                          padding: EdgeInsets.all(compact ? 2 : 3),
-                          decoration: BoxDecoration(
-                            color: m.uid == s.chatPartnerUid ? AppColors.purpleDeep : AppColors.nightDeep,
-                            border: Border.all(
-                                color: m.uid == s.chatPartnerUid ? AppColors.gold : AppColors.nightLine,
-                                width: compact ? 2 : 3),
-                          ),
-                          child: PixelImage(Catalog.speciesById(m.speciesId).assetAt(m.level)),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                  ],
-                ],
-              ),
-            ),
+  /// 채팅방 머리글: 대화 상대 프로필 · 이름. 누르면 옆으로 밀어 고르는 창이 열린다 (메신저형, 11-12).
+  /// [compact]: 자판이 올라온 동안 얇게.
+  Widget _roomHeader(GameState s, ChatController c, {bool compact = false}) {
+    final p = c.partner;
+    final sp = p == null ? null : Catalog.speciesById(p.speciesId);
+    final box = compact ? 30.0 : 40.0;
+    return Semantics(
+      button: true,
+      label: '대화 상대 바꾸기',
+      excludeSemantics: true,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: s.monsters.isEmpty ? null : () => setState(() => _picking = true),
+        child: Container(
+          padding: EdgeInsets.symmetric(horizontal: 12, vertical: compact ? 5 : 8),
+          decoration: const BoxDecoration(
+            color: AppColors.nightPanel,
+            border: Border(bottom: BorderSide(color: AppColors.nightLine, width: 3)),
           ),
-        ],
+          child: Row(
+            children: [
+              _Avatar(asset: sp == null ? AppAssets.seongsilBall : sp.assetAt(p!.level), size: box),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(sp?.name ?? '대화 상대 없음',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.text)),
+                        ),
+                        const SizedBox(width: 2),
+                        const Icon(Icons.keyboard_arrow_down, size: 18, color: AppColors.textMuted),
+                      ],
+                    ),
+                    if (!compact && p != null)
+                      Text('Lv.${p.level} · 호감도 ${p.affection}/${Economy.maxAffection}',
+                          style: const TextStyle(fontSize: 10.5, color: AppColors.textMuted)),
+                  ],
+                ),
+              ),
+              if (!compact && s.monsters.length > 1)
+                const Text('눌러서 바꾸기', style: TextStyle(fontSize: 10, color: AppColors.lavender)),
+            ],
+          ),
+        ),
       ),
     );
   }
 
   Widget _messages(ChatController c) {
     final p = c.partner;
-    final avatar = p == null ? AppAssets.seongsilBall : Catalog.speciesById(p.speciesId).assetAt(p.level);
+    final sp = p == null ? null : Catalog.speciesById(p.speciesId);
+    final avatar = sp == null ? AppAssets.seongsilBall : sp.assetAt(p!.level);
+    final name = sp?.name ?? '';
+    final msgs = c.messages;
+    final now = DateTime.now();
+    for (final m in msgs) {
+      _times[m] ??= now;
+    }
+    // 메신저처럼: 같은 쪽이 이어서 말하면 프로필 · 이름은 첫 말풍선에만, 시간은 마지막 말풍선에만.
+    final items = <Widget>[
+      _DayDivider(date: msgs.isEmpty ? now : _times[msgs.first]!),
+      for (var i = 0; i < msgs.length; i++)
+        Padding(
+          padding: EdgeInsets.only(top: i > 0 && msgs[i - 1].fromBot == msgs[i].fromBot ? 4 : 12),
+          child: _Bubble(
+            message: msgs[i],
+            avatar: avatar,
+            name: name,
+            showProfile: msgs[i].fromBot && (i == 0 || !msgs[i - 1].fromBot),
+            time: i == msgs.length - 1 || msgs[i + 1].fromBot != msgs[i].fromBot ? _times[msgs[i]] : null,
+          ),
+        ),
+      if (c.busy)
+        Padding(
+          padding: const EdgeInsets.only(top: 12),
+          child: _Bubble(
+            message: const ChatMessage.bot('…'),
+            avatar: avatar,
+            name: name,
+            showProfile: msgs.isEmpty || !msgs.last.fromBot,
+          ),
+        ),
+    ];
     // reverse: 최신 메시지가 항상 아래에 붙어 있다 (메시지 높이가 달라도 스크롤 위치를 계산할 필요 없음).
     return ListView(
       controller: _scroll,
       reverse: true,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-      children: [
-        if (c.busy) ...[
-          _Bubble(message: const ChatMessage.bot('…'), avatar: avatar),
-          const SizedBox(height: 10),
-        ],
-        for (final m in c.messages.reversed) ...[
-          const SizedBox(height: 10),
-          _Bubble(message: m, avatar: avatar),
-        ],
-      ],
+      padding: const EdgeInsets.fromLTRB(10, 10, 10, 14),
+      children: items.reversed.toList(),
     );
   }
 
@@ -358,89 +388,11 @@ class _ChatScreenState extends State<ChatScreen> {
       case ChatStep.idle:
         content = _GoldButton(label: '오늘 습관 체크 시작', onTap: c.start);
       case ChatStep.yesNo:
-        content = Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _textRow(),
-            const SizedBox(height: 9),
-            Row(
-              children: [
-                Expanded(child: _DarkButton(label: '못 했어', onTap: () => c.answer(false))),
-                const SizedBox(width: 9),
-                Expanded(child: _GoldButton(label: '했어!', onTap: () => c.answer(true))),
-              ],
-            ),
-          ],
-        );
+      case ChatStep.amount:
+        // 채팅방처럼 말로만 답한다 (빠른 답장 버튼 없앰, 11-12). 확인 카드는 사이에 끼므로 따로.
+        content = _textRow(c);
       case ChatStep.confirm:
         content = _confirmCard(c);
-      case ChatStep.amount:
-        final unit = c.currentMeasure?.unit ?? '';
-        content = Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: AppColors.night,
-                      border: Border.all(color: AppColors.nightLine2, width: 3),
-                    ),
-                    padding: const EdgeInsets.all(11),
-                    child: Semantics(
-                      label: '수행량 (숫자 또는 말로)',
-                      // 숫자 키패드만 띄우면 AI가 되물어도 말로 답할 수 없어서 일반 키보드 (11-11)
-                      child: TextField(
-                        controller: _amount,
-                        maxLength: 300,
-                        cursorColor: AppColors.gold,
-                        style: const TextStyle(fontSize: 17, color: AppColors.gold),
-                        decoration: const InputDecoration(
-                          isDense: true,
-                          border: InputBorder.none,
-                          counterText: '',
-                          contentPadding: EdgeInsets.zero,
-                          hintText: '숫자 또는 말로 (예: 30 / 30분 뛰었어)',
-                          hintStyle: TextStyle(color: AppColors.textMuted, fontSize: 13),
-                        ),
-                        onSubmitted: (_) => _sendAmount(),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                ConstrainedBox(
-                  constraints: const BoxConstraints(minWidth: 24),
-                  child: Text(unit, style: const TextStyle(fontSize: 12, color: AppColors.textMuted)),
-                ),
-                const SizedBox(width: 8),
-                _GoldButton(label: '전송', onTap: _sendAmount, expand: false, shadow: false),
-              ],
-            ),
-            const SizedBox(height: 9),
-            Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              children: [
-                for (final q in c.quickAmounts)
-                  GestureDetector(
-                    onTap: () => c.sendValue(q),
-                    child: Container(
-                      constraints: const BoxConstraints(minHeight: 36),
-                      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: AppColors.chatChip,
-                        border: Border.all(color: AppColors.nightLine, width: 3),
-                      ),
-                      child: Text('${formatNum(q)}$unit',
-                          style: const TextStyle(fontSize: 11, color: AppColors.chatSoftText)),
-                    ),
-                  ),
-              ],
-            ),
-          ],
-        );
       case ChatStep.done:
       case ChatStep.explore:
         final noEnc = s.encountersLeft <= 0;
@@ -481,7 +433,7 @@ class _ChatScreenState extends State<ChatScreen> {
         );
     }
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.fromLTRB(10, 9, 10, 10),
       decoration: const BoxDecoration(
         color: AppColors.nightDeep,
         border: Border(top: BorderSide(color: AppColors.nightLine, width: 3)),
@@ -491,31 +443,27 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   /// 말로 답하기: "아침에 30분 뛰었어"처럼 쓰면 AI가 알아듣는다 (서버 모드). 시연 모드는 숫자만 읽는다.
-  Widget _textRow() {
+  Widget _textRow(ChatController c) {
+    final unit = c.step == ChatStep.amount ? c.currentMeasure?.unit ?? '' : '';
     return Row(
       children: [
         Expanded(
-          child: Container(
-            decoration: BoxDecoration(
-              color: AppColors.night,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: AppColors.nightLine2, width: 2),
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          child: _PillField(
             child: Semantics(
               label: '말로 답하기',
               child: TextField(
                 controller: _text,
                 maxLength: 300,
                 cursorColor: AppColors.gold,
+                textInputAction: TextInputAction.send,
                 style: const TextStyle(fontSize: 14, color: AppColors.text),
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   isDense: true,
                   border: InputBorder.none,
                   counterText: '',
                   contentPadding: EdgeInsets.zero,
-                  hintText: '말로 알려줘도 돼 (예: 30분 뛰었어)',
-                  hintStyle: TextStyle(color: AppColors.textMuted, fontSize: 13),
+                  hintText: unit.isEmpty ? '메시지 보내기 (예: 했어 / 못 했어)' : '메시지 보내기 (예: 30$unit 했어)',
+                  hintStyle: const TextStyle(color: AppColors.textMuted, fontSize: 12.5),
                 ),
                 onSubmitted: (_) => _sendText(),
               ),
@@ -523,7 +471,7 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
         ),
         const SizedBox(width: 8),
-        _GoldButton(label: '보내기', onTap: _sendText, expand: false, shadow: false),
+        _SendButton(label: '보내기', onTap: _sendText),
       ],
     );
   }
@@ -586,28 +534,41 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 }
 
+/// 메신저형 말풍선. 상대(몬스터)는 왼쪽 — 이어지는 말의 첫 줄에만 프로필 · 이름, 나는 오른쪽.
+/// [time]은 이어지는 말의 마지막 말풍선 옆에만 붙는다.
 class _Bubble extends StatelessWidget {
-  const _Bubble({required this.message, required this.avatar});
+  const _Bubble({required this.message, required this.avatar, required this.name, this.showProfile = true, this.time});
   final ChatMessage message;
   final String avatar;
+  final String name;
+  final bool showProfile;
+  final DateTime? time;
+
+  static const double _avatarSize = 36;
 
   @override
   Widget build(BuildContext context) {
     final bot = message.fromBot;
     final bubble = Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
       decoration: BoxDecoration(
         color: bot ? AppColors.nightRaised : AppColors.chatMeBubble,
-        border: Border.all(color: bot ? AppColors.purple : AppColors.gold, width: 3),
+        borderRadius: BorderRadius.only(
+          topLeft: Radius.circular(bot && showProfile ? 4 : 14),
+          topRight: Radius.circular(bot ? 14 : 4),
+          bottomLeft: const Radius.circular(14),
+          bottomRight: const Radius.circular(14),
+        ),
+        border: Border.all(color: bot ? AppColors.purple : AppColors.gold, width: 2),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(message.text, style: const TextStyle(fontSize: 12.5, height: 1.9, color: AppColors.text)),
+          Text(message.text, style: const TextStyle(fontSize: 13, height: 1.6, color: AppColors.text)),
           if (message.reward != null) ...[
             const SizedBox(height: 7),
             Container(
-              color: AppColors.gold,
+              decoration: BoxDecoration(color: AppColors.gold, borderRadius: BorderRadius.circular(6)),
               padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
               child: Text(message.reward!, style: const TextStyle(fontSize: 11, color: AppColors.night)),
             ),
@@ -625,39 +586,120 @@ class _Bubble extends StatelessWidget {
         ],
       ),
     );
+    final timeText =
+        time == null ? null : Text(_clock(time!), style: const TextStyle(fontSize: 9.5, color: AppColors.textMuted));
     return LayoutBuilder(builder: (context, box) {
-      final maxW = box.maxWidth * 0.76;
+      final maxW = box.maxWidth * 0.68;
+      final line = Row(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          if (!bot && timeText != null) ...[timeText, const SizedBox(width: 5)],
+          Flexible(child: ConstrainedBox(constraints: BoxConstraints(maxWidth: maxW), child: bubble)),
+          if (bot && timeText != null) ...[const SizedBox(width: 5), timeText],
+        ],
+      );
+      if (!bot) return Align(alignment: Alignment.centerRight, child: line);
       return Row(
-        mainAxisAlignment: bot ? MainAxisAlignment.start : MainAxisAlignment.end,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (bot) ...[
-            Container(
-              width: 36,
-              height: 36,
-              padding: const EdgeInsets.all(2),
-              decoration: BoxDecoration(
-                color: AppColors.purpleDeep,
-                border: Border.all(color: AppColors.purple, width: 3),
-              ),
-              child: PixelImage(avatar),
+          if (showProfile) _Avatar(asset: avatar, size: _avatarSize) else const SizedBox(width: _avatarSize),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (showProfile && name.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 2, bottom: 4),
+                    child: Text(name, style: const TextStyle(fontSize: 11, color: AppColors.chatSoftText)),
+                  ),
+                line,
+              ],
             ),
-            const SizedBox(width: 8),
-          ],
-          ConstrainedBox(constraints: BoxConstraints(maxWidth: maxW), child: bubble),
+          ),
         ],
       );
     });
   }
+
+  /// 메신저식 시각: 오전 9:05 / 오후 2:13.
+  static String _clock(DateTime t) {
+    final h = t.hour % 12 == 0 ? 12 : t.hour % 12;
+    return '${t.hour < 12 ? '오전' : '오후'} $h:${t.minute.toString().padLeft(2, '0')}';
+  }
 }
 
-/// 금색 버튼 (밝은 테두리 + 오른쪽 아래 그림자).
-class _GoldButton extends StatelessWidget {
-  const _GoldButton({required this.label, required this.onTap, this.expand = true, this.shadow = true});
+/// 둥근 네모 프로필 (채팅방 머리글 · 말풍선).
+class _Avatar extends StatelessWidget {
+  const _Avatar({required this.asset, required this.size});
+  final String asset;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size,
+      height: size,
+      padding: EdgeInsets.all(size * 0.1),
+      decoration: BoxDecoration(
+        color: AppColors.purpleDeep,
+        borderRadius: BorderRadius.circular(size * 0.34),
+        border: Border.all(color: AppColors.purple, width: 2),
+      ),
+      child: PixelImage(asset),
+    );
+  }
+}
+
+/// 메시지 맨 위 날짜 줄.
+class _DayDivider extends StatelessWidget {
+  const _DayDivider({required this.date});
+  final DateTime date;
+
+  static const _weekdays = ['월요일', '화요일', '수요일', '목요일', '금요일', '토요일', '일요일'];
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
+        decoration: BoxDecoration(
+          color: AppColors.nightRaised,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: AppColors.nightLine2, width: 1.5),
+        ),
+        child: Text('${date.year}년 ${date.month}월 ${date.day}일 ${_weekdays[date.weekday - 1]}',
+            style: const TextStyle(fontSize: 10.5, color: AppColors.textMuted)),
+      ),
+    );
+  }
+}
+
+/// 알약 모양 입력칸 틀.
+class _PillField extends StatelessWidget {
+  const _PillField({required this.child});
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+      decoration: BoxDecoration(
+        color: AppColors.night,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: AppColors.nightLine2, width: 2),
+      ),
+      child: child,
+    );
+  }
+}
+
+/// 입력칸 옆 보내기 버튼.
+class _SendButton extends StatelessWidget {
+  const _SendButton({required this.label, required this.onTap});
   final String label;
   final VoidCallback onTap;
-  final bool expand;
-  final bool shadow;
 
   @override
   Widget build(BuildContext context) {
@@ -666,14 +708,187 @@ class _GoldButton extends StatelessWidget {
       child: GestureDetector(
         onTap: onTap,
         child: Container(
-          width: expand ? double.infinity : null,
+          constraints: const BoxConstraints(minHeight: 42),
+          alignment: Alignment.center,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          decoration: BoxDecoration(
+            color: AppColors.gold,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: AppColors.goldLight, width: 2),
+          ),
+          child: Text(label,
+              style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: AppColors.night)),
+        ),
+      ),
+    );
+  }
+}
+
+/// 대화 상대 고르기: 아래에서 올라오는 창. 양옆으로 밀어 고르고 버튼으로 바꾼다 (11-12).
+class _PartnerPicker extends StatefulWidget {
+  const _PartnerPicker({required this.monsters, required this.currentUid, required this.onPick, required this.onClose});
+  final List<OwnedMonster> monsters;
+  final String? currentUid;
+  final ValueChanged<String> onPick;
+  final VoidCallback onClose;
+
+  @override
+  State<_PartnerPicker> createState() => _PartnerPickerState();
+}
+
+class _PartnerPickerState extends State<_PartnerPicker> {
+  late int _index = math.max(0, widget.monsters.indexWhere((m) => m.uid == widget.currentUid));
+  late final _page = PageController(viewportFraction: 0.44, initialPage: _index);
+
+  @override
+  void dispose() {
+    _page.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ms = widget.monsters;
+    final sel = ms[_index.clamp(0, ms.length - 1)];
+    final selName = Catalog.speciesById(sel.speciesId).name;
+    final isCurrent = sel.uid == widget.currentUid;
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: GestureDetector(onTap: widget.onClose, child: const ColoredBox(color: AppColors.scrim)),
+        ),
+        Align(
+          alignment: Alignment.bottomCenter,
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(0, 10, 0, 14),
+            decoration: const BoxDecoration(
+              color: AppColors.nightPanel,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+              border: Border(top: BorderSide(color: AppColors.purple, width: 3)),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(width: 40, height: 4, color: AppColors.sheetHandle),
+                const SizedBox(height: 10),
+                const Text('누구랑 이야기할까?',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.text)),
+                const SizedBox(height: 2),
+                const Text('← 옆으로 밀어서 고르기 →', style: TextStyle(fontSize: 10.5, color: AppColors.textMuted)),
+                const SizedBox(height: 10),
+                SizedBox(
+                  height: 190,
+                  child: PageView.builder(
+                    controller: _page,
+                    itemCount: ms.length,
+                    onPageChanged: (i) => setState(() => _index = i),
+                    itemBuilder: (context, i) => AnimatedBuilder(
+                      animation: _page,
+                      builder: (context, child) {
+                        final page =
+                            _page.hasClients && _page.position.haveDimensions ? _page.page! : _index.toDouble();
+                        final t = (1 - (page - i).abs()).clamp(0.0, 1.0);
+                        return Transform.scale(
+                            scale: 0.84 + 0.16 * t, child: Opacity(opacity: 0.45 + 0.55 * t, child: child));
+                      },
+                      child: _card(ms[i], i),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    for (var i = 0; i < ms.length; i++)
+                      AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        margin: const EdgeInsets.symmetric(horizontal: 2.5),
+                        width: i == _index ? 14 : 6,
+                        height: 6,
+                        color: i == _index ? AppColors.gold : AppColors.nightLine2,
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: _GoldButton(
+                    label: isCurrent ? '지금 ${withWa(selName)} 이야기 중' : '${withWa(selName)} 대화하기',
+                    onTap: () => isCurrent ? widget.onClose() : widget.onPick(sel.uid),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _card(OwnedMonster m, int i) {
+    final sp = Catalog.speciesById(m.speciesId);
+    final on = m.uid == widget.currentUid;
+    return Semantics(
+      button: true,
+      selected: on,
+      label: '${withWa(sp.name)} 대화',
+      excludeSemantics: true,
+      child: GestureDetector(
+        onTap: () => _page.animateToPage(i, duration: const Duration(milliseconds: 250), curve: Curves.easeOut),
+        child: Container(
+          margin: const EdgeInsets.symmetric(horizontal: 5),
+          padding: const EdgeInsets.all(9),
+          decoration: BoxDecoration(
+            color: AppColors.nightRaised,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: on ? AppColors.gold : AppColors.purple, width: 2),
+          ),
+          child: Column(
+            children: [
+              Expanded(
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(color: AppColors.purpleDeep, borderRadius: BorderRadius.circular(10)),
+                  child: PixelImage(sp.assetAt(m.level)),
+                ),
+              ),
+              const SizedBox(height: 7),
+              Text(sp.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.text)),
+              const SizedBox(height: 2),
+              Text('Lv.${m.level} · ♥ ${m.affection}', style: const TextStyle(fontSize: 10.5, color: AppColors.textMuted)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 금색 버튼 (밝은 테두리 + 오른쪽 아래 그림자).
+class _GoldButton extends StatelessWidget {
+  const _GoldButton({required this.label, required this.onTap});
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          width: double.infinity,
           constraints: const BoxConstraints(minHeight: 46),
           alignment: Alignment.center,
-          padding: EdgeInsets.symmetric(horizontal: expand ? 12 : 15, vertical: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
           decoration: BoxDecoration(
             color: AppColors.gold,
             border: Border.all(color: AppColors.goldLight, width: 3),
-            boxShadow: shadow ? const [BoxShadow(color: AppColors.ink, offset: Offset(4, 4))] : null,
+            boxShadow: const [BoxShadow(color: AppColors.ink, offset: Offset(4, 4))],
           ),
           child: Text(label,
               textAlign: TextAlign.center,

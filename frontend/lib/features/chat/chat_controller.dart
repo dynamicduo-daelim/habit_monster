@@ -165,7 +165,7 @@ class ChatController extends ChangeNotifier {
     }
     messages.add(ChatMessage.bot(await _think(brain.askHabit(h, Catalog.category(h.categoryId)))));
     final timer = timedMinutes(h);
-    if (timer > 0) messages.add(ChatMessage.bot('타이머로 $timer분 쟀네! 했어를 누르고 $timer분을 고르면 돼.'));
+    if (timer > 0) messages.add(ChatMessage.bot("타이머로 $timer분 쟀네! '$timer분 했어'라고 보내 주면 돼."));
     step = ChatStep.yesNo;
     _notify();
   }
@@ -216,19 +216,37 @@ class ChatController extends ChangeNotifier {
     await _ask(0);
   }
 
-  /// AI 없이: 말에 숫자가 있으면 그 값, "못/안 했어"면 0. 그 밖에는 버튼으로 알려 달라고 한다.
+  /// AI 없이 (시연 모드 · AI 실패): 채팅만으로 답하게 말을 직접 읽는다 (11-12 버튼 없앰).
+  /// "못/안 했어" → 0, 숫자 → 그 값 (했다/안 했다 습관은 1), "했어 · 응 · 다 했어" → 했다/안 했다 습관은 1,
+  /// 양을 재는 습관이면 얼마나 했는지 되묻는다. 그 밖에는 말하는 법을 알려 준다.
   Future<void> _readLocally(String text, Habit? h) async {
     if (h == null) return;
+    final m = state.measureOf(h);
     final n = RegExp(r'\d+(\.\d+)?').firstMatch(text);
-    if (RegExp(r'못|안 ?했').hasMatch(text)) {
+    if (RegExp(r'못|안 ?했|아니|안 ?함').hasMatch(text)) {
       _usedText = true;
       return _record(0);
     }
     if (n != null) {
       _usedText = true;
-      return _record(state.measureOf(h).isOX ? 1 : double.parse(n.group(0)!));
+      final v = double.parse(n.group(0)!);
+      return _record(m.isOX ? (v > 0 ? 1 : 0) : v);
     }
-    messages.add(const ChatMessage.bot('음… 잘 못 알아들었어. 아래 버튼으로 알려줄래?'));
+    if (RegExp(r'했|응|ㅇㅇ|네|예|그럼|완료|당연').hasMatch(text)) {
+      if (m.isOX) {
+        _usedText = true;
+        return _record(1);
+      }
+      if (step == ChatStep.yesNo) {
+        messages.add(ChatMessage.bot(await _think(brain.askAmount(h, m))));
+        step = ChatStep.amount;
+      } else {
+        messages.add(ChatMessage.bot('좋아! 몇 ${m.unit} 했는지 숫자로 알려줄래?'));
+      }
+      _notify();
+      return;
+    }
+    messages.add(const ChatMessage.bot("음… 잘 못 알아들었어. '30분 했어'나 '못 했어'처럼 말해 줄래?"));
     _notify();
   }
 
