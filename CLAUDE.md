@@ -70,8 +70,9 @@
 
 ## 6. 저장소
 - 기본 저장소(`origin`)는 조직 레포 `dynamicduo-daelim/habit_monster`. 개인 레포는 `personal`.
-- 작업은 `feature/…` 브랜치에서 한다. `frontend/.metadata` · `frontend/pubspec.lock`의 도구 자동 변경은 따로 묻기 전엔 커밋하지 않는다.
-- 서버 연동 작업(3단계 ~)은 `feature/backend-game-system`. 시작할 때 `git branch --show-current`로 확인하고, 다르면 사용자에게 물은 뒤 전환한다. 같은 브랜치를 다른 작업 폴더(Orca worktree)가 쓰고 있을 수 있다 (`git worktree list`).
+- 작업은 `feature/…` 브랜치에서 하고, 프론트 · 백은 **`dev`에 합쳐 간다** (11-12, D-67). 서버 작업 브랜치 → `dev`는 사용자가 정할 때 주기적으로. `dev` → `main`은 아직 정하지 않음.
+- `frontend/.metadata` · `frontend/pubspec.lock`의 도구 자동 변경은 따로 묻기 전엔 커밋하지 않는다.
+- 서버 작업은 계속 `feature/backend-game-system`에서 하고 때때로 `dev`로 합친다 (사용자 요청 때만 합치기 · 푸시). 시작할 때 `git branch --show-current`로 확인하고, 다르면 사용자에게 물은 뒤 전환한다. 같은 브랜치를 다른 작업 폴더(Orca worktree)가 쓰고 있을 수 있다 (`git worktree list`).
 - 바꾸기 전에 **만들/바꿀 파일 트리와 무엇이 어떻게 바뀌는지**를 먼저 보여주고 진행한다 (사용자 요청).
 
 ## 7. 이 PC에서 겪은 함정
