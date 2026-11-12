@@ -55,9 +55,6 @@ void main() {
     for (var i = 0; i < 3; i++) {
       await say(tester, '못 했어');
     }
-    await tester.tap(find.text('맞아!')); // 말로 답하면 확인 카드로 한 번 확인
-    await tester.pump();
-    await tester.pump();
     await tester.tap(find.text('탐색하기 (1회 남음)')); // 전부 "못 했어"인 날은 탐색 1회
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 2100)); // 찾는 중…
