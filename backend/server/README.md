@@ -71,7 +71,7 @@ EC2(Ubuntu, 사용자 `ubuntu`)에서 서버는 **systemd 서비스 `habit-monst
 | 서비스 정의 | `/etc/systemd/system/habit-monster.service` — `java -Xmx256m -jar …`, `Restart=on-failure` |
 | 로그 | `journalctl -u habit-monster` (옛 `~/app-new.log`는 11-11 전까지) |
 | 포트 | 8080 (프로필 없음 = 기본값). 바깥에서는 Nginx를 거쳐 443으로 |
-| 주소 (11-12부터, D-69) | **`https://api.habitmonster.me/api/v1`** — 앱 `API_BASE_URL`. 탄력적 IP `16.179.63.74` |
+| 주소 (11-12부터, D-70) | **`https://api.habitmonster.me/api/v1`** — 앱 `API_BASE_URL`. 탄력적 IP `16.179.63.74` |
 | Nginx 설정 | `/etc/nginx/sites-available/habit-monster` (`sites-enabled`에 링크) — `proxy_pass http://127.0.0.1:8080`. 바꾼 뒤 `sudo nginx -t && sudo systemctl reload nginx` |
 | 인증서 | Let's Encrypt (`certbot --nginx`), 만료 2027-02-10 — 자동 갱신 확인: `sudo certbot renew --dry-run` |
 
