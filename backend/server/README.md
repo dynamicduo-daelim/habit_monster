@@ -70,17 +70,21 @@ EC2(Ubuntu, 사용자 `ubuntu`)에서 서버는 **systemd 서비스 `habit-monst
 | 비밀값 (환경 변수) | `/etc/habit-monster/app.env` — root만 읽기(600), 한 줄에 `이름='값'`. **저장소 · 메신저에 올리지 않는다** |
 | 서비스 정의 | `/etc/systemd/system/habit-monster.service` — `java -Xmx256m -jar …`, `Restart=on-failure` |
 | 로그 | `journalctl -u habit-monster` (옛 `~/app-new.log`는 11-11 전까지) |
-| 포트 | 8080 (프로필 없음 = 기본값) |
+| 포트 | 8080 (프로필 없음 = 기본값). 바깥에서는 Nginx를 거쳐 443으로 |
+| 주소 (11-12부터, D-69) | **`https://api.habitmonster.me/api/v1`** — 앱 `API_BASE_URL`. 탄력적 IP `16.179.63.74` |
+| Nginx 설정 | `/etc/nginx/sites-available/habit-monster` (`sites-enabled`에 링크) — `proxy_pass http://127.0.0.1:8080`. 바꾼 뒤 `sudo nginx -t && sudo systemctl reload nginx` |
+| 인증서 | Let's Encrypt (`certbot --nginx`), 만료 2027-02-10 — 자동 갱신 확인: `sudo certbot renew --dry-run` |
 
 ```bash
-ssh -i <pem 경로> ubuntu@<EC2 IP>
+ssh -i <pem 경로> ubuntu@16.179.63.74
+curl.exe -i https://api.habitmonster.me/api/v1/me/status   # (PC) 401 JSON이면 정상. PowerShell에선 curl 말고 curl.exe
 sudo systemctl restart habit-monster      # 다시 띄우기
 sudo systemctl status habit-monster       # 상태
 journalctl -u habit-monster -f            # 로그 실시간
 sudoedit /etc/habit-monster/app.env       # 비밀값 바꾸기 → restart
 ```
 
-새 코드 배포: PC(`backend/server`)에서 `./gradlew bootJar` → `scp -i <pem> build/libs/<jar>.jar ubuntu@<EC2 IP>:~/app-new.jar` → `sudo systemctl restart habit-monster`. DB 계약이 바뀐 jar면 **Supabase에 SQL을 먼저** 적용한다.
+새 코드 배포: PC(`backend/server`)에서 `./gradlew bootJar` → `scp -i <pem> build/libs/<jar>.jar ubuntu@16.179.63.74:~/app-new.jar` → `sudo systemctl restart habit-monster`. DB 계약이 바뀐 jar면 **Supabase에 SQL을 먼저** 적용한다.
 
 - `-Xmx256m`: EC2 메모리가 908MB · 스왑 없음. 11-06에 기본 설정 서버가 메모리 부족으로 강제 종료됐다(`Out of memory: Killed process … (java)`).
 - 11-11 `app.env`에 든 이름 (7개): `SPRING_DATASOURCE_URL` · `SPRING_DATASOURCE_USERNAME` · `SPRING_DATASOURCE_PASSWORD` · `JWT_SECRET` · `GEMINI_API_KEY` · `KAKAO_APP_ID` · `GOOGLE_CLIENT_IDS`. 옛 이름 `SPRING_DATASOURCE_*`는 `DB_*`보다 우선한다. 카카오 · 구글 값은 공개 값이라 `application-local.properties`와 같다.

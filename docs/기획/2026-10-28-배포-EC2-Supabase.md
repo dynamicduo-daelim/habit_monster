@@ -11,15 +11,17 @@
 
 ## 2. 구성
 ```
-폰 앱 ──HTTPS──▶ EC2 (Nginx → Spring Boot :8081) ──▶ Supabase PostgreSQL
-                 도메인 + 인증서(Let's Encrypt)
+폰 앱 ──HTTPS(443)──▶ EC2 (Nginx → Spring Boot :8080) ──▶ Supabase PostgreSQL
+                      api.habitmonster.me (탄력적 IP) + 인증서(Let's Encrypt)
 ```
+> **현재 (11-12)**: 위 구성대로 동작 — `https://api.habitmonster.me/api/v1`. 8080 직접 접속은 아직 열려 있음 (8장).
+
 | 부분 | 쓰는 것 | 비고 |
 | --- | --- | --- |
 | 서버 | EC2 무료 플랜 (리눅스, 작은 인스턴스) | Java 21 + 서버 jar, 껐다 켜도 다시 뜨게 (systemd) **[가정]** Docker 대신 jar 직접 실행 — 메모리 아끼려고 |
 | DB | Supabase 무료 프로젝트 | `schema.sql` · `seed.sql`을 Supabase SQL 편집기로 적용 |
 | HTTPS | 도메인 + Nginx + Let's Encrypt | 운영 빌드 앱은 http를 막음 (지금 http 허용은 debug만) |
-| 앱 | 릴리스 빌드 APK | `API_BASE_URL=https://<도메인>/api/v1` |
+| 앱 | 릴리스 빌드 APK | `API_BASE_URL=https://api.habitmonster.me/api/v1` |
 
 ## 3. 할 일 (순서)
 1. **Supabase**: 프로젝트 만들기(서울 리전) → SQL 적용 → 서버용 연결 문자열 확인 (직접 연결 / 풀러 중 EC2에서 되는 것)
@@ -61,7 +63,7 @@
 - [ ] 저장소에 비밀값 없음, 결제 알림 걸림
 
 ## 7. 정해야 할 것
-- [ ] 도메인: 사서 쓸지(연 1~2만 원대) / 무료 도메인 · 무료 하위 도메인 서비스 **[가정: 사서 쓰기]**
+- [x] 도메인: 사서 쓸지(연 1~2만 원대) / 무료 도메인 · 무료 하위 도메인 서비스 **[가정: 사서 쓰기]** → GitHub 학생 혜택으로 받은 `habitmonster.me`, 서버는 `api.` 하위 도메인 (11-12, D-69)
 - [ ] AWS · Supabase 계정은 누구 것으로 (사용자가 직접 만들고, Claude는 명령 · 설정만 안내)
 - [ ] 4-1 습관 앱 연결을 배포 전에 누가 언제
 - [ ] 로그인 요청 횟수 제한 · 카카오 연결 끊기(6단계)를 이번에 같이 할지
@@ -75,3 +77,14 @@
 - 2장 표의 [가정] "systemd · jar 직접 실행" → 확정. 구성도의 `:8081`은 실제로는 **8080** (기본 프로필).
 - 같은 날 `GEMINI_API_KEY` · `KAKAO_APP_ID` · `GOOGLE_CLIENT_IDS`도 넣음 (소셜 설정 · Gemini 키 유효 확인).
 - 아직: HTTPS(도메인 · nginx 연결 — nginx는 80에 떠 있으나 서버로 넘기는 설정은 못 찾음), 재부팅 시험, 새 jar(v1.9) 배포.
+
+### 2026-11-12 — 탄력적 IP · 도메인 · HTTPS (D-69)
+- 사용자가 직접 함 (AWS 콘솔 · 도메인 사이트 · EC2 SSH), Claude는 단계 안내와 바깥에서 확인만.
+- **탄력적 IP** `16.179.63.74`를 인스턴스에 연결 → 그전 퍼블릭 IP(`3.26.72.239`)는 반납돼 다시 못 씀. 예전 IP로 빌드한 앱은 다시 빌드해야 한다.
+- **도메인** `habitmonster.me` (GitHub 학생 혜택), DNS A 레코드 `api` → 탄력적 IP.
+- **보안 그룹**: 80 · 443 추가 (Anywhere-IPv4). 22는 내 IP, 8080은 아직 열림.
+- **Nginx**: `/etc/nginx/sites-available/habit-monster` (→ `sites-enabled` 링크) — `server_name api.habitmonster.me`, `proxy_pass http://127.0.0.1:8080`, `proxy_read_timeout 30s` (Gemini 5초보다 넉넉히).
+- **인증서**: `sudo certbot --nginx -d api.habitmonster.me` — Let's Encrypt(YE1), 유효 11-12 ~ **2027-02-10**, http → https 자동 전환.
+- 확인 (Claude, 이 PC에서 11-12 13:48): `https://…/api/v1/me/status` → **401** `INVALID_TOKEN` JSON (Nginx → Spring까지 옴) · `http://` → **301** · 인증서 이름 `api.habitmonster.me` · DNS → `16.179.63.74`.
+- 막혔던 것: ① PowerShell 5.1의 `curl`은 `Invoke-WebRequest` 별명이라 `-i`에서 `Uri:`를 물음 → `curl.exe` ② 443 연결이 22초 뒤 시간 초과 → 보안 그룹에 443이 없었음 (80 · 8080 · 22만).
+- 아직: `sudo certbot renew --dry-run`(자동 갱신 시험), 폰에서 https 주소로 한 바퀴(6장 첫 항목), 그다음 보안 그룹에서 **8080 삭제**, 재부팅 시험.
