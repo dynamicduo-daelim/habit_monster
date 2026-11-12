@@ -40,7 +40,7 @@ class _FakeAiRepo extends LocalGameRepository {
 
 void main() {
   group('챗봇: 말로 답하기 (AI 해석, D-57)', () {
-    test('한 문장에서 여러 습관 → 남은 습관을 묻고 → 다 모이면 확인 카드 → [맞아]면 제출', () async {
+    test('한 문장에서 여러 습관 → 남은 습관을 묻고 → 다 모이면 바로 제출 (확인 카드 없음, 11-12)', () async {
       final s = GameState.sample(gold: 1240, balls: 1);
       final repo = _FakeAiRepo(
         s,
@@ -60,16 +60,12 @@ void main() {
       expect(s.checkedInToday, isFalse);
 
       await c.sendText('공부는 1시간 했어');
-      expect(c.step, ChatStep.confirm); // 말로 답했으니 바로 제출하지 않고 확인
-      expect([for (final (h, v) in c.draft) (h.id, v)], [('h1', 30.0), ('h2', 60.0), ('h3', 2.0)]);
-      expect(s.checkedInToday, isFalse);
-
-      await c.confirmDraft();
-      expect(s.checkedInToday, isTrue);
+      expect(s.checkedInToday, isTrue); // 마지막 답이면 바로 제출
+      expect(s.todayRecords, {'h1': 30.0, 'h2': 60.0, 'h3': 2.0});
       expect(c.step, ChatStep.done);
     });
 
-    test('AI가 다시 물으면 그 습관 숫자 입력으로, [고칠래]는 처음부터', () async {
+    test('AI가 다시 물으면 그 습관 숫자 입력으로', () async {
       final s = GameState.sample(gold: 1240, balls: 1);
       final repo = _FakeAiRepo(
         s,
@@ -86,11 +82,8 @@ void main() {
       await c.sendValue(60);
       await c.answer(true); // 물
       await c.sendValue(2);
-      expect(c.step, ChatStep.confirm);
-      await c.editDraft();
-      expect(c.draft, isEmpty);
-      expect(c.currentHabit!.id, 'h1');
-      expect(s.checkedInToday, isFalse);
+      expect(s.checkedInToday, isTrue);
+      expect(s.todayRecords, {'h1': 30.0, 'h2': 60.0, 'h3': 2.0});
     });
 
     test('위기 신호(safety)면 다음 습관으로 넘어가지 않는다', () async {
@@ -118,8 +111,8 @@ void main() {
       await c.sendText('공부 못 했어');
       expect(c.currentHabit!.id, 'h3');
       await c.sendText('2리터');
-      expect(c.step, ChatStep.confirm);
-      expect([for (final (h, v) in c.draft) (h.id, v)], [('h1', 30.0), ('h2', 0.0), ('h3', 2.0)]);
+      expect(s.checkedInToday, isTrue);
+      expect(s.todayRecords, {'h1': 30.0, 'h2': 0.0, 'h3': 2.0});
     });
 
     test('공부 타이머로 잰 분은 공부 습관을 물을 때 미리 채운다', () async {

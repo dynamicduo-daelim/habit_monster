@@ -389,10 +389,8 @@ class _ChatScreenState extends State<ChatScreen> {
         content = _GoldButton(label: '오늘 습관 체크 시작', onTap: c.start);
       case ChatStep.yesNo:
       case ChatStep.amount:
-        // 채팅방처럼 말로만 답한다 (빠른 답장 버튼 없앰, 11-12). 확인 카드는 사이에 끼므로 따로.
+        // 채팅방처럼 말로만 답한다 (빠른 답장 버튼 · 확인 카드 없앰, 11-12).
         content = _textRow(c);
-      case ChatStep.confirm:
-        content = _confirmCard(c);
       case ChatStep.done:
       case ChatStep.explore:
         final noEnc = s.encountersLeft <= 0;
@@ -472,63 +470,6 @@ class _ChatScreenState extends State<ChatScreen> {
         ),
         const SizedBox(width: 8),
         _SendButton(label: '보내기', onTap: _sendText),
-      ],
-    );
-  }
-
-  /// 확인 카드: 말로 답한 기록을 제출 전에 보여 준다 (AI가 잘못 알아들었으면 [고칠래]).
-  Widget _confirmCard(ChatController c) {
-    final s = GameScope.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: AppColors.cream,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppColors.ink, width: 2),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Text('이대로 기록할까?',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.brownText)),
-              const SizedBox(height: 8),
-              for (final (h, v) in c.draft)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 3),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(h.name, style: const TextStyle(fontSize: 13, color: AppColors.brownText)),
-                      ),
-                      Text(
-                          v <= 0
-                              ? '못 했어'
-                              : (s.measureOf(h).isOX ? '했어' : '${formatNum(v)}${s.measureOf(h).unit}'),
-                          style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w700,
-                              color: v <= 0 ? AppColors.brownMuted : AppColors.tierMidText)),
-                      if (c.timedMinutes(h) > 0 && v > 0) ...[
-                        const SizedBox(width: 6),
-                        const Text('타이머', style: TextStyle(fontSize: 11, color: AppColors.purple)),
-                      ],
-                    ],
-                  ),
-                ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 9),
-        Row(
-          children: [
-            Expanded(child: _DarkButton(label: '고칠래', onTap: c.editDraft)),
-            const SizedBox(width: 9),
-            Expanded(flex: 2, child: _GoldButton(label: '맞아!', onTap: c.confirmDraft)),
-          ],
-        ),
       ],
     );
   }

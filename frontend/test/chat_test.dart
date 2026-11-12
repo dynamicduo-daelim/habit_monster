@@ -245,10 +245,7 @@ void main() {
 
     // 물 2L: "3L 마셨어" → 마지막 답이라 확정
     await say(tester, '3L 마셨어');
-    expect(find.text('이대로 기록할까?'), findsOneWidget); // 말로 답했으니 한 번 확인
-    await tester.tap(find.text('맞아!'));
-    await tester.pump();
-    await tester.pump();
+    expect(find.text('이대로 기록할까?'), findsNothing); // 확인 카드 없이 바로 제출 (11-12)
     await tester.pump(); // 맨 아래로 스크롤된 프레임
     expect(find.textContaining('오늘 체크 끝! 오늘의 성실도는 45/75야.'), findsOneWidget);
     expect(find.text('성실도 +45 · +45G'), findsOneWidget);
@@ -306,8 +303,6 @@ void main() {
     await say(tester, '45분 뛰었어'); // 아침 러닝 30 → 45분
     await say(tester, '못 했어'); // 전공 공부
     await say(tester, '못 했어'); // 물 3L → 못 함
-    await tester.tap(find.text('맞아!'));
-    await tester.pump();
     await tester.pump();
     expect(find.text('기록을 고쳐 뒀어! 보상은 처음 확정한 그대로야.'), findsOneWidget);
     expect(s.todayRecords, {'h1': 45, 'h2': 0, 'h3': 0});
