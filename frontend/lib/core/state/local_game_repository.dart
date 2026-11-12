@@ -101,6 +101,10 @@ class LocalGameRepository implements GameRepository {
   }) async =>
       null;
 
+  /// 시연 모드에는 서버 대사가 없다 → 챗봇이 대본 대사를 쓴다.
+  @override
+  Future<String?> checkinDialogue() async => null;
+
   @override
   Future<StatsData> loadStats() async {
     final now = DateTime.now();

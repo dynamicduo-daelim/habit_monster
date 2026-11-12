@@ -43,6 +43,8 @@ class _PendingRepo extends LocalGameRepository {
 }
 
 void main() {
+  _amountFieldTests();
+
   test('체크인한 날 챗봇을 열면 남은 등장을 되살린다 (서버 모드)', () async {
     final s = _checkedIn(GameState.sample(gold: 1240, balls: 1));
     final c = ChatController(state: s, repository: _PendingRepo(s));
@@ -310,6 +312,42 @@ void main() {
   });
 }
 
+
+/// "얼마나 했어?" 칸은 숫자도 말도 받는다 (11-11 — 전엔 숫자 키패드만이라 AI에게 말로 답할 수 없었다).
+void _amountFieldTests() {
+  testWidgets('"얼마나 했어?" 칸: 글이 섞이면 말로 답하기, 숫자만이면 바로 기록', (tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final s = GameState.sample(gold: 1240, balls: 1);
+    await tester.pumpWidget(withGame(s, const MaterialApp(home: MainShell())));
+    await tester.tap(find.text('챗봇'));
+    await tester.pump();
+    await tester.pump();
+
+    await tester.tap(find.text('했어!').last);
+    await tester.pump();
+    expect(find.text('숫자 또는 말로 (예: 30 / 30분 뛰었어)'), findsOneWidget);
+    final field = tester.widget<TextField>(find.byType(TextField));
+    expect(field.keyboardType, isNot(const TextInputType.numberWithOptions(decimal: true))); // 한글 키보드가 뜬다
+
+    // 말로: 시연 모드라 AI 대신 말 속 숫자를 읽는다 (서버 모드면 AI 해석)
+    await tester.enterText(find.byType(TextField), '25분 뛰었어');
+    await tester.tap(find.text('전송'));
+    await tester.pump();
+    await tester.pump();
+    expect(find.text('25분 뛰었어'), findsOneWidget); // 내 말풍선
+    expect(find.textContaining("'전공 공부' 오늘 했어?"), findsOneWidget); // 다음 습관으로
+
+    // 숫자만: 지금처럼 바로 기록
+    await tester.tap(find.text('했어!').last);
+    await tester.pump();
+    await tester.enterText(find.byType(TextField), '60');
+    await tester.tap(find.text('전송'));
+    await tester.pump();
+    expect(find.textContaining("'물 2L 마시기' 오늘 했어?"), findsOneWidget);
+  });
+}
 
 /// 체크인 확정 (탐색하려면 먼저 필요): 샘플 습관 3개 모두 응답.
 GameState _checkedIn(GameState s) {

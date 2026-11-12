@@ -351,6 +351,19 @@ class HttpGameRepository implements GameRepository {
     );
   }
 
+  /// `POST /checkins/today/dialogue` (본문 없음) → `line`. 같은 revision이면 서버가 저장된 대사를 그대로 준다.
+  /// 제출 전(409 `CHECKIN_REQUIRED`) · 네트워크 · 응답 모양 등 **어떤 실패든 null** (대사는 보상과 상관없음).
+  @override
+  Future<String?> checkinDialogue() async {
+    try {
+      final res = await api.send('POST', '/checkins/today/dialogue') as Map<String, dynamic>;
+      final line = res['line'];
+      return line is String && line.trim().isNotEmpty ? line : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   Map<String, dynamic> _checkinBody(Map<String, double> answers) => {
         'businessDate': _businessDate,
         'answers': [

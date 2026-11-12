@@ -107,6 +107,10 @@ abstract class GameRepository {
     required Map<String, double> draft,
     String? askingHabitId,
   });
+
+  /// 오늘 체크인(또는 다시 체크) 뒤 챗봇이 할 한 줄 (서버: `POST /checkins/today/dialogue`, 결정 D-64).
+  /// 보상과 상관없는 말이라 **실패해도 오류를 띄우지 않고 null** → 챗봇이 대본 대사를 쓴다. 시연 모드도 null.
+  Future<String?> checkinDialogue();
 }
 
 /// 위젯 트리 어디서든 `GameRepositoryScope.of(context)`로 꺼내 쓴다.

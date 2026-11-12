@@ -308,7 +308,7 @@ class ChatController extends ChangeNotifier {
       _rechecking = false;
       final again = await _call(() => repository.resubmitCheckin(_answers));
       _answers.clear();
-      if (again != null) messages.add(ChatMessage.bot(await _think(brain.recheckDone(again))));
+      if (again != null) messages.add(ChatMessage.bot(await _think(_closingLine(() => brain.recheckDone(again)))));
       step = ChatStep.done;
       _notify();
       return;
@@ -320,7 +320,7 @@ class ChatController extends ChangeNotifier {
       _notify();
       return;
     }
-    final text = await _think(brain.wrapUp(r, maxScore: GameState.maxDailyScore));
+    final text = await _think(_closingLine(() => brain.wrapUp(r, maxScore: GameState.maxDailyScore)));
     final lv = [
       for (final e in r.levelUps.entries) '${Catalog.category(e.key).name} Lv.${e.value} 달성!',
     ];
@@ -389,6 +389,10 @@ class ChatController extends ChangeNotifier {
   }
 
   /// 서버 오류면 그 문구를 몬스터 말풍선으로 보여주고 null (예: 날짜가 바뀌었어요 · 서버에 연결할 수 없어요).
+  /// 체크인 · 다시 체크를 마친 뒤의 마무리 말: 서버 대사(AI, D-64)가 있으면 그것, 없으면 [scripted] 대본.
+  Future<String> _closingLine(Future<String> Function() scripted) async =>
+      await repository.checkinDialogue() ?? await scripted();
+
   Future<T?> _call<T>(Future<T?> Function() action) async {
     try {
       return await action();

@@ -10,6 +10,16 @@ import 'package:habit_monster/features/chat/study_timer_view.dart';
 import 'package:habit_monster/features/shell/main_shell.dart';
 import 'game_harness.dart';
 
+/// 서버 체크인 대사(D-64)만 정해 둔 값으로 돌려주는 저장소 (규칙 계산은 앱 그대로).
+class _FakeDialogueRepo extends LocalGameRepository {
+  _FakeDialogueRepo(super.state, this.lines);
+  final List<String?> lines;
+  int calls = 0;
+
+  @override
+  Future<String?> checkinDialogue() async => lines[calls++];
+}
+
 /// 서버 AI 해석 대신 정해 둔 답을 돌려주는 저장소 (규칙 계산은 앱 그대로).
 class _FakeAiRepo extends LocalGameRepository {
   _FakeAiRepo(super.state, this.reply);
@@ -291,6 +301,42 @@ void main() {
       await tester.pump(const Duration(milliseconds: 400));
       expect(StudyTimerView.friendsOf(s, timer).length, 2);
       await tester.pumpWidget(const SizedBox());
+    });
+  });
+
+  group('체크인 대사 (서버, D-64)', () {
+    Future<void> checkAll(ChatController c) async {
+      await c.answer(true);
+      await c.sendValue(30);
+      await c.answer(true);
+      await c.sendValue(60);
+      await c.answer(true);
+      await c.sendValue(2);
+    }
+
+    test('확정 · 다시 체크 뒤 서버 대사가 있으면 그 말, 보상 칩은 그대로', () async {
+      final s = GameState.sample(gold: 1240, balls: 1);
+      final repo = _FakeDialogueRepo(s, ['30분이나 뛰었구나, 멋져!', '기록 고쳐 줘서 고마워!']);
+      final c = ChatController(state: s, repository: repo);
+      await c.start();
+      await checkAll(c);
+      expect(s.checkedInToday, isTrue);
+      final done = c.messages.firstWhere((m) => m.text == '30분이나 뛰었구나, 멋져!');
+      expect(done.reward, isNotNull); // 성실도 · 골드 칩은 대사와 상관없이 그대로
+      expect(c.messages.any((m) => m.text.contains('오늘 체크 끝!')), isFalse);
+
+      await c.recheck();
+      await checkAll(c);
+      expect(c.messages.last.text, '기록 고쳐 줘서 고마워!');
+      expect(repo.calls, 2);
+    });
+
+    test('서버 대사가 없으면(null) 지금 대본 대사', () async {
+      final s = GameState.sample(gold: 1240, balls: 1);
+      final c = ChatController(state: s, repository: _FakeDialogueRepo(s, [null]));
+      await c.start();
+      await checkAll(c);
+      expect(c.messages.any((m) => m.text.contains('오늘 체크 끝!')), isTrue);
     });
   });
 }

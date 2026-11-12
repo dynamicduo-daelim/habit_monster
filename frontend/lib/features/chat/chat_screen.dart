@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../../core/audio/bgm.dart';
 import '../../core/constants/app_assets.dart';
@@ -133,8 +132,15 @@ class _ChatScreenState extends State<ChatScreen> {
     s.touch(); // 아래 build에서 대화 상대 변경을 보고 대화를 다시 시작한다.
   }
 
+  /// "얼마나 했어?" 칸: 숫자만이면(`30`, `1.5`) 바로 기록, 글이 섞이면(`30분 뛰었어`) 말로 답하기(AI 해석)로.
   Future<void> _sendAmount() async {
-    final ok = await _c!.sendAmount(_amount.text);
+    final raw = _amount.text.trim();
+    if (raw.isNotEmpty && double.tryParse(raw) == null) {
+      _amount.clear();
+      await _c!.sendText(raw);
+      return;
+    }
+    final ok = await _c!.sendAmount(raw);
     if (!mounted) return;
     if (!ok) {
       MainShell.of(context).toast('숫자를 입력해 주세요');
@@ -375,19 +381,20 @@ class _ChatScreenState extends State<ChatScreen> {
                     ),
                     padding: const EdgeInsets.all(11),
                     child: Semantics(
-                      label: '수행량',
+                      label: '수행량 (숫자 또는 말로)',
+                      // 숫자 키패드만 띄우면 AI가 되물어도 말로 답할 수 없어서 일반 키보드 (11-11)
                       child: TextField(
                         controller: _amount,
-                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                        inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
+                        maxLength: 300,
                         cursorColor: AppColors.gold,
                         style: const TextStyle(fontSize: 17, color: AppColors.gold),
                         decoration: const InputDecoration(
                           isDense: true,
                           border: InputBorder.none,
+                          counterText: '',
                           contentPadding: EdgeInsets.zero,
-                          hintText: '숫자만',
-                          hintStyle: TextStyle(color: AppColors.textMuted),
+                          hintText: '숫자 또는 말로 (예: 30 / 30분 뛰었어)',
+                          hintStyle: TextStyle(color: AppColors.textMuted, fontSize: 13),
                         ),
                         onSubmitted: (_) => _sendAmount(),
                       ),

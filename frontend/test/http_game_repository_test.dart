@@ -669,6 +669,26 @@ void main() {
     });
   });
 
+  group('체크인 대사 (5-1, D-64)', () {
+    test('POST /checkins/today/dialogue → line', () async {
+      final r = repo(GameState.empty(), {
+        'POST /checkins/today/dialogue': {'revision': 1, 'line': '30분이나 뛰었구나, 멋져!', 'source': 'LLM'},
+      });
+      expect(await r.checkinDialogue(), '30분이나 뛰었구나, 멋져!');
+      expect(requests.single.body, isEmpty); // 본문 없음
+    });
+
+    test('제출 전(409) · 서버 오류 · 빈 대사면 null (오류를 띄우지 않는다)', () async {
+      for (final res in <Object>[
+        _json({'code': 'CHECKIN_REQUIRED', 'message': '오늘 체크인을 먼저 해 주세요'}, 409),
+        _json({'code': 'INTERNAL_ERROR', 'message': '오류'}, 500),
+        {'revision': 1, 'line': '  ', 'source': 'TEMPLATE'},
+      ]) {
+        expect(await repo(GameState.empty(), {'POST /checkins/today/dialogue': res}).checkinDialogue(), isNull);
+      }
+    });
+  });
+
   group('GameLoader', () {
     Widget app(GameState s, GameRepository r) => MaterialApp(
           home: GameScope(
