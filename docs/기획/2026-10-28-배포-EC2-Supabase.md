@@ -15,6 +15,7 @@
                       api.habitmonster.me (탄력적 IP) + 인증서(Let's Encrypt)
 ```
 > **현재 (11-12)**: 위 구성대로 동작 — `https://api.habitmonster.me/api/v1`. 8080 직접 접속은 아직 열려 있음 (8장).
+> **EC2와 Supabase 모두 시드니(`ap-southeast-2`)** (11-12, D-71). 처음 Supabase는 도쿄에 있어 요청마다 몇 초씩 걸렸다. 서버와 DB는 같은 리전에 둔다.
 
 | 부분 | 쓰는 것 | 비고 |
 | --- | --- | --- |
@@ -24,7 +25,7 @@
 | 앱 | 릴리스 빌드 APK | `API_BASE_URL=https://api.habitmonster.me/api/v1` |
 
 ## 3. 할 일 (순서)
-1. **Supabase**: 프로젝트 만들기(서울 리전) → SQL 적용 → 서버용 연결 문자열 확인 (직접 연결 / 풀러 중 EC2에서 되는 것)
+1. **Supabase**: 프로젝트 만들기(서울 리전 → 실제로는 도쿄에 만들어졌고, 11-12에 **EC2와 같은 시드니**로 새로 만듦, D-71) → SQL 적용 → 서버용 연결 문자열 확인 (직접 연결 / 풀러 중 EC2에서 되는 것)
 2. **EC2**: 인스턴스 · 보안 그룹(22 · 80 · 443만) · Java 21 · 결제 알림(Billing alert)
 3. **서버 설정 (코드 변경 작음)**: 운영 환경변수 `DB_URL` · `DB_USER` · `DB_PASSWORD` · `JWT_SECRET`(새로 만든 긴 값) · `KAKAO_APP_ID` · `GOOGLE_CLIENT_IDS`. CORS는 끔(앱은 상관없음)
 4. **HTTPS**: 도메인 연결 → Nginx 프록시 → 인증서
@@ -47,10 +48,10 @@
 | **릴리스 빌드는 http를 막음** | 안드로이드 운영 빌드는 암호화 안 된 연결을 거부한다 (`usesCleartextTraffic`는 debug 설정에만) | http인 지금은 **debug 빌드로만** 폰 테스트 (`flutter run --dart-define=API_BASE_URL=http://<EC2 IP>:8080/api/v1`). 릴리스 APK는 HTTPS 뒤에 |
 | **로그인 요청 횟수 제한 없음** | 이메일 로그인에 비밀번호를 계속 넣어 보는 공격을 막지 못한다 | 6단계(진행현황) · 7장 "정해야 할 것". 그때까지 테스트 계정 비밀번호는 길게 |
 | **`JWT_SECRET`** | 이 값을 알면 누구의 토큰이든 만들 수 있다. 짧거나 예시 값이면 추측된다 | 새로 만든 **긴 무작위 값**(32바이트 이상)을 EC2 환경 파일에만. 바꾸면 기존 로그인이 모두 풀린다 (알고 바꿀 것) |
-| **`DB_PASSWORD` (Supabase)** | DB에 바로 접속해 모든 데이터를 읽고 바꿀 수 있다 | EC2 환경 파일에만. 유출이 의심되면 Supabase에서 비밀번호 재설정 → EC2 값 바꾸고 서버 다시 시작 |
+| **`DB_PASSWORD` (Supabase)** | DB에 바로 접속해 모든 데이터를 읽고 바꿀 수 있다 | EC2 환경 파일에만. 유출이 의심되면 Supabase에서 비밀번호 재설정 → EC2 값 바꾸고 서버 다시 시작. **연결 주소(URL)에 사용자 · 비밀번호를 넣지 않는다** — 주소가 서버 로그에 찍힐 때 비밀번호 일부가 그대로 남았다 (11-12). 비밀번호는 **영문 · 숫자만** (`# % &`가 주소를 깨뜨림) |
 | **Supabase RLS 경고** | Supabase는 `public` 스키마 테이블을 앱 키(anon)로 읽을 수 있어서 RLS를 권한다 | **무시해도 된다** — 우리 앱은 anon 키를 쓰지 않고(서버만 DB 비밀번호로 접속), 테이블도 `public`이 아닌 모듈 스키마에 있다 |
 | **카카오 · 구글 값** | 앱 ID(`KAKAO_APP_ID`) · 클라이언트 ID(`GOOGLE_CLIENT_IDS`)는 공개돼도 되는 값이지만, **카카오 REST · Admin 키 · 구글 client secret은 비밀** | 비밀 값은 어디에도 넣지 않는다 (서버는 토큰 검증에 공개 값만 씀). 두 ID가 EC2에 없으면 소셜 로그인이 실패한다 |
-| **`GEMINI_API_KEY` (AI 챗봇, `feature/ai-chatbot-study-timer`)** | 키가 새면 남이 우리 요금으로 호출한다 | EC2 환경 파일에만 (앱 · 저장소에 넣지 않음, `.env`는 `.gitignore`). 하루 호출 한도가 지금은 서버 메모리라 서버를 다시 켜면 초기화된다 |
+| **`GEMINI_API_KEY` (AI 챗봇, `feature/ai-chatbot-study-timer`)** | 키가 새면 남이 우리 요금으로 호출한다 | EC2 환경 파일에만 (앱 · 저장소에 넣지 않음, `.env`는 `.gitignore`). 하루 호출 한도는 11-05부터 DB(`ai.daily_call_count`)에 세서 서버를 다시 켜도 유지 |
 
 ## 5. 영향
 - 서버: 운영 설정(환경변수) — 코드 변경은 거의 없음 **[가정]**. 로그인 요청 횟수 제한은 이번에 넣을지 8장에서
@@ -88,3 +89,20 @@
 - 확인 (Claude, 이 PC에서 11-12 13:48): `https://…/api/v1/me/status` → **401** `INVALID_TOKEN` JSON (Nginx → Spring까지 옴) · `http://` → **301** · 인증서 이름 `api.habitmonster.me` · DNS → `16.179.63.74`.
 - 막혔던 것: ① PowerShell 5.1의 `curl`은 `Invoke-WebRequest` 별명이라 `-i`에서 `Uri:`를 물음 → `curl.exe` ② 443 연결이 22초 뒤 시간 초과 → 보안 그룹에 443이 없었음 (80 · 8080 · 22만).
 - 아직: `sudo certbot renew --dry-run`(자동 갱신 시험), 폰에서 https 주소로 한 바퀴(6장 첫 항목), 그다음 보안 그룹에서 **8080 삭제**, 재부팅 시험.
+
+### 2026-11-12 — DB를 시드니로 옮김 (D-71)
+- **왜**: 앱 버튼마다 몇 초. EC2 시드니 · Supabase 도쿄라 요청마다 DB를 10번 안팎 오가며 시드니 ↔ 도쿄 왕복이 쌓였다. EC2를 옮기려 했으나 AWS 무료 플랜은 다른 리전에 인스턴스를 만들 수 없어서 DB를 옮김.
+- **한 일** (사용자가 직접 — Supabase · EC2 · PC, Claude는 단계 안내와 바깥에서 측정)
+  1. 시드니(`ap-southeast-2`)에 새 Supabase 프로젝트 → SQL 편집기로 `schema.sql` · `seed.sql` (설정 키 55개 확인)
+  2. EC2 `app.env`의 `SPRING_DATASOURCE_URL` · `USERNAME` · `PASSWORD` 세 줄만 바꿈 (Session pooler 주소) → restart
+  3. 새 DB가 비어 있어 기존 계정으로 로그인이 안 됨("비밀번호가 틀렸다" — 서버는 없는 계정과 틀린 비밀번호를 구분해 알리지 않음) → 도쿄 DB를 통째로 옮김: PC Docker `postgres:17.11`로 우리 스키마 9개를 `pg_dump -Fc --no-owner --no-privileges` → 서버 멈춤 → 시드니에서 그 스키마 `drop … cascade` → `pg_restore` → 서버 시작. 덤프 파일은 지움 (계정 · 비밀번호 해시가 들어 있음)
+- **잰 값** (이 PC → `16.179.63.74:8080`, 첫 응답까지 − 요청 보낸 때): DB 한 번 읽는 요청 **0.75초 → 0.31 ~ 0.42초**, DB 안 쓰는 요청 약 0.31초. 남은 0.3초는 한국 ↔ 시드니.
+- **막혔던 것**
+  - `verify.sql`을 운영 DB에서 돌렸다가 실패 (Claude 안내 실수) — verify는 **빈 검사용 DB 전용**이라 테스트 사용자를 진짜 테이블에 넣는다. 실행이 통째로 되돌려져 남은 데이터는 없었음 (users 0 확인)
+  - `'url' must start with "jdbc"` — Supabase 화면의 `postgresql://…` 주소를 그대로 넣음 → `jdbc:postgresql://<호스트>:5432/postgres?sslmode=require`
+  - `Driver … claims to not accept jdbcUrl` — URL에 `?user=…&password=…`가 붙어 있었고 비밀번호의 `# % &`가 주소를 깨뜨림. 그 로그에 **비밀번호 일부가 가려지지 않고 찍힘** → URL에서 빼고 USERNAME · PASSWORD 줄로, 비밀번호 재설정(영문 · 숫자) 권함
+  - 덤프 · 복원에서 `C:/Program Files/Git/dump/…` 없음 — Git Bash가 `/dump` 경로를 바꿈 → `MSYS_NO_PATHCONV=1` 또는 PowerShell (복원은 PowerShell에서 `-e PGPASSWORD`로 성공)
+  - `password authentication failed` — 앞선 명령 묶음의 `unset OLDPW`로 비밀번호 변수가 비어 있었음
+  - 백업으로 되돌리는 `cp`를 실수로 실행 → 편집한 세 줄이 되돌려져 다시 고침
+- **아직**: 사용자 정리 — Supabase 비밀번호 재설정 여부, `app.env.bak` 삭제, 며칠 뒤 도쿄 프로젝트 일시정지 · 삭제. 폰에서 체감 속도.
+

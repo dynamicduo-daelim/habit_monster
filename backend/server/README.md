@@ -71,6 +71,7 @@ EC2(Ubuntu, 사용자 `ubuntu`)에서 서버는 **systemd 서비스 `habit-monst
 | 서비스 정의 | `/etc/systemd/system/habit-monster.service` — `java -Xmx256m -jar …`, `Restart=on-failure` |
 | 로그 | `journalctl -u habit-monster` (옛 `~/app-new.log`는 11-11 전까지) |
 | 포트 | 8080 (프로필 없음 = 기본값). 바깥에서는 Nginx를 거쳐 443으로 |
+| DB (11-12부터, D-71) | Supabase **시드니**(`ap-southeast-2`) — EC2와 같은 리전, Session pooler로 접속 |
 | 주소 (11-12부터, D-69) | **`https://api.habitmonster.me/api/v1`** — 앱 `API_BASE_URL`. 탄력적 IP `16.179.63.74` |
 | Nginx 설정 | `/etc/nginx/sites-available/habit-monster` (`sites-enabled`에 링크) — `proxy_pass http://127.0.0.1:8080`. 바꾼 뒤 `sudo nginx -t && sudo systemctl reload nginx` |
 | 인증서 | Let's Encrypt (`certbot --nginx`), 만료 2027-02-10 — 자동 갱신 확인: `sudo certbot renew --dry-run` |
@@ -87,7 +88,10 @@ sudoedit /etc/habit-monster/app.env       # 비밀값 바꾸기 → restart
 새 코드 배포: PC(`backend/server`)에서 `./gradlew bootJar` → `scp -i <pem> build/libs/<jar>.jar ubuntu@16.179.63.74:~/app-new.jar` → `sudo systemctl restart habit-monster`. DB 계약이 바뀐 jar면 **Supabase에 SQL을 먼저** 적용한다.
 
 - `-Xmx256m`: EC2 메모리가 908MB · 스왑 없음. 11-06에 기본 설정 서버가 메모리 부족으로 강제 종료됐다(`Out of memory: Killed process … (java)`).
-- 11-11 `app.env`에 든 이름 (7개): `SPRING_DATASOURCE_URL` · `SPRING_DATASOURCE_USERNAME` · `SPRING_DATASOURCE_PASSWORD` · `JWT_SECRET` · `GEMINI_API_KEY` · `KAKAO_APP_ID` · `GOOGLE_CLIENT_IDS`. 옛 이름 `SPRING_DATASOURCE_*`는 `DB_*`보다 우선한다. 카카오 · 구글 값은 공개 값이라 `application-local.properties`와 같다.
+- `app.env`에 든 이름 (8개): `SPRING_DATASOURCE_URL` · `SPRING_DATASOURCE_USERNAME` · `SPRING_DATASOURCE_PASSWORD` · `JWT_SECRET` · `GEMINI_API_KEY` · `KAKAO_APP_ID` · `GOOGLE_CLIENT_IDS` (11-11) · `APP_LLM_TIMEOUT_MS` (11-11, D-66). 옛 이름 `SPRING_DATASOURCE_*`는 `DB_*`보다 우선한다. 카카오 · 구글 값은 공개 값이라 `application-local.properties`와 같다.
+- **DB 연결 값 쓰는 법** (11-12에 두 번 막힘): URL은 `jdbc:postgresql://<호스트>:5432/postgres?sslmode=require` — Supabase 화면의 `postgresql://…`를 그대로 넣으면 시작 실패. **URL에 `user=` · `password=`를 넣지 않는다** (로그에 비밀번호가 찍히고 특수문자가 주소를 깨뜨림) — 사용자 · 비밀번호는 각각 `USERNAME` · `PASSWORD` 줄. Session pooler면 사용자는 `postgres.<프로젝트 id>`. 비밀번호는 영문 · 숫자만
+- **서버와 DB는 같은 리전에** (D-71): 요청마다 DB를 여러 번 오가서, 리전이 다르면 버튼마다 몇 초가 걸린다
+- `docs/데이터베이스/verify.sql`은 **빈 검사용 DB 전용** (테스트 사용자를 진짜 테이블에 넣는다) — 운영 DB에서 돌리지 않는다. 새 DB 확인은 `select count(*) from config.balance_config` (55) · 서버가 뜨는지로
 
 ## 테스트
 
