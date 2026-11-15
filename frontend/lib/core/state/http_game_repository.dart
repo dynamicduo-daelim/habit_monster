@@ -72,8 +72,8 @@ class HttpGameRepository implements GameRepository {
     final status = r[0] as Map<String, dynamic>;
     final today = r[1] as Map<String, dynamic>;
     final list = (r[3] as List).cast<Map<String, dynamic>>().where((m) => _knownSpecies(m['imageKey'])).toList();
-    final details = (await Future.wait(list.map((m) => api.get('/monsters/${m['userMonsterId']}'))))
-        .cast<Map<String, dynamic>>();
+    final details =
+        (await Future.wait(list.map((m) => api.get('/monsters/${m['userMonsterId']}')))).cast<Map<String, dynamic>>();
     final measures = r[7] as Map<int, (String, int)>;
 
     final items = ((r[4] as Map<String, dynamic>)['items'] as List).cast<Map<String, dynamic>>();
@@ -107,8 +107,14 @@ class HttpGameRepository implements GameRepository {
       ])
       ..applyGoals(_goals(r[6] as Map<String, dynamic>))
       ..applyDex(
-        seen: {for (final m in _dexMonsters(r.skip(10))) if (m['status'] != 'UNKNOWN') m['imageKey'] as String},
-        owned: {for (final m in _dexMonsters(r.skip(10))) if (m['status'] == 'OWNED') m['imageKey'] as String},
+        seen: {
+          for (final m in _dexMonsters(r.skip(10)))
+            if (m['status'] != 'UNKNOWN') m['imageKey'] as String
+        },
+        owned: {
+          for (final m in _dexMonsters(r.skip(10)))
+            if (m['status'] == 'OWNED') m['imageKey'] as String
+        },
         tickets: ((r[9] as Map<String, dynamic>)['slot'] as Map<String, dynamic>)['availableTickets'] as int,
       );
     if (today['checkedIn'] == true) {
@@ -116,7 +122,10 @@ class HttpGameRepository implements GameRepository {
       state.applyToday(
         values: {for (final h in hs) '${h['habitId']}': (h['rewardedValue'] as num).toDouble()},
         scores: {for (final h in hs) '${h['habitId']}': h['rewardedScore'] as int},
-        counted: {for (final h in hs) if (h['counted'] == true) '${h['habitId']}'},
+        counted: {
+          for (final h in hs)
+            if (h['counted'] == true) '${h['habitId']}'
+        },
       );
     }
     _applyBoard(r[8] as Map<String, dynamic>);
@@ -251,7 +260,10 @@ class HttpGameRepository implements GameRepository {
     final hs = (res['habits'] as List).cast<Map<String, dynamic>>();
     final categories = (res['categoryExp'] as List).cast<Map<String, dynamic>>();
     final scores = {for (final h in hs) '${h['habitId']}': h['score'] as int};
-    final counted = {for (final h in hs) if (h['counted'] == true) '${h['habitId']}'};
+    final counted = {
+      for (final h in hs)
+        if (h['counted'] == true) '${h['habitId']}'
+    };
     state.applyCheckinResult(
       gold: res['gold'] as int,
       values: {for (final h in hs) '${h['habitId']}': answers['${h['habitId']}'] ?? 0},
@@ -288,8 +300,8 @@ class HttpGameRepository implements GameRepository {
   @override
   Future<DailyCheckinResult?> resubmitCheckin(Map<String, double> answers) async {
     if (answers.isEmpty) return null;
-    final res = await api.send('PUT', '/checkins/today', idempotent: true, body: _checkinBody(answers))
-        as Map<String, dynamic>;
+    final res =
+        await api.send('PUT', '/checkins/today', idempotent: true, body: _checkinBody(answers)) as Map<String, dynamic>;
     final hs = (res['habits'] as List).cast<Map<String, dynamic>>();
     final values = {for (final h in hs) '${h['habitId']}': (h['value'] as num).toDouble()};
     final scores = {for (final h in hs) '${h['habitId']}': h['score'] as int};
@@ -346,6 +358,30 @@ class HttpGameRepository implements GameRepository {
       },
       askAgainHabitId: ask == null ? null : '${ask['habitId']}',
       askAgainQuestion: ask?['question'] as String?,
+      safety: res['safety'] == true,
+      fromAi: res['source'] == 'LLM',
+    );
+  }
+
+  /// `POST /chat/talk` (기획 2026-11-15-몬스터-대화 B). 하루 한도(해석과 함께 60번)를 넘으면(429) `limited`.
+  /// 그 밖의 서버 오류는 그대로 올려 몬스터 말풍선으로 보인다 (예: 날짜가 바뀌었어요).
+  @override
+  Future<TalkResult?> chatTalk({required String message, required List<(String, String)> history}) async {
+    final Map<String, dynamic> res;
+    try {
+      res = await api.send('POST', '/chat/talk', body: {
+        'businessDate': _businessDate,
+        'message': message,
+        'history': [
+          for (final (role, text) in history) {'role': role, 'text': text},
+        ],
+      }) as Map<String, dynamic>;
+    } on ApiException catch (e) {
+      if (e.code == 'AI_RATE_LIMITED') return const TalkResult(reply: '', fromAi: false, limited: true);
+      rethrow;
+    }
+    return TalkResult(
+      reply: res['reply'] as String,
       safety: res['safety'] == true,
       fromAi: res['source'] == 'LLM',
     );
@@ -554,8 +590,8 @@ class HttpGameRepository implements GameRepository {
   @override
   Future<Goal> addGoal(GoalTier tier, String title, String detail) async {
     final res = await api.send('POST', '/goals',
-        idempotent: true,
-        body: {'goalType': tier == GoalTier.weekly ? 'WEEKLY' : 'MONTHLY', 'title': title, 'detail': detail})
+            idempotent: true,
+            body: {'goalType': tier == GoalTier.weekly ? 'WEEKLY' : 'MONTHLY', 'title': title, 'detail': detail})
         as Map<String, dynamic>;
     final g = _goal(res, tier);
     state.applyGoalAdded(g);
@@ -565,8 +601,9 @@ class HttpGameRepository implements GameRepository {
   /// 목표 수정 (`PATCH /goals/{id}`). 상세를 비우면 `null`(지우기)로 보낸다.
   @override
   Future<void> updateGoal(Goal g, String title, String detail) async {
-    final res = await api.send('PATCH', '/goals/${g.id}', body: {'title': title, 'detail': detail.isEmpty ? null : detail})
-        as Map<String, dynamic>;
+    final res =
+        await api.send('PATCH', '/goals/${g.id}', body: {'title': title, 'detail': detail.isEmpty ? null : detail})
+            as Map<String, dynamic>;
     state.applyGoalUpdated(g, title: res['title'] as String? ?? title, detail: res['detail'] as String? ?? '');
   }
 
@@ -627,5 +664,4 @@ class HttpGameRepository implements GameRepository {
   /// 4단계에서 서버로 (`POST /habits/{id}/stop`).
   @override
   Future<bool> removeHabit(Habit h) => _local.removeHabit(h);
-
 }

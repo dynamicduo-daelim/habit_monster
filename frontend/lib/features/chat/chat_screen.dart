@@ -235,17 +235,17 @@ class _ChatScreenState extends State<ChatScreen> {
                 ),
               )
             else ...[
-            _roomHeader(s, c, compact: keyboard),
-            Expanded(
-              child: c.step == ChatStep.explore
-                  ? ExploreView(controller: c, bobUp: _bobUp, onNeedBall: _openBallShop)
-                  : Column(
-                      children: [
-                        Expanded(child: _messages(c)),
-                        _dock(s, c),
-                      ],
-                    ),
-            ),
+              _roomHeader(s, c, compact: keyboard),
+              Expanded(
+                child: c.step == ChatStep.explore
+                    ? ExploreView(controller: c, bobUp: _bobUp, onNeedBall: _openBallShop)
+                    : Column(
+                        children: [
+                          Expanded(child: _messages(c)),
+                          _dock(s, c),
+                        ],
+                      ),
+              ),
             ],
           ],
         ),
@@ -394,39 +394,47 @@ class _ChatScreenState extends State<ChatScreen> {
       case ChatStep.done:
       case ChatStep.explore:
         final noEnc = s.encountersLeft <= 0;
-        content = Row(
+        // 체크인을 마친 뒤에도 몬스터와 이야기할 수 있게 입력칸을 둔다 (기획 2026-11-15 — 임시 화면, 프론트 담당이 다듬음)
+        content = Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // 확정한 기록 고치기 (보상은 첫 확정 그대로)
-            if (s.checkedInToday) ...[
-              Expanded(flex: 2, child: _DarkButton(label: '다시 체크', onTap: c.recheck)),
-              const SizedBox(width: 9),
-            ],
-            Expanded(
-              flex: 3,
-              child: Semantics(
-                button: true,
-                enabled: !noEnc,
-                child: GestureDetector(
-                  onTap: noEnc ? null : c.explore,
-                  child: Container(
-                    constraints: const BoxConstraints(minHeight: 46),
-                    alignment: Alignment.center,
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: noEnc ? AppColors.nightRaised : AppColors.purpleDeep,
-                      border: Border.all(color: noEnc ? AppColors.nightLine2 : AppColors.purple, width: 3),
-                      boxShadow: const [BoxShadow(color: AppColors.ink, offset: Offset(4, 4))],
+            Row(
+              children: [
+                // 확정한 기록 고치기 (보상은 첫 확정 그대로)
+                if (s.checkedInToday) ...[
+                  Expanded(flex: 2, child: _DarkButton(label: '다시 체크', onTap: c.recheck)),
+                  const SizedBox(width: 9),
+                ],
+                Expanded(
+                  flex: 3,
+                  child: Semantics(
+                    button: true,
+                    enabled: !noEnc,
+                    child: GestureDetector(
+                      onTap: noEnc ? null : c.explore,
+                      child: Container(
+                        constraints: const BoxConstraints(minHeight: 46),
+                        alignment: Alignment.center,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: noEnc ? AppColors.nightRaised : AppColors.purpleDeep,
+                          border: Border.all(color: noEnc ? AppColors.nightLine2 : AppColors.purple, width: 3),
+                          boxShadow: const [BoxShadow(color: AppColors.ink, offset: Offset(4, 4))],
+                        ),
+                        child: Text('탐색하기 (${s.encountersLeft}회 남음)',
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w700,
+                              color: noEnc ? AppColors.lavender : AppColors.text,
+                            )),
+                      ),
                     ),
-                    child: Text('탐색하기 (${s.encountersLeft}회 남음)',
-                        style: TextStyle(
-                          fontSize: 12.5,
-                          fontWeight: FontWeight.w700,
-                          color: noEnc ? AppColors.lavender : AppColors.text,
-                        )),
                   ),
                 ),
-              ),
+              ],
             ),
+            const SizedBox(height: 9),
+            _textRow(c),
           ],
         );
     }
@@ -443,12 +451,17 @@ class _ChatScreenState extends State<ChatScreen> {
   /// 말로 답하기: "아침에 30분 뛰었어"처럼 쓰면 AI가 알아듣는다 (서버 모드). 시연 모드는 숫자만 읽는다.
   Widget _textRow(ChatController c) {
     final unit = c.step == ChatStep.amount ? c.currentMeasure?.unit ?? '' : '';
+    final p = c.partner;
+    final talking = c.step == ChatStep.done;
+    final hint = talking
+        ? '${p == null ? '루틴몬' : Catalog.speciesById(p.speciesId).name}에게 말 걸기'
+        : (unit.isEmpty ? '메시지 보내기 (예: 했어 / 못 했어)' : '메시지 보내기 (예: 30$unit 했어)');
     return Row(
       children: [
         Expanded(
           child: _PillField(
             child: Semantics(
-              label: '말로 답하기',
+              label: talking ? '몬스터에게 말 걸기' : '말로 답하기',
               child: TextField(
                 controller: _text,
                 maxLength: 300,
@@ -460,7 +473,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   border: InputBorder.none,
                   counterText: '',
                   contentPadding: EdgeInsets.zero,
-                  hintText: unit.isEmpty ? '메시지 보내기 (예: 했어 / 못 했어)' : '메시지 보내기 (예: 30$unit 했어)',
+                  hintText: hint,
                   hintStyle: const TextStyle(color: AppColors.textMuted, fontSize: 12.5),
                 ),
                 onSubmitted: (_) => _sendText(),
@@ -657,8 +670,8 @@ class _SendButton extends StatelessWidget {
             borderRadius: BorderRadius.circular(10),
             border: Border.all(color: AppColors.goldLight, width: 2),
           ),
-          child: Text(label,
-              style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: AppColors.night)),
+          child:
+              Text(label, style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: AppColors.night)),
         ),
       ),
     );
@@ -800,7 +813,8 @@ class _PartnerPickerState extends State<_PartnerPicker> {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.text)),
               const SizedBox(height: 2),
-              Text('Lv.${m.level} · ♥ ${m.affection}', style: const TextStyle(fontSize: 10.5, color: AppColors.textMuted)),
+              Text('Lv.${m.level} · ♥ ${m.affection}',
+                  style: const TextStyle(fontSize: 10.5, color: AppColors.textMuted)),
             ],
           ),
         ),

@@ -35,6 +35,9 @@ abstract class ChatBrain {
 
   /// 탐색에서 몬스터를 잡았을 때 대화창에 남길 말 (잡았을 때만 불린다).
   Future<String> catchReport(CatchResult result);
+
+  /// 체크인 뒤 자유 대화의 대본 대답 (시연 모드 · 서버 대답이 없을 때, 기획 2026-11-15).
+  Future<String> smallTalk(String message);
 }
 
 /// 시안(prototype-source.dc.html)의 대사를 그대로 쓰는 대본형 챗봇.
@@ -42,17 +45,16 @@ class ScriptedChatBrain implements ChatBrain {
   const ScriptedChatBrain();
 
   @override
-  Future<String> greet(MonsterSpecies? partner) => SynchronousFuture(partner == null
-      ? '안녕! 오늘 습관 체크하러 왔어. 탐색에서 첫 친구도 만나보자.'
-      : '안녕! 나 ${partner.name}. 오늘 습관 체크하러 왔어.');
+  Future<String> greet(MonsterSpecies? partner) => SynchronousFuture(
+      partner == null ? '안녕! 오늘 습관 체크하러 왔어. 탐색에서 첫 친구도 만나보자.' : '안녕! 나 ${partner.name}. 오늘 습관 체크하러 왔어.');
 
   @override
   Future<String> askHabit(Habit habit, HabitCategory category) =>
       SynchronousFuture("[${category.name}] '${habit.name}' 오늘 했어?");
 
   @override
-  Future<String> askAmount(Habit habit, Measure measure) => SynchronousFuture(
-      '좋아! ${measure.label}은 얼마나 했어? 목표는 ${formatNum(habit.target)}${measure.unit}이야.');
+  Future<String> askAmount(Habit habit, Measure measure) =>
+      SynchronousFuture('좋아! ${measure.label}은 얼마나 했어? 목표는 ${formatNum(habit.target)}${measure.unit}이야.');
 
   @override
   Future<String> react(Habit habit, int score) {
@@ -74,12 +76,10 @@ class ScriptedChatBrain implements ChatBrain {
   Future<String> alreadyCheckedIn() => SynchronousFuture('오늘 체크는 이미 끝났어! 탐색하러 갈래?');
 
   @override
-  Future<String> recheckIntro() =>
-      SynchronousFuture('잘못 적은 게 있었어? 처음부터 다시 물어볼게. 골드랑 탐색 횟수는 처음 확정한 그대로야.');
+  Future<String> recheckIntro() => SynchronousFuture('잘못 적은 게 있었어? 처음부터 다시 물어볼게. 골드랑 탐색 횟수는 처음 확정한 그대로야.');
 
   @override
-  Future<String> recheckDone(DailyCheckinResult r) =>
-      SynchronousFuture('기록을 고쳐 뒀어! 보상은 처음 확정한 그대로야.');
+  Future<String> recheckDone(DailyCheckinResult r) => SynchronousFuture('기록을 고쳐 뒀어! 보상은 처음 확정한 그대로야.');
 
   @override
   Future<String> catchReport(CatchResult r) {
@@ -87,4 +87,15 @@ class ScriptedChatBrain implements ChatBrain {
     return SynchronousFuture('$name${josaEulReul(name)} 잡았어! 새 친구가 생겼네. '
         '${r.toField ? '필드에서 기다리고 있을 거야.' : '필드가 꽉 차서 가방에 넣어뒀어.'}');
   }
+
+  static const _smallTalk = [
+    '그랬구나! 더 이야기해 줘.',
+    '오늘도 고생 많았어. 푹 쉬자.',
+    '헤헤, 너랑 이야기하는 거 좋아.',
+    '내일도 같이 습관 챙기자!',
+  ];
+
+  /// 말 길이로 대본 넷 중 하나 (같은 말엔 같은 대답).
+  @override
+  Future<String> smallTalk(String message) => SynchronousFuture(_smallTalk[message.length % _smallTalk.length]);
 }

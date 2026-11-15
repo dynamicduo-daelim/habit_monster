@@ -12,6 +12,7 @@ import kr.habitmonster.ai.CheckinInterpreter.DraftAnswer;
 import kr.habitmonster.ai.CheckinInterpreter.HabitContext;
 import kr.habitmonster.ai.CheckinInterpreter.HistoryLine;
 import kr.habitmonster.ai.CheckinInterpreter.Result;
+import kr.habitmonster.ai.Memory;
 import kr.habitmonster.common.ApiException;
 import kr.habitmonster.common.BusinessDates;
 import kr.habitmonster.common.ErrorCode;
@@ -64,11 +65,7 @@ public class CheckinChatService {
 		String message = req.message() == null ? "" : req.message().strip();
 		List<HistoryLine> history = req.history() == null ? List.of() : req.history();
 		List<DraftAnswer> draft = req.draft() == null ? List.of() : req.draft();
-		if (message.isEmpty() || message.length() > MAX_MESSAGE || history.size() > MAX_HISTORY
-				|| history.stream().anyMatch(h -> h == null || h.text() == null || h.text().isBlank()
-						|| h.text().length() > MAX_MESSAGE)) {
-			throw new ApiException(ErrorCode.INVALID_REQUEST);
-		}
+		validate(message, history);
 		List<ChatHabit> today0 = habits.chatHabits(userId);
 		if (today0.isEmpty()) {
 			throw new ApiException(ErrorCode.NO_ACTIVE_HABIT);
@@ -81,8 +78,7 @@ public class CheckinChatService {
 			.map(h -> new HabitContext(h.habitId(), h.name(), h.categoryName(), h.unit(), h.scoringMode(), h.target(),
 					h.maxValue(), h.options(), h.timerMinutes()))
 			.toList();
-		CheckinInterpreter.Partner partner = monsters.partner(userId)
-			.map(p -> new CheckinInterpreter.Partner(p.name(), p.affectionTier())).orElse(null);
+		CheckinInterpreter.Partner partner = partnerOf(monsters, userId);
 		Set<Long> askedAgain = req.askedAgainHabitIds() == null ? Set.of() : Set.copyOf(req.askedAgainHabitIds());
 		Result r = interpreter.interpret(new CheckinInterpreter.Request(partner, context, message, history, draft,
 				req.askingHabitId(), askedAgain));
@@ -92,4 +88,30 @@ public class CheckinChatService {
 		List<Long> remaining = context.stream().map(HabitContext::habitId).filter(id -> !recorded.contains(id)).toList();
 		return new Interpreted(r.reply(), r.answers(), r.askAgain(), remaining, r.safety(), r.source());
 	}
+
+	/** 말 · 앞 대화 검사 (해석 · 자유 대화 공통): 빈 말 · 300자 초과 · 앞 대화 10줄 초과 · 빈 줄이면 400. */
+	static void validate(String message, List<HistoryLine> history) {
+		if (message.isEmpty() || message.length() > MAX_MESSAGE || history.size() > MAX_HISTORY
+				|| history.stream().anyMatch(h -> h == null || h.text() == null || h.text().isBlank()
+						|| h.text().length() > MAX_MESSAGE)) {
+			throw new ApiException(ErrorCode.INVALID_REQUEST);
+		}
+	}
+
+	/** 대화 상대 → AI 문맥 (이름 · 호감도 단계 · 종 코드 — 성격을 찾는 열쇠). 없으면 null. */
+	static CheckinInterpreter.Partner partnerOf(MonsterService monsters, long userId) {
+		return monsters.partner(userId)
+			.map(p -> new CheckinInterpreter.Partner(p.name(), p.affectionTier(), p.imageKey())).orElse(null);
+	}
+
+	/** 습관 모듈의 지난 기록 → AI 기억 문맥 (값으로 넘긴다 — ai 모듈은 습관 테이블을 읽지 않는다). */
+	static List<Memory.PastDay> memoryOf(HabitService habits, long userId) {
+		return habits.recentDays(userId, MEMORY_DAYS).stream()
+			.map(d -> new Memory.PastDay(d.daysAgo(), d.habits().stream()
+				.map(h -> new Memory.PastHabit(h.name(), h.unit(), h.scoringMode(), h.value())).toList()))
+			.toList();
+	}
+
+	/** 몬스터가 기억하는 날 수 (오늘 제외, 기획 2026-11-15 C). */
+	static final int MEMORY_DAYS = 7;
 }

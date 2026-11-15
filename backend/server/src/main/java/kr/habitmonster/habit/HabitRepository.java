@@ -289,6 +289,23 @@ class HabitRepository {
 			.params(userId, day).query(DailyCheckinRow.class).optional();
 	}
 
+	/** 지난 체크인 한 줄 (몬스터의 기억, 11-15). {@code value}: 그날 최신 값 (다시 체크 반영). */
+	record RecentCheckRow(LocalDate day, long habitId, String name, String unit, String scoringMode, BigDecimal value) {
+	}
+
+	/** {@code from} ~ {@code to}(포함)에 체크한 습관 — 그만둔(STOPPED) 습관은 뺀다. 최근 날 먼저, 같은 날은 등록 순서. */
+	List<RecentCheckRow> recentChecks(long userId, LocalDate from, LocalDate to) {
+		return db.sql("""
+			select dc.checkin_date as day, h.id as habit_id, h.name, m.unit, m.scoring_mode, hc.value
+			  from habit.daily_checkin dc
+			  join habit.habit_checkin hc on hc.daily_checkin_id = dc.id
+			  join habit.habit h on h.id = hc.habit_id
+			  join habit.measure_type m on m.id = h.measure_type_id
+			 where dc.user_id = ? and dc.checkin_date between ? and ? and h.status <> 'STOPPED'
+			 order by dc.checkin_date desc, h.id""")
+			.params(userId, from, to).query(RecentCheckRow.class).list();
+	}
+
 	long insertDailyCheckin(long userId, LocalDate day, int habitCount, int totalScore, int countedScore) {
 		return db.sql("""
 			insert into habit.daily_checkin (user_id, checkin_date, habit_count, total_score, counted_score)

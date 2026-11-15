@@ -38,6 +38,19 @@ class _FakeAiRepo extends LocalGameRepository {
   }
 }
 
+/// 체크인 뒤 자유 대화(기획 2026-11-15)만 정해 둔 대답을 돌려주는 저장소.
+class _FakeTalkRepo extends LocalGameRepository {
+  _FakeTalkRepo(super.state, this.result);
+  final TalkResult? result;
+  final calls = <(String, List<(String, String)>)>[];
+
+  @override
+  Future<TalkResult?> chatTalk({required String message, required List<(String, String)> history}) async {
+    calls.add((message, history));
+    return result;
+  }
+}
+
 void main() {
   group('챗봇: 말로 답하기 (AI 해석, D-57)', () {
     test('한 문장에서 여러 습관 → 남은 습관을 묻고 → 다 모이면 바로 제출 (확인 카드 없음, 11-12)', () async {
@@ -88,8 +101,8 @@ void main() {
 
     test('위기 신호(safety)면 다음 습관으로 넘어가지 않는다', () async {
       final s = GameState.sample(gold: 1240, balls: 1);
-      final repo = _FakeAiRepo(
-          s, (_) => const InterpretResult(reply: '많이 힘들구나. 주변에 꼭 도움을 청해.', answers: {}, safety: true));
+      final repo =
+          _FakeAiRepo(s, (_) => const InterpretResult(reply: '많이 힘들구나. 주변에 꼭 도움을 청해.', answers: {}, safety: true));
       final c = ChatController(state: s, repository: repo);
       await c.start();
       await c.sendText('요즘 너무 힘들어');
@@ -117,8 +130,7 @@ void main() {
 
     test('공부 타이머로 잰 분은 공부 습관을 물을 때 미리 채운다', () async {
       final s = GameState.sample(gold: 1240, balls: 1);
-      final c = ChatController(
-          state: s, repository: LocalGameRepository(s), timerMinutes: (id) => id == 'h2' ? 45 : 0);
+      final c = ChatController(state: s, repository: LocalGameRepository(s), timerMinutes: (id) => id == 'h2' ? 45 : 0);
       await c.start();
       await c.answer(true);
       await c.sendValue(30); // 러닝
@@ -225,7 +237,8 @@ void main() {
       var now = DateTime(2026, 10, 30, 19, 0);
       final timer = StudyTimer(clock: () => now);
       final s = GameState.sample(gold: 1240, balls: 1);
-      await tester.pumpWidget(StudyTimerScope(notifier: timer, child: withGame(s, const MaterialApp(home: MainShell()))));
+      await tester
+          .pumpWidget(StudyTimerScope(notifier: timer, child: withGame(s, const MaterialApp(home: MainShell()))));
       await tester.tap(find.text('챗봇'));
       await tester.pump();
       await tester.pump();
@@ -330,6 +343,70 @@ void main() {
       await c.start();
       await checkAll(c);
       expect(c.messages.any((m) => m.text.contains('오늘 체크 끝!')), isTrue);
+    });
+  });
+
+  group('체크인 뒤 자유 대화 (기획 2026-11-15)', () {
+    Future<ChatController> checkedIn(LocalGameRepository repo, GameState s) async {
+      final c = ChatController(state: s, repository: repo);
+      await c.start();
+      await c.answer(true);
+      await c.sendValue(30);
+      await c.answer(true);
+      await c.sendValue(60);
+      await c.answer(true);
+      await c.sendValue(2);
+      expect(c.step, ChatStep.done);
+      return c;
+    }
+
+    test('확정 뒤 말을 보내면 해석이 아니라 자유 대화로 — 몬스터 대답, 기록은 그대로', () async {
+      final s = GameState.sample(gold: 1240, balls: 1);
+      final repo = _FakeTalkRepo(s, const TalkResult(reply: '끽! 오늘 30분 뛰었잖아.'));
+      final c = await checkedIn(repo, s);
+      final gold = s.gold;
+      final records = Map.of(s.todayRecords);
+
+      await c.sendText('오늘 진짜 피곤했어');
+      expect(repo.calls.single.$1, '오늘 진짜 피곤했어');
+      expect(repo.calls.single.$2, isNotEmpty); // 직전 대화를 같이 보낸다
+      expect(c.messages.last.text, '끽! 오늘 30분 뛰었잖아.');
+      expect(c.step, ChatStep.done);
+      expect(s.gold, gold); // 대화로는 아무것도 바뀌지 않는다
+      expect(s.todayRecords, records);
+    });
+
+    test('하루 한도를 넘으면 안내 한 줄, 시연 모드(AI 없음)는 대본 대답', () async {
+      final s = GameState.sample(gold: 1240, balls: 1);
+      final c = await checkedIn(_FakeTalkRepo(s, const TalkResult(reply: '', fromAi: false, limited: true)), s);
+      await c.sendText('안녕');
+      expect(c.messages.last.text, '오늘은 많이 이야기했어! 내일 또 하자.');
+
+      final s2 = GameState.sample(gold: 1240, balls: 1);
+      final c2 = await checkedIn(LocalGameRepository(s2), s2);
+      await c2.sendText('안녕');
+      expect(c2.messages.last.fromBot, isTrue);
+      expect(c2.messages.last.text, isNotEmpty);
+    });
+
+    testWidgets('확정 뒤에도 입력칸이 있고 "…에게 말 걸기"', (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final s = GameState.sample(gold: 1240, balls: 1);
+      s.confirmCheckin({'h1': 30, 'h2': 60, 'h3': 2});
+      await tester.pumpWidget(withGame(s, const MaterialApp(home: MainShell())));
+      await tester.tap(find.text('챗봇'));
+      await tester.pump();
+      await tester.pump();
+      expect(find.textContaining('에게 말 걸기'), findsOneWidget);
+      expect(find.text('다시 체크'), findsOneWidget);
+      await tester.enterText(find.byType(TextField), '안녕');
+      await tester.tap(find.text('보내기'));
+      await tester.pump();
+      await tester.pump();
+      expect(find.text('안녕'), findsOneWidget); // 내 말풍선
+      await tester.pump(const Duration(seconds: 7));
     });
   });
 }

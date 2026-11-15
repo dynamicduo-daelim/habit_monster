@@ -447,6 +447,33 @@ public class HabitService {
 				.toList()));
 	}
 
+	/** 지난 날 습관 한 줄 (몬스터의 기억). {@code value}: 그날 최신 값, 못 했으면 0. */
+	public record PastHabit(String name, String unit, String scoringMode, Number value) {
+	}
+
+	/** 지난 하루. {@code daysAgo}: 1 = 어제. {@code habits}가 비었으면 그날 체크하지 않았다. */
+	public record PastDay(int daysAgo, List<PastHabit> habits) {
+	}
+
+	/**
+	 * 최근 {@code days}일(오늘 제외)의 체크 기록 — 어제부터 거꾸로 (기획 {@code 2026-11-15-몬스터-대화.md} C).
+	 * 그만둔 습관은 뺀다 (지금 하는 습관 이야기만). 체크하지 않은 날도 빈 줄로 넣는다.
+	 */
+	@Transactional(readOnly = true)
+	public List<PastDay> recentDays(long userId, int days) {
+		LocalDate today = dates.today();
+		Map<LocalDate, List<PastHabit>> byDay = new LinkedHashMap<>();
+		for (HabitRepository.RecentCheckRow r : habits.recentChecks(userId, today.minusDays(days), today.minusDays(1))) {
+			byDay.computeIfAbsent(r.day(), k -> new ArrayList<>())
+				.add(new PastHabit(r.name(), r.unit(), r.scoringMode(), Decimals.plain(r.value())));
+		}
+		List<PastDay> out = new ArrayList<>();
+		for (int i = 1; i <= days; i++) {
+			out.add(new PastDay(i, List.copyOf(byDay.getOrDefault(today.minusDays(i), List.of()))));
+		}
+		return out;
+	}
+
 	/**
 	 * 오늘 체크인 화면: 제출 전이면 대상 습관, 제출 후면 제출에 들어간 습관(최신 값과 함께).
 	 * 쓰기 트랜잭션 — 타이머 자동 종료 정리를 먼저 하고 오늘 타이머 분을 붙인다 (명세 v6 5장).

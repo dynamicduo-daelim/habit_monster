@@ -44,12 +44,11 @@ public class CheckinDialogueService {
 		if (saved.isPresent()) {
 			return saved.get(); // 같은 revision이면 모델을 다시 부르지 않는다
 		}
-		CheckinInterpreter.Partner partner = monsters.partner(userId)
-			.map(p -> new CheckinInterpreter.Partner(p.name(), p.affectionTier())).orElse(null);
+		CheckinInterpreter.Partner partner = CheckinChatService.partnerOf(monsters, userId);
 		DialogueWriter.Written w = writer.write(new DialogueWriter.Request(partner, ctx.revision(), ctx.habits().stream()
 			.map(h -> new DialogueWriter.HabitLine(h.name(), h.categoryName(), h.unit(), h.scoringMode(), h.target(),
 					h.value()))
-			.toList()));
+			.toList(), CheckinChatService.memoryOf(habits, userId)));
 		return dialogues.save(userId, ctx.checkinId(), ctx.revision(), w.line(), w.source());
 	}
 }

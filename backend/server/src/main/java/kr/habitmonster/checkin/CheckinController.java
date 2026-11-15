@@ -3,6 +3,7 @@ package kr.habitmonster.checkin;
 import java.util.UUID;
 
 import kr.habitmonster.ai.CheckinDialogues.Line;
+import kr.habitmonster.ai.TalkWriter;
 import kr.habitmonster.checkin.CheckinChatService.InterpretRequest;
 import kr.habitmonster.checkin.CheckinChatService.Interpreted;
 import kr.habitmonster.checkin.CheckinService.CheckinRequest;
@@ -23,18 +24,27 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
-/** 체크인 (API 명세 v6 "5. 챗봇 — 체크인"): 조회 · 제출 · 다시 체크 · 대화 해석 · 체크인 대사. */
+/** 체크인 (API 명세 v6 "5. 챗봇 — 체크인"): 조회 · 제출 · 다시 체크 · 대화 해석 · 체크인 대사 · 자유 대화(11-15). */
 @RestController
 class CheckinController {
 
 	private final CheckinService checkins;
 	private final CheckinChatService chat;
 	private final CheckinDialogueService dialogue;
+	private final CheckinTalkService talk;
 
-	CheckinController(CheckinService checkins, CheckinChatService chat, CheckinDialogueService dialogue) {
+	CheckinController(CheckinService checkins, CheckinChatService chat, CheckinDialogueService dialogue,
+			CheckinTalkService talk) {
 		this.checkins = checkins;
 		this.chat = chat;
 		this.dialogue = dialogue;
+		this.talk = talk;
+	}
+
+	/** 자유 대화 (기획 2026-11-15-몬스터-대화 B). 아무것도 저장 · 확정하지 않아서 중복 방지 키가 없다. */
+	@PostMapping("/chat/talk")
+	TalkWriter.Reply talk(@AuthenticationPrincipal Jwt jwt, @RequestBody CheckinTalkService.TalkRequest req) {
+		return talk.talk(Long.parseLong(jwt.getSubject()), req);
 	}
 
 	@GetMapping("/checkins/today")
