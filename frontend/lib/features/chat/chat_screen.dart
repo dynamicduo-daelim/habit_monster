@@ -137,10 +137,24 @@ class _ChatScreenState extends State<ChatScreen> {
     super.dispose();
   }
 
-  void _pickPartner(GameState s, String uid) {
+  /// 대화 상대 바꾸기: 화면은 바로 바꾸고, 서버에도 알린다 (`PUT /me/partner` — 홈 교감 창과 같음).
+  /// 서버 AI(해석 · 대사 · 자유 대화)는 서버에 저장된 대화 상대의 성격으로 말해서, 알리지 않으면 예전 몬스터로 말한다 (11-16 버그).
+  /// 서버가 거절하면 원래 상대로 되돌린다 (오류 문구는 [runGameAction]이 띄움).
+  Future<void> _pickPartner(GameState s, String uid) async {
     if (uid == s.chatPartnerUid) return;
+    final m = s.monsterByUid(uid);
+    if (m == null) return;
+    final before = s.chatPartnerUid;
     s.chatPartnerUid = uid;
     s.touch(); // 아래 build에서 대화 상대 변경을 보고 대화를 다시 시작한다.
+    final ok = await runGameAction(context, (r) async {
+      await r.setPartner(m);
+      return true;
+    });
+    if (ok != true && mounted && s.chatPartnerUid == uid) {
+      s.chatPartnerUid = before;
+      s.touch();
+    }
   }
 
   /// "얼마나 했어?" 칸: 숫자만이면(`30`, `1.5`) 바로 기록, 글이 섞이면(`30분 뛰었어`) 말로 답하기(AI 해석)로.

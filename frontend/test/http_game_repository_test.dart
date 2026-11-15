@@ -607,6 +607,54 @@ void main() {
     expect(st.categories['st']!.isMax, isTrue);
   });
 
+  group('습관 추가 · 그만두기 (4-1, 11-16에 서버로)', () {
+    Future<(GameState, HttpGameRepository, Map<String, Object>)> loaded() async {
+      final s = GameState.empty();
+      final routes = _server();
+      final r = repo(s, routes);
+      await r.load();
+      return (s, r, routes);
+    }
+
+    test('추가: 측정 항목을 서버 id로 바꿔 키와 함께 보내고, 서버가 준 id로 더한 뒤 체크인 대상을 다시 받는다', () async {
+      final (s, r, routes) = await loaded();
+      routes['POST /habits'] = {
+        'habitId': 102, 'categoryCode': 'ex', 'name': '스쿼트', 'measureTypeId': 2, 'unit': '회', 'dailyTarget': 3,
+        'periodCode': 'D7', 'startDate': '2026-10-21', 'filledDays': 0, 'periodDays': 7, 'status': 'ACTIVE',
+      };
+      final h = await r.addHabit(name: ' 스쿼트 ', categoryId: 'ex', measureIndex: 1, target: 3, periodIndex: 0);
+
+      final post = requests.firstWhere((q) => q.method == 'POST' && q.url.path.endsWith('/habits'));
+      expect(post.headers['Idempotency-Key'], isNotEmpty);
+      expect(jsonDecode(post.body),
+          {'categoryCode': 'ex', 'measureTypeId': 2, 'name': '스쿼트', 'dailyTarget': 3.0, 'periodCode': 'D7'});
+      expect((h!.id, h.name, h.measureIndex, h.target, h.periodIndex), ('102', '스쿼트', 1, 3.0, 0));
+      expect(s.habits.map((x) => x.id), ['100', '101', '102']);
+      expect(requests.last.url.path, endsWith('/checkins/today')); // 오늘 체크인 대상은 서버가 정한다
+    });
+
+    test('추가: 서버가 거절하면(5개 넘음) 오류가 그대로 올라오고 아무것도 더하지 않는다', () async {
+      final (s, r, routes) = await loaded();
+      routes['POST /habits'] = _json({'code': 'HABIT_LIMIT', 'message': '습관은 5개까지 등록할 수 있어요'}, 422);
+      await expectLater(r.addHabit(name: '스쿼트', categoryId: 'ex', measureIndex: 1, target: 3, periodIndex: 0),
+          throwsA(isA<ApiException>().having((e) => e.code, 'code', 'HABIT_LIMIT')));
+      expect(s.habits.length, 2);
+    });
+
+    test('그만두기: stop을 보내고 목록에서 뺀다, 마지막 1개면 서버 422가 그대로', () async {
+      final (s, r, routes) = await loaded();
+      routes['POST /habits/101/stop'] = {'habitId': 101, 'status': 'STOPPED'};
+      final h = s.habits.firstWhere((x) => x.id == '101');
+      expect(await r.removeHabit(h), isTrue);
+      expect(s.habits.map((x) => x.id), ['100']);
+      expect(requests.any((q) => q.method == 'POST' && q.url.path.endsWith('/habits/101/stop')), isTrue);
+
+      routes['POST /habits/100/stop'] = _json({'code': 'LAST_HABIT', 'message': '습관은 1개 이상 있어야 해요'}, 422);
+      await expectLater(r.removeHabit(s.habits.single), throwsA(isA<ApiException>()));
+      expect(s.habits.length, 1);
+    });
+  });
+
   group('목표 (4-2)', () {
     Future<(GameState, HttpGameRepository, Map<String, Object>)> loaded() async {
       final s = GameState.empty();

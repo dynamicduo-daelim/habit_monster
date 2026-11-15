@@ -659,6 +659,19 @@ class GameState extends ChangeNotifier {
       ..addAll(list);
   }
 
+  /// `POST /habits` 응답의 새 습관 (서버가 정한 id). 상한 · 카테고리 검사는 서버가 했다.
+  void applyHabitAdded(Habit h) {
+    habits.add(h);
+    notifyListeners();
+  }
+
+  /// `POST /habits/{id}/stop` 성공. 이미 받은 골드 · 경험치 · 오늘의 성실도는 그대로 ([removeHabit]과 같음).
+  void applyHabitStopped(Habit h) {
+    habits.removeWhere((x) => x.id == h.id);
+    todayRecords.remove(h.id);
+    notifyListeners();
+  }
+
   /// `GET /goals` (기간이 남은 목표).
   void applyGoals(List<Goal> list) {
     goals

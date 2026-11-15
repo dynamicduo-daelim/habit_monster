@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:habit_monster/core/state/game_repository.dart';
 import 'package:habit_monster/core/state/game_state.dart';
 import 'package:habit_monster/core/state/local_game_repository.dart';
 import 'package:habit_monster/core/state/study_timer.dart';
+import 'package:habit_monster/data/models.dart';
 import 'package:habit_monster/data/results.dart';
 import 'package:habit_monster/features/chat/chat_controller.dart';
 import 'package:habit_monster/features/chat/study_timer_view.dart';
@@ -35,6 +37,18 @@ class _FakeAiRepo extends LocalGameRepository {
   }) async {
     calls.add((message, history, askingHabitId));
     return reply(message);
+  }
+}
+
+/// 대화 상대 바꾸기를 서버에 알렸는지 세는 저장소 (11-16 버그: 챗봇 화면에서 바꾸면 앱만 바뀌었다).
+class _PartnerRepo extends LocalGameRepository {
+  _PartnerRepo(super.state);
+  final partners = <String>[];
+
+  @override
+  Future<void> setPartner(OwnedMonster m) async {
+    partners.add(m.uid);
+    await super.setPartner(m);
   }
 }
 
@@ -408,5 +422,33 @@ void main() {
       expect(find.text('안녕'), findsOneWidget); // 내 말풍선
       await tester.pump(const Duration(seconds: 7));
     });
+  });
+
+  testWidgets('챗봇 화면에서 대화 상대를 바꾸면 서버에도 알린다 (AI가 그 몬스터 성격으로 말하게, 11-16)', (tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final s = GameState.sample(gold: 1240, balls: 1);
+    final repo = _PartnerRepo(s);
+    await tester.pumpWidget(GameScope(
+      notifier: s,
+      child: GameRepositoryScope(repository: repo, child: const MaterialApp(home: MainShell())),
+    ));
+    await tester.tap(find.text('챗봇'));
+    await tester.pump();
+    await tester.pump();
+    final before = s.chatPartnerUid;
+
+    await tester.tap(find.bySemanticsLabel('대화 상대 바꾸기'));
+    await tester.pump();
+    await tester.drag(find.byType(PageView), const Offset(-200, 0));
+    await tester.pumpAndSettle();
+    await tester.tap(find.textContaining('대화하기'));
+    await tester.pump();
+    await tester.pump();
+
+    expect(s.chatPartnerUid, isNot(before));
+    expect(repo.partners, [s.chatPartnerUid]); // 서버(PUT /me/partner)에 새 상대를 알렸다
+    await tester.pump(const Duration(seconds: 7));
   });
 }
