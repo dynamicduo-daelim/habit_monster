@@ -160,3 +160,20 @@ class InterpretResult {
   /// false = AI가 실패해 대본형 질문으로 돌아왔다.
   final bool fromAi;
 }
+
+/// 체크인 뒤 자유 대화의 대답 (서버 `POST /chat/talk`, 기획 2026-11-15-몬스터-대화 B). 아무것도 저장 · 확정하지 않는다.
+class TalkResult {
+  const TalkResult({required this.reply, this.safety = false, this.fromAi = true, this.limited = false});
+
+  /// 대화 상대 몬스터의 대답 (자기 성격 · 말투로).
+  final String reply;
+
+  /// 힘든 감정 · 위기 신호 → 걱정하는 문구.
+  final bool safety;
+
+  /// false = AI가 실패해 대본형 대답.
+  final bool fromAi;
+
+  /// 오늘 AI 호출 한도(해석과 함께 60번)를 다 써서 대답하지 못했다 (서버 429).
+  final bool limited;
+}

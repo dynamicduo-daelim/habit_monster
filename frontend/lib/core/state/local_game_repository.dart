@@ -105,13 +105,18 @@ class LocalGameRepository implements GameRepository {
   @override
   Future<String?> checkinDialogue() async => null;
 
+  /// 시연 모드에는 AI가 없다 → 챗봇이 대본 대답을 쓴다.
+  @override
+  Future<TalkResult?> chatTalk({required String message, required List<(String, String)> history}) async => null;
+
   @override
   Future<StatsData> loadStats() async {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final todayRate = state.countedToday.isEmpty
         ? null
-        : (state.countedToday.map((id) => ((state.rewardedScores[id] ?? 0) / Economy.targetHitScore).clamp(0, 1) * 100)
+        : (state.countedToday
+                    .map((id) => ((state.rewardedScores[id] ?? 0) / Economy.targetHitScore).clamp(0, 1) * 100)
                     .reduce((a, b) => a + b) /
                 state.countedToday.length)
             .round();

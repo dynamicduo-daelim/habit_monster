@@ -88,9 +88,12 @@ class ChatController extends ChangeNotifier {
     final m = currentMeasure;
     if (h == null || m == null || m.isOX) return const [];
     double r1(double v) => (v * 10).round() / 10;
-    final raw = m.unit == '점' ? const [3.0, 4.0, 5.0] : [r1(h.target * 0.5) < 1 ? 1.0 : r1(h.target * 0.5), h.target, r1(h.target * 1.5)];
+    final raw = m.unit == '점'
+        ? const [3.0, 4.0, 5.0]
+        : [r1(h.target * 0.5) < 1 ? 1.0 : r1(h.target * 0.5), h.target, r1(h.target * 1.5)];
     final timer = timedMinutes(h);
-    return {if (timer > 0) state.recordableValue(h, timer.toDouble()), for (final v in raw) state.recordableValue(h, v)}.toList();
+    return {if (timer > 0) state.recordableValue(h, timer.toDouble()), for (final v in raw) state.recordableValue(h, v)}
+        .toList();
   }
 
   /// 오늘 공부 타이머로 잰 분 (시간(분) 습관만, 없으면 0).
@@ -157,14 +160,14 @@ class ChatController extends ChangeNotifier {
 
   /// 말(글)로 답하기: 서버 AI가 해석한 기록 후보를 답에 넣고, 아직 안 들은 습관을 이어서 묻는다.
   /// AI가 없거나(시연 모드) 실패하면 말 속의 숫자 · "못 했어"만 읽는다.
+  /// 체크인을 마친 뒤([ChatStep.done])에는 해석 대신 자유 대화로 보낸다 ([_talk], 기획 2026-11-15).
   Future<void> sendText(String raw) async {
     final text = raw.trim();
-    if (text.isEmpty || busy || (step != ChatStep.yesNo && step != ChatStep.amount)) return;
+    if (text.isEmpty || busy) return;
+    if (step == ChatStep.done) return _talk(text);
+    if (step != ChatStep.yesNo && step != ChatStep.amount) return;
     final asking = currentHabit;
-    final history = [
-      for (final m in messages.length > 10 ? messages.sublist(messages.length - 10) : messages)
-        (m.fromBot ? 'BOT' : 'USER', m.text),
-    ];
+    final history = _recentHistory();
     messages.add(ChatMessage.me(text));
     _notify();
     final r = await _call(() => _think(repository.interpret(
@@ -216,7 +219,7 @@ class ChatController extends ChangeNotifier {
     }
     if (RegExp(r'했|응|ㅇㅇ|네|예|그럼|완료|당연').hasMatch(text)) {
       if (m.isOX) {
-          return _record(1);
+        return _record(1);
       }
       if (step == ChatStep.yesNo) {
         messages.add(ChatMessage.bot(await _think(brain.askAmount(h, m))));
@@ -367,6 +370,32 @@ class ChatController extends ChangeNotifier {
 
   void leaveExplore() {
     step = ChatStep.done;
+    _notify();
+  }
+
+  /// 직전 대화 10줄 (BOT · USER) — 서버 AI에 문맥으로 보낸다 (서버는 대화를 저장하지 않는다).
+  List<(String, String)> _recentHistory() => [
+        for (final m in messages.length > 10 ? messages.sublist(messages.length - 10) : messages)
+          (m.fromBot ? 'BOT' : 'USER', m.text),
+      ];
+
+  /// 체크인 뒤 자유 대화: 대화 상대 몬스터가 자기 성격으로 대답한다 (서버 AI). 아무것도 기록 · 보상하지 않는다.
+  /// 시연 모드(AI 없음)는 대본 대답, 하루 한도를 넘으면 안내 한 줄.
+  Future<void> _talk(String text) async {
+    final history = _recentHistory();
+    messages.add(ChatMessage.me(text));
+    _notify();
+    final r = await _call(() => _think(repository.chatTalk(message: text, history: history)));
+    if (r == null && messages.last.fromBot) return; // 서버 오류 문구를 이미 말풍선으로 보였다
+    final String reply;
+    if (r == null) {
+      reply = await brain.smallTalk(text);
+    } else if (r.limited) {
+      reply = '오늘은 많이 이야기했어! 내일 또 하자.';
+    } else {
+      reply = r.reply;
+    }
+    messages.add(ChatMessage.bot(reply));
     _notify();
   }
 
