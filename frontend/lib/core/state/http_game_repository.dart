@@ -6,24 +6,22 @@ import '../api/api_exception.dart';
 import '../constants/economy.dart';
 import 'game_repository.dart';
 import 'game_state.dart';
-import 'local_game_repository.dart';
 
 /// 서버 API로 동작하는 [GameRepository] (`API_BASE_URL`을 주고 빌드했을 때).
 ///
 /// 서버가 규칙을 계산하고, 이 클래스는 응답을 [GameState]의 `apply…` 메서드로 옮긴다.
-/// 아직 서버 API가 없는 동작은 [LocalGameRepository]에 넘긴다 — 그 결과는 앱 안에만 있고 서버에 저장되지 않는다.
-/// 넘기는 메서드에는 "3-x에서 서버로"라고 적어 두고, 단계마다 하나씩 서버로 옮긴다 (남은 것은 `frontend/서버연동-메모.md`).
+/// 11-16에 마지막으로 앱 안에만 있던 습관 추가 · 그만두기를 서버로 옮겨, 이제 모든 동작이 서버를 부른다
+/// (전엔 서버 API가 없는 동작을 `LocalGameRepository`에 넘겼다 — 남은 일은 `frontend/서버연동-메모.md`).
 ///
 /// 서버 id ↔ 앱 모델 (결정 D2 · D-38):
 /// - 몬스터 `uid` = 서버 `userMonsterId` 문자열, 종 = `imageKey`(= 종 코드 = 앱 종 id)
 /// - 습관 `id` = 서버 `habitId` 문자열, 측정 항목 = `GET /measure-types`의 (카테고리, 순서) ↔ `measureTypeId`
 /// - 목표 `id` = 서버 `goalId` 문자열, 아이템 = [Catalog.itemByServerCode]
 class HttpGameRepository implements GameRepository {
-  HttpGameRepository(this.state, this.api) : _local = LocalGameRepository(state);
+  HttpGameRepository(this.state, this.api);
 
   final GameState state;
   final ApiClient api;
-  final LocalGameRepository _local;
 
   static const _periodCodes = ['D7', 'D30', 'D100'];
 
@@ -649,7 +647,9 @@ class HttpGameRepository implements GameRepository {
     return true;
   }
 
-  /// 4단계에서 서버로 (`POST /habits`).
+  /// 습관 추가 (`POST /habits`, 중복 방지 키, 4-1 — 11-16에 서버로). 전엔 앱 안에서만 더해서 다시 켜면 사라졌다.
+  /// 상한(5개) · 연 카테고리 검사는 서버가 한다 — 넘으면 422 `HABIT_LIMIT` · `CATEGORY_LOCKED` 문구가 토스트로.
+  /// 오늘 체크인 대상에 들어가는지(체크인 전이면 오늘부터, 낸 뒤면 내일부터)는 서버가 정해서 체크인 대상을 다시 받는다.
   @override
   Future<Habit?> addHabit({
     required String name,
@@ -657,11 +657,33 @@ class HttpGameRepository implements GameRepository {
     required int measureIndex,
     required double target,
     required int periodIndex,
-  }) =>
-      _local.addHabit(
-          name: name, categoryId: categoryId, measureIndex: measureIndex, target: target, periodIndex: periodIndex);
+  }) async {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty || target <= 0) return null;
+    final table = await _measureTable();
+    final measureTypeId =
+        table.entries.where((e) => e.value == (categoryId, measureIndex)).map((e) => e.key).firstOrNull;
+    if (measureTypeId == null) return null;
+    final res = await api.send('POST', '/habits', idempotent: true, body: {
+      'categoryCode': categoryId,
+      'measureTypeId': measureTypeId,
+      'name': trimmed,
+      'dailyTarget': target,
+      'periodCode': _periodCodes[periodIndex.clamp(0, _periodCodes.length - 1)],
+    }) as Map<String, dynamic>;
+    final h = _habit(res, table);
+    state.applyHabitAdded(h);
+    _applyBoard(await api.get('/checkins/today') as Map<String, dynamic>);
+    return h;
+  }
 
-  /// 4단계에서 서버로 (`POST /habits/{id}/stop`).
+  /// 습관 그만두기 (`POST /habits/{id}/stop`, 4-1 — 11-16에 서버로). 마지막 1개면 422 `LAST_HABIT` 문구가 토스트로.
+  /// 이미 받은 보상은 그대로, 체크인 대상은 서버에서 다시 받는다.
   @override
-  Future<bool> removeHabit(Habit h) => _local.removeHabit(h);
+  Future<bool> removeHabit(Habit h) async {
+    await api.send('POST', '/habits/${h.id}/stop');
+    state.applyHabitStopped(h);
+    _applyBoard(await api.get('/checkins/today') as Map<String, dynamic>);
+    return true;
+  }
 }
