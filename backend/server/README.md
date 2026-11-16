@@ -93,6 +93,24 @@ sudoedit /etc/habit-monster/app.env       # 비밀값 바꾸기 → restart
 - **서버와 DB는 같은 리전에** (D-71): 요청마다 DB를 여러 번 오가서, 리전이 다르면 버튼마다 몇 초가 걸린다
 - `docs/데이터베이스/verify.sql`은 **빈 검사용 DB 전용** (테스트 사용자를 진짜 테이블에 넣는다) — 운영 DB에서 돌리지 않는다. 새 DB 확인은 `select count(*) from config.balance_config` (55) · 서버가 뜨는지로
 
+### 자동 배포 (CD, GitHub Actions — D-76)
+
+위 수동 절차를 GitHub이 대신 해 주는 방법. 수동 절차는 CD가 막혔을 때의 대비책으로 그대로 둔다. 기획서 `docs/기획/2026-11-16-CD-EC2-자동배포.md`.
+
+1. 서버 PR을 `dev`에 머지한다 (CI `backend-test` 통과).
+2. **DB 계약이 바뀌었으면 Supabase에 SQL을 먼저 적용한다** (사람이).
+3. GitHub → Actions → **CD Backend** → **Run workflow** → Branch는 `dev` → "DB SQL 적용 확인" 체크 → 실행.
+4. 러너가 jar를 빌드해 EC2에 올리고(22번을 배포 동안만 러너 IP로 열었다 닫음), `app-new.jar`로 교체 · 재시작한 뒤 `https://api.habitmonster.me/api/v1/me/status`가 **401**인지 60초 동안 본다. 401이 안 오면 `app-prev.jar`로 되돌린다 (작업은 '실패'로 끝나고, 되돌림 결과는 로그에 남는다).
+
+| 무엇 | 어디 |
+| --- | --- |
+| 워크플로 | `.github/workflows/cd-backend.yml` |
+| 시크릿 · 변수 | GitHub → Settings → Environments → `production` (`EC2_SSH_KEY` · `AWS_ACCESS_KEY_ID` · `AWS_SECRET_ACCESS_KEY` / `EC2_HOST` · `EC2_USER` · `AWS_REGION` · `EC2_SECURITY_GROUP_ID`) |
+| EC2의 이전 jar | `/home/ubuntu/app-prev.jar` (배포 때마다 직전 `app-new.jar`로 갱신) |
+| 되돌림 연습 | Run workflow에서 "되돌림 연습"을 켜면 깨진 jar를 올려 되돌아오는지 본다 |
+
+실패했을 때: 배포 뒤 보안 그룹에 설명이 `gha-deploy`인 22번 규칙이 남아 있으면 지운다 (러너가 갑자기 끊긴 경우). 서버 로그는 EC2에서 `journalctl -u habit-monster`.
+
 ## 테스트
 
 ```bash

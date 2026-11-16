@@ -1,0 +1,193 @@
+name: CD Backend
+
+# 서버(jar)를 EC2에 자동 배포한다. 수동 실행만 (D-76):
+#   Actions → "CD Backend" → Run workflow → "DB SQL 적용 확인" 체크
+# 순서: 빌드 → 러너 IP를 22번에 임시 허용 → jar 전송 → 교체 · 재시작 → 응답 확인(401) → 실패하면 되돌림 → 임시 허용 삭제
+# 기획서: docs/기획/2026-11-16-CD-EC2-자동배포.md · 수동 배포 절차는 backend/server/README.md에 그대로 남아 있다.
+on:
+  workflow_dispatch:
+    inputs:
+      db_ready:
+        description: 'DB 계약이 바뀌었다면 Supabase에 SQL을 먼저 적용했다 (체크해야 실행됨)'
+        type: boolean
+        required: true
+        default: false
+      rollback_drill:
+        description: '되돌림 연습: 일부러 깨진 jar를 올려 이전 jar로 되돌아오는지 본다 (평소엔 끔)'
+        type: boolean
+        required: false
+        default: false
+
+# 두 배포가 같은 jar를 동시에 덮어쓰지 않게 (먼저 시작한 것을 취소하지 않고 기다림)
+concurrency:
+  group: cd-backend
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: deploy-backend
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production   # 시크릿 · 변수는 이 환경에만 있다
+    env:
+      HEALTH_URL: https://api.habitmonster.me/api/v1/me/status   # 살아 있으면 401(토큰 없음)이 온다
+    steps:
+      - name: 실행 조건 확인
+        env:
+          REF: ${{ github.ref }}
+          DB_READY: ${{ inputs.db_ready }}
+        run: |
+          if [ "$REF" != "refs/heads/dev" ]; then
+            echo "::error::dev 브랜치에서만 배포할 수 있다 (지금: $REF). Run workflow에서 Branch를 dev로 고르세요."
+            exit 1
+          fi
+          if [ "$DB_READY" != "true" ]; then
+            echo "::error::'DB SQL 적용 확인'을 체크해야 한다. DB 계약이 바뀐 jar를 SQL보다 먼저 올리면 서버가 못 뜬다."
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+
+      # 테스트는 머지 전에 CI(backend-test)가 이미 했다. dev는 보호 규칙으로 CI 통과가 필요하다.
+      - name: jar 만들기
+        working-directory: backend/server
+        env:
+          DRILL: ${{ inputs.rollback_drill }}
+        run: |
+          chmod +x gradlew
+          ./gradlew bootJar --no-daemon
+          JAR=$(ls build/libs/*.jar | grep -v -- '-plain.jar' || true)
+          if [ "$(echo "$JAR" | wc -l)" != "1" ] || [ -z "$JAR" ]; then
+            echo "::error::배포할 jar를 하나로 못 정했다: [$JAR]"
+            exit 1
+          fi
+          if [ "$DRILL" = "true" ]; then
+            echo "::warning::되돌림 연습 — 일부러 깨진 jar를 올린다 (서버가 못 뜨고 이전 jar로 되돌아와야 정상)"
+            printf 'not a jar' > deploy.jar
+          else
+            cp "$JAR" deploy.jar
+          fi
+          ls -l deploy.jar
+
+      - name: AWS 인증
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      # 평소 22번은 "내 IP만"이다. 러너 IP를 /32로 이번 배포 동안만 연다 (끝나면 맨 아래 단계에서 삭제).
+      - name: 보안 그룹 22번 임시 허용
+        env:
+          SG_ID: ${{ vars.EC2_SECURITY_GROUP_ID }}
+        run: |
+          RUNNER_IP=$(curl -fsS https://checkip.amazonaws.com | tr -d '[:space:]')
+          if ! echo "$RUNNER_IP" | grep -Eq '^[0-9]{1,3}(\.[0-9]{1,3}){3}$'; then
+            echo "::error::러너 IP를 못 알아냈다: [$RUNNER_IP]"
+            exit 1
+          fi
+          echo "RUNNER_IP=$RUNNER_IP" >> "$GITHUB_ENV"
+          aws ec2 authorize-security-group-ingress --group-id "$SG_ID" \
+            --ip-permissions "IpProtocol=tcp,FromPort=22,ToPort=22,IpRanges=[{CidrIp=${RUNNER_IP}/32,Description=gha-deploy}]"
+          echo "SG_OPENED=true" >> "$GITHUB_ENV"
+          echo "22번 임시 허용: ${RUNNER_IP}/32"
+
+      - name: SSH 준비
+        env:
+          EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+          EC2_HOST: ${{ vars.EC2_HOST }}
+          EC2_USER: ${{ vars.EC2_USER }}
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$EC2_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          # 규칙이 퍼지는 데 몇 초 걸릴 수 있어 접속될 때까지 재시도
+          for i in 1 2 3 4 5 6 7 8 9 10; do
+            if ssh-keyscan -T 5 -H "$EC2_HOST" >> ~/.ssh/known_hosts 2>/dev/null && \
+               ssh -i ~/.ssh/deploy_key -o BatchMode=yes -o ConnectTimeout=10 "$EC2_USER@$EC2_HOST" 'echo ssh-ok'; then
+              exit 0
+            fi
+            echo "접속 재시도 $i/10"
+            sleep 5
+          done
+          echo "::error::EC2에 SSH로 접속하지 못했다 (배포 전용 공개키가 authorized_keys에 있는지, 22번 임시 허용이 됐는지 확인)"
+          exit 1
+
+      - name: jar 전송
+        env:
+          EC2_HOST: ${{ vars.EC2_HOST }}
+          EC2_USER: ${{ vars.EC2_USER }}
+        run: |
+          scp -i ~/.ssh/deploy_key -o BatchMode=yes backend/server/deploy.jar "$EC2_USER@$EC2_HOST:~/app-new.jar.tmp"
+
+      # 이전 jar를 app-prev.jar로 백업하고 새 jar로 교체한 뒤 다시 시작
+      - name: 교체 · 재시작
+        id: swap
+        env:
+          EC2_HOST: ${{ vars.EC2_HOST }}
+          EC2_USER: ${{ vars.EC2_USER }}
+        run: |
+          ssh -i ~/.ssh/deploy_key -o BatchMode=yes "$EC2_USER@$EC2_HOST" 'set -e
+            cd ~
+            cp -f app-new.jar app-prev.jar
+            mv -f app-new.jar.tmp app-new.jar
+            sudo systemctl restart habit-monster
+            echo "restart 요청 완료"'
+
+      - name: 응답 확인 (401이면 성공)
+        run: |
+          # 재시작 직후엔 Nginx가 502를 줄 수 있어 60초(5초 × 12) 동안 다시 본다
+          for i in $(seq 1 12); do
+            CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "$HEALTH_URL" || true)
+            echo "확인 $i/12: HTTP $CODE"
+            if [ "$CODE" = "401" ]; then
+              echo "서버가 떴다 (401 = Nginx → Spring까지 도달)"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::error::60초 안에 401이 오지 않았다 — 이전 jar로 되돌린다"
+          exit 1
+
+      # 응답 확인이 실패하면 이전 jar로 되돌린다 (이 단계가 돈 뒤에도 작업은 '실패'로 끝난다)
+      - name: 이전 jar로 되돌리기
+        if: failure() && steps.swap.outcome == 'success'
+        env:
+          EC2_HOST: ${{ vars.EC2_HOST }}
+          EC2_USER: ${{ vars.EC2_USER }}
+        run: |
+          ssh -i ~/.ssh/deploy_key -o BatchMode=yes "$EC2_USER@$EC2_HOST" 'set -e
+            cd ~
+            cp -f app-prev.jar app-new.jar
+            sudo systemctl restart habit-monster
+            echo "이전 jar로 되돌리고 다시 시작함"'
+          for i in $(seq 1 12); do
+            CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "$HEALTH_URL" || true)
+            echo "되돌림 확인 $i/12: HTTP $CODE"
+            if [ "$CODE" = "401" ]; then
+              echo "::warning::되돌림 성공 — 이전 jar로 다시 떴다. 새 jar가 못 뜬 원인은 EC2의 journalctl -u habit-monster 로 본다"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::error::되돌린 뒤에도 서버가 안 뜬다 — README의 수동 절차 · journalctl -u habit-monster 로 복구"
+          exit 1
+
+      # 성공 · 실패 · 취소 어느 쪽이든 임시 허용은 반드시 지운다
+      - name: 보안 그룹 22번 임시 허용 삭제
+        if: always() && env.SG_OPENED == 'true'
+        env:
+          SG_ID: ${{ vars.EC2_SECURITY_GROUP_ID }}
+        run: |
+          aws ec2 revoke-security-group-ingress --group-id "$SG_ID" \
+            --ip-permissions "IpProtocol=tcp,FromPort=22,ToPort=22,IpRanges=[{CidrIp=${RUNNER_IP}/32,Description=gha-deploy}]"
+          echo "22번 임시 허용 삭제: ${RUNNER_IP}/32"
