@@ -25,8 +25,8 @@ enum _Tab { pet, feed, play }
 /// 몬스터 정보 · 교감 창 (기획 2026-10-29-교감-창-개편 — 밤 보라 · 네모 픽셀).
 /// 위에서부터 머리(이름 · Lv · EXP) → 무대(오른쪽 아래에 쓰다듬기 · 말 걸기) → 고른 행동의 칸 → 간식 · 놀아주기 → 가방 · 대화 상대.
 /// - 간식: 물약을 무대의 몬스터에게 직접 끌어다 놓는다.
-/// - 놀아주기: 무대가 길어지고, 무대를 휙 밀면(스와이프) 그 방향 · 세기대로 공이 날아가 몬스터가 뛰어가 잡는다 (첫 번째만 하루 1회 ♥+1).
-/// - 쓰다듬기: 무대의 몬스터를 문지르면 게이지가 차고, 다 차면 하루 1회 ♥+2.
+/// - 놀아주기: 무대가 길어지고, 무대를 휙 밀면(스와이프) 그 방향 · 세기대로 공이 날아가 몬스터가 뛰어가 잡는다 (첫 번째만 하루 1회 ♥+[Economy.playAffectionGain]).
+/// - 쓰다듬기: 무대의 몬스터를 문지르면 게이지가 차고, 다 차면 하루 1회 ♥+[Economy.petAffectionGain].
 /// - 말 걸기 · 톡 건드리기: 대사.
 class MonsterOverlay extends StatefulWidget {
   const MonsterOverlay({
@@ -236,7 +236,7 @@ class _MonsterOverlayState extends State<MonsterOverlay> {
   }
 
   /// 공을 [p] 근처의 땅으로 던진다 → 공이 날아가고 → 몬스터가 뛰어가 잡는다.
-  /// 오늘 처음 잡으면 놀아주기 보상(하루 1회 ♥+1)을 받고, 그 뒤로는 서버를 부르지 않고 놀기만 한다.
+  /// 오늘 처음 잡으면 놀아주기 보상(하루 1회 ♥+[Economy.playAffectionGain])을 받고, 그 뒤로는 서버를 부르지 않고 놀기만 한다.
   void _throwTo(Offset p, Size size) {
     if (_throwing) return;
     final x = p.dx.clamp(_playMonSize / 2, size.width - _playMonSize / 2);
@@ -877,15 +877,17 @@ class _MonsterOverlayState extends State<MonsterOverlay> {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          for (var i = 0; i < Economy.maxAffection ~/ 2; i++) ...[
+          for (var i = 0; i < Economy.maxAffection ~/ Economy.affectionPerHeart; i++) ...[
             if (i > 0) const SizedBox(width: 1),
             PixelIcon(
               layers: [
                 PixelLayer(
                   PixelIcons.heart,
-                  m.affection >= (i + 1) * 2
+                  m.affection >= (i + 1) * Economy.affectionPerHeart
                       ? AppColors.tierHigh
-                      : (m.affection == i * 2 + 1 ? AppColors.heartHalf : AppColors.nightLine2),
+                      : (m.affection >= i * Economy.affectionPerHeart + Economy.affectionPerHeart ~/ 2
+                          ? AppColors.heartHalf
+                          : AppColors.nightLine2),
                 ),
               ],
               size: 14,

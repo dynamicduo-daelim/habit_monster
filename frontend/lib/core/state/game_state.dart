@@ -114,9 +114,9 @@ class GameState extends ChangeNotifier {
       pickedCategories: ['ex', 'st', 'fd'],
       categoryPoints: {'ex': 64, 'st': 38, 'fd': 21, 'md': 0, 'sl': 0, 'mn': 0},
       monsters: [
-        OwnedMonster(uid: 'm1', speciesId: 'monkey', level: 7, exp: 60, affection: 4),
-        OwnedMonster(uid: 'm2', speciesId: 'mouse', level: 4, exp: 90, affection: 8),
-        OwnedMonster(uid: 'm3', speciesId: 'turtle', level: 2, exp: 30, affection: 2),
+        OwnedMonster(uid: 'm1', speciesId: 'monkey', level: 7, exp: 60, affection: 40),
+        OwnedMonster(uid: 'm2', speciesId: 'mouse', level: 4, exp: 90, affection: 80),
+        OwnedMonster(uid: 'm3', speciesId: 'turtle', level: 2, exp: 30, affection: 20),
       ],
       habits: [
         Habit(id: 'h1', name: '아침 러닝', categoryId: 'ex', measureIndex: 0, target: 30, periodIndex: 1),

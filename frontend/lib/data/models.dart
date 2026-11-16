@@ -42,8 +42,8 @@ class HabitCategory {
 enum AffectionTier { low, mid, high }
 
 AffectionTier tierOf(int affection) {
-  if (affection >= 7) return AffectionTier.high;
-  if (affection >= 4) return AffectionTier.mid;
+  if (affection >= Economy.affectionHighTier) return AffectionTier.high;
+  if (affection >= Economy.affectionMidTier) return AffectionTier.mid;
   return AffectionTier.low;
 }
 

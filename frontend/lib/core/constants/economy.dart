@@ -36,12 +36,16 @@ class Economy {
   static const int fieldCapacity = 5;
 
   // 호감도
-  static const int maxAffection = 10;
-  static const int petAffectionGain = 2; // 하루 1회
-  static const int playAffectionGain = 1; // 하루 1회
+  // 0~100, 매일 다 챙기면(+5/일) 친해짐 6일 · 단짝 14일 · 최대 20일 (11-16 사용자 "단짝 2주")
+  static const int maxAffection = 100;
+  static const int affectionMidTier = 30; // 친해진 사이 하한
+  static const int affectionHighTier = 70; // 단짝 하한
+  static const int affectionPerHeart = 20; // 하트 5칸, 반 칸 = 10
+  static const int petAffectionGain = 3; // 하루 1회
+  static const int playAffectionGain = 2; // 하루 1회
   static const int dragAffectionGain = 1; // 홈 필드에서 끌어 옮기기, 몬스터마다 하루 1회
   static const Duration dragRest = Duration(seconds: 3); // 옮긴 자리에서 쉬는 시간 (그 뒤 다시 돌아다님)
-  static const int starterAffection = 3; // 온보딩에서 고른 첫 파트너
+  static const int starterAffection = 5; // 온보딩에서 고른 첫 파트너
 
   // 카테고리 슬롯: 기본 3개, 도감 발견 5 · 10 · 15마리마다 +1 (최대 6)
   static const int baseCategorySlots = 3;
