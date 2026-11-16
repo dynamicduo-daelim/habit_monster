@@ -8,6 +8,7 @@ import '../../core/constants/app_assets.dart';
 import '../../core/constants/economy.dart';
 import '../../core/state/game_state.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/theme/app_theme.dart';
 import '../../core/utils/format.dart';
 import '../../core/widgets/help_button.dart';
 import '../../core/widgets/pixel_icon.dart';
@@ -860,12 +861,14 @@ class _IconSpot extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 1),
+              // 이름표는 본문 글꼴(Pretendard) — 테두리가 2px면 픽셀 글꼴처럼 뭉개 보여서 1px로 (11-16 사용자)
               Text(label,
                   style: TextStyle(
-                      fontSize: 10.5,
+                      fontFamily: AppTheme.bodyFont,
+                      fontSize: 11,
                       fontWeight: FontWeight.w700,
                       color: labelColor,
-                      shadows: outlineShadows(AppColors.ink))),
+                      shadows: outlineShadows(AppColors.ink, 1))),
             ],
           ),
         ),
