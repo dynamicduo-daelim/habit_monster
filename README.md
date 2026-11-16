@@ -104,11 +104,36 @@ flutter run
 - 케이블이 빠지거나 adb가 끊기면 `adb reverse`도 풀려요 → 다시 걸기. 서버에 안 붙으면 이것부터 확인.
 - 실행 중 단축키 (터미널): `r` 화면 새로 그리기(hot reload), `R` 처음부터 다시(hot restart), `q` 끝내기.
 
+#### D. 배포 서버(EC2)에 연결 — 내 PC 서버(Docker DB · bootRun) 없이
+```bash
+# 에뮬레이터 · 실제 폰 둘 다 (https라 adb reverse · 10.0.2.2가 필요 없어요)
+flutter run --dart-define=API_BASE_URL=https://api.habitmonster.me/api/v1
+```
+- 진짜 DB(Supabase)에 데이터가 쌓여요 → **테스트 계정**으로 쓰고 실제 비밀번호는 쓰지 않기.
+- 웹(Chrome)으로는 안 돼요 — 배포 서버는 CORS가 꺼져 있어요 (`CORS_ALLOWED_ORIGINS` 기본값이 비어 있고, 배포 서버 환경 파일 목록에도 없음).
+- 서버가 떠 있는지 먼저 보려면: `curl.exe -i https://api.habitmonster.me/api/v1/me/status` → **401**이면 정상 (PowerShell에선 `curl`이 아니라 `curl.exe`).
+- 이 명령은 문서를 보고 쓴 것이고, 이번 정리에서 직접 실행해 보지는 않았어요.
+
 ### 3. 테스트
 - 앱: `frontend/`에서 `flutter analyze` → `flutter test`
 - 서버: `backend/server/`에서 `./gradlew test` (Docker가 켜져 있어야 해요 — 테스트용 DB를 스스로 띄움)
 
 더 자세한 서버 설정(환경변수 · 프로필 · CORS)은 `backend/server/README.md`, DB는 `backend/db/README.md`.
+
+### 4. 자동 검사 · 배포 (CI/CD, GitHub Actions)
+
+| 언제 | 무엇이 | 어디서 보나 |
+| --- | --- | --- |
+| `dev`로 가는 **PR을 올리면** (항상) | **CI Backend** (`backend-test`: `./gradlew test`) · **CI Frontend** (`frontend-check`: `flutter pub get` → `analyze` → `test`, Flutter 3.47.6) | PR 화면 아래 체크 목록 · Actions 탭 |
+| 위 두 체크가 **모두 통과해야** `dev`에 머지돼요 | 브랜치 보호 규칙 `protect-dev` (PR로만 머지, 강제 푸시 · 삭제 금지) | Settings → Rules |
+| 서버를 **배포하고 싶을 때** (사람이 누름) | **CD Backend**: 빌드 → EC2로 전송 → 재시작 → `/me/status`가 401인지 확인 → 안 뜨면 이전 jar로 되돌림 | Actions → **CD Backend** → **Run workflow** |
+
+CD를 누르는 법 (자세한 건 `backend/server/README.md`의 "자동 배포"):
+1. 서버 PR이 `dev`에 머지된 뒤, **DB 구조가 바뀌었으면 Supabase에 SQL을 먼저** 적용
+2. Actions → CD Backend → Run workflow → Branch는 `dev` → **"DB SQL 적용 확인" 체크** → 실행 (배포 중 서버가 20~60초 502일 수 있어요)
+3. "되돌림 연습"은 평소엔 끄기 (깨진 파일을 일부러 올려 되돌림을 시험하는 용도)
+
+앱(APK) 배포는 자동화돼 있지 않아요 — 앱은 필요할 때 직접 빌드해서 폰에 설치해요. 설계 · 실행 기록은 `docs/기획/2026-11-16-CD-EC2-자동배포.md`.
 
 ## 지금 만들어진 것
 
