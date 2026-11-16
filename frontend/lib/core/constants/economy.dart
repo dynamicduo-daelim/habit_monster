@@ -36,12 +36,13 @@ class Economy {
   static const int fieldCapacity = 5;
 
   // 호감도
-  // 0~100, 매일 다 챙기면(+5/일) 친해짐 6일 · 단짝 14일 · 최대 20일 (11-16 사용자 "단짝 2주")
+  // 0~100, 매일 다 챙기면(쓰다듬기 1 + 놀아주기 2 + 간식 2 = +5/일) 친해짐 6일 · 단짝 14일 · 최대 20일 (11-16 사용자 "단짝 2주", D-77 · D-79)
   static const int maxAffection = 100;
   static const int affectionMidTier = 30; // 친해진 사이 하한
   static const int affectionHighTier = 70; // 단짝 하한
   static const int affectionPerHeart = 20; // 하트 5칸, 반 칸 = 10
-  static const int petAffectionGain = 3; // 하루 1회
+  static const int petAffectionGain = 1; // 하루 1회
+  static const int feedAffectionGain = 2; // 간식 아이템, 몬스터마다 하루 첫 간식만 (D-79 — 아이템 · API 연결 전)
   static const int playAffectionGain = 2; // 하루 1회
   static const int dragAffectionGain = 1; // 홈 필드에서 끌어 옮기기, 몬스터마다 하루 1회
   static const Duration dragRest = Duration(seconds: 3); // 옮긴 자리에서 쉬는 시간 (그 뒤 다시 돌아다님)
