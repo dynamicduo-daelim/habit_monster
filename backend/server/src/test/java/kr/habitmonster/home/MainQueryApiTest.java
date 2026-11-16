@@ -151,15 +151,15 @@ class MainQueryApiTest extends PostgresTest {
 			.andExpect(jsonPath("$.expRequired").value(125))
 			.andExpect(jsonPath("$.expToNextLevel").doesNotExist())
 			.andExpect(jsonPath("$.nextEvolutionLevel").value(10))
-			.andExpect(jsonPath("$.affection").value(3))
-			.andExpect(jsonPath("$.affectionMax").value(10))
+			.andExpect(jsonPath("$.affection").value(5))
+			.andExpect(jsonPath("$.affectionMax").value(100))
 			.andExpect(jsonPath("$.affectionTier").value("LOW"))
 			.andExpect(jsonPath("$.todayActions.pet").value(false))
 			.andExpect(jsonPath("$.todayActions.play").value(false));
 
-		// Lv.7 + 40 EXP, 호감도 6, 오늘 쓰다듬음
-		jdbc.update("update monster.user_monster set level = 7, exp_total = ?, affection = 6 where id = ?", 6 * 125 + 40, monkey);
-		jdbc.update("insert into monster.affection_action (user_monster_id, action_date, action_type, gain) values (?, ?, 'PET', 2)",
+		// Lv.7 + 40 EXP, 호감도 45(친해진 사이 30 이상), 오늘 쓰다듬음
+		jdbc.update("update monster.user_monster set level = 7, exp_total = ?, affection = 45 where id = ?", 6 * 125 + 40, monkey);
+		jdbc.update("insert into monster.affection_action (user_monster_id, action_date, action_type, gain) values (?, ?, 'PET', 1)",
 				monkey, dates.today());
 		as(access, get("/monsters/" + monkey))
 			.andExpect(jsonPath("$.expInLevel").value(40))

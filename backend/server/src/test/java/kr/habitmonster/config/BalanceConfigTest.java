@@ -29,7 +29,7 @@ class BalanceConfigTest extends PostgresTest {
 	@Test
 	void 시드의_수치를_타입대로_읽는다() {
 		assertThat(config.fieldMax()).isEqualTo(5);
-		assertThat(config.starterAffection()).isEqualTo(3);
+		assertThat(config.starterAffection()).isEqualTo(5);
 		assertThat(config.exploreMissRate()).isEqualTo(0.35);
 		assertThat(config.captureRate()).isEqualTo(Map.of(1, 0.8, 2, 0.6, 3, 0.4));
 		assertThat(config.exploreRarityWeight()).containsEntry(1, 60).containsEntry(3, 10);
@@ -46,9 +46,11 @@ class BalanceConfigTest extends PostgresTest {
 		assertThat(config.stageOf(20)).isEqualTo(2);
 		assertThat(config.nextEvolutionLevel(7)).isEqualTo(10);
 		assertThat(config.nextEvolutionLevel(20)).isNull();
-		assertThat(config.affectionTier(3)).isEqualTo("LOW");
-		assertThat(config.affectionTier(4)).isEqualTo("MID");
-		assertThat(config.affectionTier(7)).isEqualTo("HIGH");
+		// 호감도는 0~100, 단계 하한 30 · 70 (D-77)
+		assertThat(config.affectionTier(29)).isEqualTo("LOW");
+		assertThat(config.affectionTier(30)).isEqualTo("MID");
+		assertThat(config.affectionTier(69)).isEqualTo("MID");
+		assertThat(config.affectionTier(70)).isEqualTo("HIGH");
 	}
 
 	@Test

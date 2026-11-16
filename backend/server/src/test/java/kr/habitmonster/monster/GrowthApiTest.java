@@ -33,7 +33,7 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 
 /**
  * 성장 · 교감 (API 명세 v5 "3. 메인 화면", 3-5단계): 간식(물약) · 쓰다듬기/놀아주기 · 말 걸기 · 필드/가방 · 대화 상대.
- * 기본 온보딩이면 스타터 불씨 원숭이(1번) · 찌릿 쥐(6번)가 필드에 있고 호감도 3 (설정 {@code starter_affection}).
+ * 기본 온보딩이면 스타터 불씨 원숭이(1번) · 찌릿 쥐(6번)가 필드에 있고 호감도 5 (설정 {@code starter_affection}, 0~100 — D-77).
  */
 class GrowthApiTest extends PostgresTest {
 
@@ -161,29 +161,30 @@ class GrowthApiTest extends PostgresTest {
 	void 쓰다듬기_놀아주기는_하루_한_번씩() throws Exception {
 		String access = onboardedUser(E);
 		long monkey = monster(E, 1);
-		act(access, monkey, "PET").andExpect(status().isOk()) // 3 + 2 = 5 → MID (4 이상)
-			.andExpect(jsonPath("$.gain").value(2))
-			.andExpect(jsonPath("$.affection").value(5))
+		jdbc.update("update monster.user_monster set affection = 29 where id = ?", monkey); // 친해짐(30) 바로 앞
+		act(access, monkey, "PET").andExpect(status().isOk()) // 29 + 1 = 30 → MID (30 이상)
+			.andExpect(jsonPath("$.gain").value(1))
+			.andExpect(jsonPath("$.affection").value(30))
 			.andExpect(jsonPath("$.affectionTier").value("MID"));
 		act(access, monkey, "PET").andExpect(status().isConflict())
 			.andExpect(jsonPath("$.code").value("ALREADY_DONE_TODAY"));
-		act(access, monkey, "PLAY").andExpect(status().isOk()).andExpect(jsonPath("$.gain").value(1));
+		act(access, monkey, "PLAY").andExpect(status().isOk()).andExpect(jsonPath("$.gain").value(2));
 		as(access, get("/monsters/" + monkey)).andExpect(jsonPath("$.todayActions.pet").value(true))
 			.andExpect(jsonPath("$.todayActions.play").value(true));
-		assertThat(affection(monkey)).isEqualTo(6);
+		assertThat(affection(monkey)).isEqualTo(32);
 
 		doReturn(dates.today().plusDays(1)).when(dates).today(); // 다음 날엔 다시
-		act(access, monkey, "PET").andExpect(status().isOk()).andExpect(jsonPath("$.affection").value(8));
+		act(access, monkey, "PET").andExpect(status().isOk()).andExpect(jsonPath("$.affection").value(33));
 	}
 
 	@Test
 	void 호감도가_최대면_gain_0() throws Exception {
 		String access = onboardedUser(E);
 		long monkey = monster(E, 1);
-		jdbc.update("update monster.user_monster set affection = 10 where id = ?", monkey);
+		jdbc.update("update monster.user_monster set affection = 100 where id = ?", monkey);
 		act(access, monkey, "PET").andExpect(status().isOk())
 			.andExpect(jsonPath("$.gain").value(0))
-			.andExpect(jsonPath("$.affection").value(10))
+			.andExpect(jsonPath("$.affection").value(100))
 			.andExpect(jsonPath("$.affectionTier").value("HIGH"));
 		act(access, monkey, "PET").andExpect(status().isConflict()); // 0이어도 오늘 한 것
 	}
@@ -215,7 +216,7 @@ class GrowthApiTest extends PostgresTest {
 		pool.shutdown();
 
 		assertThat(statuses).containsExactlyInAnyOrder(200, 409);
-		assertThat(affection(monkey)).isEqualTo(5);
+		assertThat(affection(monkey)).isEqualTo(6); // 시작 5 + 쓰다듬기 1 (한 번만)
 	}
 
 	// ---------- 말 걸기 ----------
@@ -228,7 +229,7 @@ class GrowthApiTest extends PostgresTest {
 				String.class);
 		when(dice.roll()).thenReturn(0.0);
 		as(access, get("/monsters/" + monkey + "/line")).andExpect(status().isOk())
-			.andExpect(jsonPath("$.affectionTier").value("LOW")) // 호감도 3
+			.andExpect(jsonPath("$.affectionTier").value("LOW")) // 호감도 5 (시작값)
 			.andExpect(jsonPath("$.line").value(first));
 	}
 
@@ -283,6 +284,6 @@ class GrowthApiTest extends PostgresTest {
 		as(other, get("/monsters/" + monkey + "/line")).andExpect(status().isNotFound());
 		move(other, monkey, "BAG").andExpect(status().isNotFound());
 		json(other, put("/me/partner"), "{\"userMonsterId\": " + monkey + "}").andExpect(status().isNotFound());
-		assertThat(affection(monkey)).isEqualTo(3);
+		assertThat(affection(monkey)).isEqualTo(5);
 	}
 }
