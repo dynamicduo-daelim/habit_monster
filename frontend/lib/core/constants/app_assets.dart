@@ -57,6 +57,7 @@ class AppAssets {
   static const String potionMedium = '$_items/potion_medium.png';
   static const String potionLarge = '$_items/potion_large.png';
   static const String seongsilBall = '$_items/seongsil_ball.png';
+  static const String cookie = '$_items/cookie.png'; // 간식 (호감도, D-79)
 
   // 브랜드 (로그인 화면 로고 = 앱 아이콘)
   static const String logo = '$_brand/logo.png';

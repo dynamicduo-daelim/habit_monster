@@ -134,7 +134,7 @@ class _BagOverlayState extends State<BagOverlay> {
   // ---------- 아이템 ----------
   List<Widget> _items(GameState s) {
     final slots = [
-      for (final it in Catalog.items) (it, '${it.short} 물약', s.inventory[it.id] ?? 0),
+      for (final it in Catalog.feedItems) (it, it.isSnack ? it.short : '${it.short} 물약', s.inventory[it.id] ?? 0),
       (Catalog.seongsilBall, Catalog.seongsilBall.short, s.balls),
     ];
     final sel = slots.where((x) => x.$1.id == _sel).firstOrNull;
@@ -147,7 +147,8 @@ class _BagOverlayState extends State<BagOverlay> {
           selected: _sel == it.id,
           onTap: () => setState(() => _sel = it.id),
         ),
-      for (var i = 0; i < 4; i++)
+      // 빈 칸: 4칸씩 줄을 맞추고 최소 2줄 (아이템이 늘면 함께 늘어난다)
+      for (var i = 0; i < _emptySlots(slots.length); i++)
         const CustomPaint(
           foregroundPainter: DashedBorderPainter(color: AppColors.brownShadow, width: 3),
           child: ColoredBox(color: AppColors.slotEmpty),
@@ -176,6 +177,11 @@ class _BagOverlayState extends State<BagOverlay> {
       else
         _SelectedItem(item: sel.$1, count: sel.$3, onUse: () => widget.onUse(sel.$1.id)),
     ];
+  }
+
+  static int _emptySlots(int n) {
+    final total = ((n + 3) ~/ 4) * 4;
+    return (total < 8 ? 8 : total) - n;
   }
 
   // ---------- 몬스터 ----------
@@ -294,7 +300,9 @@ class _SelectedItem extends StatelessWidget {
     final isBall = item.id == Catalog.seongsilBall.id;
     final desc = isBall
         ? '챗봇 탐색에서 만난 몬스터에게 던져서 잡아요 · 1번에 1개'
-        : '몬스터에게 먹이면 +${item.exp} EXP';
+        : item.isSnack
+            ? '몬스터마다 하루 첫 쿠키에 호감도 +${item.affection} · 그 뒤로는 먹기만 해요'
+            : '몬스터에게 먹이면 +${item.exp} EXP';
     return Container(
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(

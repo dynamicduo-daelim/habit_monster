@@ -216,7 +216,7 @@ void main() {
     expect(s.checkedInToday, isFalse);
     expect(s.encountersLeft, 0);
     expect(s.pickedCategories, ['ex', 'st']);
-    expect(s.inventory, {'s': 0, 'm': 2, 'l': 0});
+    expect(s.inventory, {'s': 0, 'm': 2, 'l': 0, 'cookie': 0});
 
     // 모르는 종(앱 그림이 없는 종)은 건너뛴다
     expect(s.monsters.map((m) => m.uid), ['10', '11']);
@@ -481,6 +481,16 @@ void main() {
       expect(jsonDecode(requests.last.body), {'itemCode': 'POTION_M'});
       expect(requests.last.headers['Idempotency-Key'], isNotEmpty);
       expect((m.level, s.inventory[potion.id]), (8, 1));
+    });
+
+    test('쿠키: 서버 코드가 나오기 전엔 서버를 부르지 않고 안내 (D-79)', () async {
+      final (s, r, _) = await loaded();
+      s.inventory['cookie'] = 1;
+      final before = requests.length;
+      await expectLater(
+          r.feed(s.monsterByUid('10')!, Catalog.cookie), throwsA(isA<ApiException>().having((e) => e.code, 'code', 'NOT_READY')));
+      expect(requests.length, before);
+      expect(s.inventory['cookie'], 1);
     });
 
     test('교감: 오른 호감도 반영, 오늘 이미 했으면 표시하고 안내 문구를 올린다', () async {
