@@ -1,0 +1,57 @@
+name: CI Backend
+
+# 서버(backend/server)의 테스트를 자동으로 돌린다. 지금은 dev만 대상 (main은 아직 안 씀, D-73).
+on:
+  pull_request:
+    branches: [dev]
+    paths:
+      - 'backend/server/**'
+      - 'docs/데이터베이스/**'   # 테스트가 공식 schema.sql · seed.sql을 읽는다 (PostgresTest)
+      - '.github/workflows/ci-backend.yml'
+  push:
+    branches: [dev]
+    paths:
+      - 'backend/server/**'
+      - 'docs/데이터베이스/**'
+      - '.github/workflows/ci-backend.yml'
+
+# 같은 PR에 연달아 push하면 이전 실행은 취소 (낭비 방지)
+concurrency:
+  group: ci-backend-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: backend/server
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+
+      # Windows에서 커밋한 gradlew는 실행 권한이 없다
+      - name: gradlew 실행 권한
+        run: chmod +x gradlew
+
+      # 테스트가 Testcontainers로 postgres:16을 직접 띄운다 (ubuntu 러너엔 Docker가 있음).
+      # JWT 키 · 소셜 키는 테스트 코드가 넣거나 비우므로 시크릿은 필요 없다.
+      - name: 서버 테스트
+        run: ./gradlew test --no-daemon
+
+      - name: 실패 시 테스트 리포트 올리기
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-report
+          path: backend/server/build/reports/tests/test
+          retention-days: 7
