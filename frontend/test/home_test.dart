@@ -31,11 +31,11 @@ Future<void> swipe(WidgetTester tester, Offset from, Offset step) async {
 
 void main() {
   group('GameState 교감 · 성실도', () {
-    test('쓰다듬기는 ♥+3, 최대치를 넘지 않는다', () {
+    test('쓰다듬기는 ♥+1, 최대치를 넘지 않는다', () {
       final s = GameState.sample(gold: 1240, balls: 1);
       final spark = s.monsterByUid('m2')!; // 호감도 80
-      expect(s.pet(spark), 3);
-      expect(spark.affection, 83);
+      expect(s.pet(spark), 1);
+      expect(spark.affection, 81);
       final full = s.monsterByUid('m1')!;
       full.affection = 99;
       expect(s.pet(full), 1); // 100에서 멈춤
