@@ -38,7 +38,7 @@ class GameState extends ChangeNotifier {
   final List<Goal> goals;
   final List<String> pickedCategories;
   final Map<String, int> categoryPoints;
-  final Map<String, int> inventory = {'s': 3, 'm': 1, 'l': 0};
+  final Map<String, int> inventory = {'s': 3, 'm': 1, 'l': 0, 'cookie': 2};
   String? chatPartnerUid;
 
   /// 오늘 체크인의 최신 값 (습관 id → 값, O/X는 1/0). 확정 전엔 비어 있다 (임시값은 챗봇에만).
@@ -204,10 +204,21 @@ class GameState extends ChangeNotifier {
     return m;
   }
 
-  /// 물약을 먹인다. 올라간 레벨 수를 돌려준다 (실패 시 -1).
+  /// 물약 · 간식을 먹인다. 올라간 레벨 수를 돌려준다 (실패 시 -1).
+  /// 간식(쿠키)은 EXP 없이 몬스터마다 하루 첫 번째에만 호감도 +[ShopItem.affection] (D-79) — 최종형에게도 줄 수 있다.
   int feed(OwnedMonster m, ShopItem item) {
     final have = inventory[item.id] ?? 0;
-    if (have <= 0 || m.level >= Economy.finalEvolutionLevel) return -1;
+    if (have <= 0) return -1;
+    if (item.isSnack) {
+      inventory[item.id] = have - 1;
+      if (!m.fedToday && m.affection < Economy.maxAffection) {
+        m.affection = math.min(Economy.maxAffection, m.affection + item.affection);
+        m.fedToday = true;
+      }
+      notifyListeners();
+      return 0;
+    }
+    if (m.level >= Economy.finalEvolutionLevel) return -1;
     inventory[item.id] = have - 1;
     final ups = m.addExp(item.exp);
     notifyListeners();
@@ -822,10 +833,16 @@ class GameState extends ChangeNotifier {
   }
 
   /// `POST /monsters/{id}/feed` 응답: 경험치를 앱 공식으로 더한 뒤 레벨은 서버 값으로 맞춘다 (둘 다 레벨당 125).
-  void applyFeed(OwnedMonster m, {required ShopItem potion, required int expGained, required int levelAfter, required int remaining}) {
+  /// [affection]은 간식일 때 서버가 준 지금 호감도 (응답 칸 이름은 윤서 API 확정 뒤 맞춘다).
+  void applyFeed(OwnedMonster m,
+      {required ShopItem potion, required int expGained, required int levelAfter, required int remaining, int? affection}) {
     m.addExp(expGained);
     m.level = levelAfter;
     inventory[potion.id] = remaining;
+    if (affection != null) {
+      m.affection = affection;
+      m.fedToday = true;
+    }
     notifyListeners();
   }
 

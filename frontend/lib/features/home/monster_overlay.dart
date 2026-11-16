@@ -347,6 +347,7 @@ class _MonsterOverlayState extends State<MonsterOverlay> {
   Future<void> _feed(ShopItem item) async {
     final s = _s;
     if ((s.inventory[item.id] ?? 0) <= 0) return;
+    if (item.isSnack) return _feedSnack(item);
     if (m.level >= Economy.finalEvolutionLevel) {
       _shell.toast('이미 최종형이에요');
       return;
@@ -366,6 +367,28 @@ class _MonsterOverlayState extends State<MonsterOverlay> {
       _shell.toast('레벨 업! Lv.${m.level}');
     } else {
       _shell.toast('+${item.exp} EXP');
+    }
+  }
+
+  /// 쿠키: EXP 없이 하루 첫 번째에만 호감도 (D-79). 그 뒤로는 먹기만 한다.
+  Future<void> _feedSnack(ShopItem item) async {
+    final tierBefore = tierOf(m.affection);
+    final affBefore = m.affection;
+    final ok = await runGameAction(context, (r) => r.feed(m, item));
+    if (ok == null || ok < 0 || !mounted) return;
+    final gain = m.affection - affBefore;
+    setState(() => _line = '냠냠! 쿠키 맛있다!');
+    _hop(1);
+    _showEmote('heart');
+    if (gain > 0) {
+      _floatText('호감도 +$gain', AppColors.tierHigh);
+      if (tierOf(m.affection) != tierBefore) {
+        _toastTierUp(tierBefore);
+      } else {
+        _shell.toast('호감도 +$gain · 쿠키는 하루 한 번만 호감도가 올라요');
+      }
+    } else {
+      _shell.toast(m.affection >= Economy.maxAffection ? '호감도 최대! 맛있게 먹었어요' : '맛있게 먹었어요 · 호감도는 내일 또!');
     }
   }
 
@@ -857,7 +880,7 @@ class _MonsterOverlayState extends State<MonsterOverlay> {
   }
 
   String _stageHint() => switch (_tab) {
-        _Tab.feed => _dragging ? '몬스터 위에 놓으면 먹어요' : '아래 물약을 몬스터에게 끌어다 주세요',
+        _Tab.feed => _dragging ? '몬스터 위에 놓으면 먹어요' : '아래 물약 · 쿠키를 몬스터에게 끌어다 주세요',
         _Tab.play => _throwing ? '공을 쫓아가는 중…' : (_aim != null ? '놓으면 휙!' : '무대를 휙 밀어서 공을 던져요'),
         _Tab.pet => m.pettedToday ? '오늘은 이미 쓰다듬었어요' : '몬스터를 문질러 쓰다듬어 주세요',
       };
@@ -933,10 +956,10 @@ class _MonsterOverlayState extends State<MonsterOverlay> {
   }
 
   Widget _feedPanel(GameState s) {
-    final short = Catalog.items.any((it) => (s.inventory[it.id] ?? 0) <= 0);
+    final short = Catalog.feedItems.any((it) => (s.inventory[it.id] ?? 0) <= 0);
     return _panel(
       '간식 주기',
-      '물약을 몬스터에게 끌어다 주세요',
+      '물약 · 쿠키를 몬스터에게 끌어다 주세요',
       Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -948,6 +971,8 @@ class _MonsterOverlayState extends State<MonsterOverlay> {
               ],
             ],
           ),
+          const SizedBox(height: 8),
+          _feedTile(s, Catalog.cookie),
           if (short)
             Align(
               alignment: Alignment.centerRight,
@@ -998,9 +1023,13 @@ class _MonsterOverlayState extends State<MonsterOverlay> {
                           FittedBox(
                             fit: BoxFit.scaleDown,
                             alignment: Alignment.centerLeft,
-                            child: Text('+${it.exp} EXP',
-                                style: TextStyle(
-                                    fontSize: 10.5, color: n > 0 ? AppColors.expBlue : AppColors.textMuted)),
+                            child: it.isSnack
+                                ? Text(m.fedToday ? '오늘 ♥+${it.affection} 받음 · 내일 또!' : '하루 첫 쿠키 ♥+${it.affection}',
+                                    style: TextStyle(
+                                        fontSize: 10.5, color: n > 0 ? AppColors.tierHigh : AppColors.textMuted))
+                                : Text('+${it.exp} EXP',
+                                    style: TextStyle(
+                                        fontSize: 10.5, color: n > 0 ? AppColors.expBlue : AppColors.textMuted)),
                           ),
                         ],
                       ),

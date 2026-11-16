@@ -120,6 +120,7 @@ class OwnedMonster {
     this.pettedToday = false,
     this.playedToday = false,
     this.draggedToday = false,
+    this.fedToday = false,
   });
   final String uid;
   final String speciesId;
@@ -130,6 +131,7 @@ class OwnedMonster {
   bool pettedToday;
   bool playedToday;
   bool draggedToday; // 오늘 홈 필드에서 끌어 옮겨 호감도를 받았는지
+  bool fedToday; // 오늘 간식(쿠키)으로 호감도를 받았는지 (D-79)
 
   String get stage {
     if (level >= Economy.finalEvolutionLevel) return '최종형';
@@ -158,13 +160,18 @@ class ShopItem {
     required this.price,
     required this.exp,
     required this.asset,
+    this.affection = 0,
   });
   final String id;
   final String name;
   final String short;
   final int price;
-  final int exp; // 성실볼은 0
+  final int exp; // 성실볼 · 쿠키는 0
   final String asset;
+
+  /// 간식이면 몬스터마다 하루 첫 번째에 오르는 호감도 (쿠키 = [Economy.feedAffectionGain], D-79). 물약은 0.
+  final int affection;
+  bool get isSnack => affection > 0;
   double get goldEfficiency => price == 0 ? 0 : exp / price;
 }
 

@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:habit_monster/core/constants/economy.dart';
 import 'package:habit_monster/core/state/game_state.dart';
 import 'package:habit_monster/core/utils/format.dart';
+import 'package:habit_monster/data/catalog.dart';
 import 'package:habit_monster/features/shell/main_shell.dart';
 import 'game_harness.dart';
 
@@ -64,6 +65,25 @@ void main() {
       mouse.affection = 100;
       expect(s.drag(mouse), 0); // 꽉 찼으면 안 오르고, 오늘 기회도 안 쓴다
       expect(mouse.draggedToday, isFalse);
+    });
+
+    test('쿠키는 EXP 없이 하루 첫 번째만 ♥+2, 최종형에게도 줄 수 있다 (D-79)', () {
+      final s = GameState.sample(gold: 1240, balls: 1);
+      final monkey = s.monsterByUid('m1')!; // 호감도 40
+      final exp = (monkey.level, monkey.exp);
+      expect(s.feed(monkey, Catalog.cookie), 0);
+      expect((monkey.affection, monkey.fedToday), (40 + Economy.feedAffectionGain, true));
+      expect((monkey.level, monkey.exp), exp);
+      expect(s.feed(monkey, Catalog.cookie), 0); // 두 번째는 먹기만
+      expect(monkey.affection, 40 + Economy.feedAffectionGain);
+      expect(s.inventory['cookie'], 0);
+      expect(s.feed(monkey, Catalog.cookie), -1); // 다 먹음
+
+      final top = s.monsterByUid('m2')!..level = Economy.finalEvolutionLevel;
+      s.inventory['cookie'] = 1;
+      expect(s.feed(top, Catalog.cookie), 0);
+      expect(top.fedToday, isTrue);
+      expect(s.feed(top, Catalog.items.first), -1); // 물약은 최종형에게 못 준다
     });
 
     test('오늘의 성실도는 앞 3개 습관만, 75점 만점', () {

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../core/constants/app_assets.dart';
+import '../core/constants/economy.dart';
 import 'models.dart';
 
 /// 고정 데이터: 카테고리, 몬스터 도감, 상점 아이템, 기간 배수.
@@ -319,6 +320,13 @@ class Catalog {
     ShopItem(id: 'l', name: '상급 경험치 물약', short: '상급', price: 400, exp: 500, asset: AppAssets.potionLarge),
   ];
 
+  /// 간식 쿠키 — EXP 없이 몬스터마다 하루 첫 쿠키에 호감도 (D-79). 상점 · 가격은 성수연 담당 (가격은 아직 [가정] 0).
+  static const ShopItem cookie = ShopItem(
+      id: 'cookie', name: '쿠키', short: '쿠키', price: 0, exp: 0, affection: Economy.feedAffectionGain, asset: AppAssets.cookie);
+
+  /// 교감 창 · 가방에서 몬스터에게 줄 수 있는 것: 물약 3종 + 쿠키.
+  static const List<ShopItem> feedItems = [...items, cookie];
+
   static const ShopItem seongsilBall =
       ShopItem(id: 'ball', name: '성실볼', short: '성실볼', price: 50, exp: 0, asset: AppAssets.seongsilBall);
 
@@ -334,11 +342,14 @@ class Catalog {
   static String serverCodeOf(ShopItem item) =>
       itemIdByServerCode.entries.firstWhere((e) => e.value == item.id).key;
 
+  /// 서버 코드가 정해졌는지 (쿠키는 윤서 API · 시드가 나오기 전까지 없다).
+  static bool hasServerCode(ShopItem item) => itemIdByServerCode.containsValue(item.id);
+
   /// 서버 아이템 코드 → 앱 아이템. 모르는 코드면 null.
   static ShopItem? itemByServerCode(String code) {
     final id = itemIdByServerCode[code];
     if (id == null) return null;
-    return id == seongsilBall.id ? seongsilBall : items.where((i) => i.id == id).firstOrNull;
+    return id == seongsilBall.id ? seongsilBall : feedItems.where((i) => i.id == id).firstOrNull;
   }
 
   /// 습관 기간과 끝까지 지켰을 때의 보상 배수.

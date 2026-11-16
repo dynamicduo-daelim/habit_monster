@@ -491,6 +491,10 @@ class HttpGameRepository implements GameRepository {
   @override
   Future<int> feed(OwnedMonster m, ShopItem potion) async {
     if ((state.inventory[potion.id] ?? 0) <= 0) return -1;
+    if (!Catalog.hasServerCode(potion)) {
+      // 쿠키: 서버 API · 아이템 코드가 나오면 연결 (D-79, 윤서)
+      throw const ApiException('NOT_READY', '쿠키는 아직 서버에서 줄 수 없어요');
+    }
     final res = await api.send('POST', '/monsters/${m.uid}/feed',
         idempotent: true, body: {'itemCode': Catalog.serverCodeOf(potion)}) as Map<String, dynamic>;
     state.applyFeed(m,
