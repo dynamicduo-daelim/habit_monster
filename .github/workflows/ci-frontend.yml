@@ -2,11 +2,9 @@ name: CI Frontend
 
 # 앱(frontend)의 코드 검사(analyze)와 테스트를 자동으로 돌린다. 지금은 dev만 대상 (D-73 · D-74).
 on:
+  # PR은 파일 필터 없이 항상 돈다 — 브랜치 보호의 "필수 체크"가 되려면 모든 PR에 체크가 있어야 해서 (D-75).
   pull_request:
     branches: [dev]
-    paths:
-      - 'frontend/**'
-      - '.github/workflows/ci-frontend.yml'
   push:
     branches: [dev]
     paths:
@@ -23,6 +21,8 @@ permissions:
 
 jobs:
   check:
+    # 브랜치 보호 규칙의 필수 체크 이름 — 규칙에는 이 이름을 글자 그대로 적는다 (D-75)
+    name: frontend-check
     runs-on: ubuntu-latest
     timeout-minutes: 20
     defaults:
