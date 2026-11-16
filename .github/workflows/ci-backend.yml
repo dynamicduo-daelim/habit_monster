@@ -2,17 +2,15 @@ name: CI Backend
 
 # 서버(backend/server)의 테스트를 자동으로 돌린다. 지금은 dev만 대상 (main은 아직 안 씀, D-73).
 on:
+  # PR은 파일 필터 없이 항상 돈다 — 브랜치 보호의 "필수 체크"가 되려면 모든 PR에 체크가 있어야 해서 (D-75).
+  # 필터가 있으면 서버를 안 고친 PR에서 이 체크가 안 생겨 머지가 영원히 대기 상태로 막힌다.
   pull_request:
     branches: [dev]
-    paths:
-      - 'backend/server/**'
-      - 'docs/데이터베이스/**'   # 테스트가 공식 schema.sql · seed.sql을 읽는다 (PostgresTest)
-      - '.github/workflows/ci-backend.yml'
   push:
     branches: [dev]
     paths:
       - 'backend/server/**'
-      - 'docs/데이터베이스/**'
+      - 'docs/데이터베이스/**'   # 테스트가 공식 schema.sql · seed.sql을 읽는다 (PostgresTest)
       - '.github/workflows/ci-backend.yml'
 
 # 같은 PR에 연달아 push하면 이전 실행은 취소 (낭비 방지)
@@ -25,6 +23,8 @@ permissions:
 
 jobs:
   test:
+    # 브랜치 보호 규칙의 필수 체크 이름 — 규칙에는 이 이름을 글자 그대로 적는다 (D-75)
+    name: backend-test
     runs-on: ubuntu-latest
     timeout-minutes: 20
     defaults:
