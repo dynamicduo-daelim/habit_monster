@@ -55,11 +55,11 @@ Map<String, Object> _server({bool checkedIn = false, String date = '2026-10-18'}
         {'userMonsterId': 12, 'imageKey': 'unknown_new_species', 'location': 'BAG', 'isPartner': false},
       ],
       'GET /monsters/10': {
-        'userMonsterId': 10, 'imageKey': 'monkey', 'level': 7, 'expInLevel': 40, 'expRequired': 125, 'affection': 6,
+        'userMonsterId': 10, 'imageKey': 'monkey', 'level': 7, 'expInLevel': 40, 'expRequired': 125, 'affection': 60,
         'todayActions': {'pet': true, 'play': false}, 'location': 'FIELD', 'isPartner': false,
       },
       'GET /monsters/11': {
-        'userMonsterId': 11, 'imageKey': 'mouse', 'level': 1, 'expInLevel': 0, 'expRequired': 125, 'affection': 3,
+        'userMonsterId': 11, 'imageKey': 'mouse', 'level': 1, 'expInLevel': 0, 'expRequired': 125, 'affection': 30,
         'todayActions': {'pet': false, 'play': false}, 'location': 'BAG', 'isPartner': true,
       },
       'GET /inventory': {
@@ -221,7 +221,7 @@ void main() {
     // 모르는 종(앱 그림이 없는 종)은 건너뛴다
     expect(s.monsters.map((m) => m.uid), ['10', '11']);
     final monkey = s.monsterByUid('10')!;
-    expect((monkey.speciesId, monkey.level, monkey.exp, monkey.affection), ('monkey', 7, 40, 6));
+    expect((monkey.speciesId, monkey.level, monkey.exp, monkey.affection), ('monkey', 7, 40, 60));
     expect((monkey.inField, monkey.pettedToday, monkey.playedToday), (true, true, false));
     expect(s.monsterByUid('11')!.inField, isFalse);
     expect(s.chatPartnerUid, '11');
@@ -485,11 +485,11 @@ void main() {
 
     test('교감: 오른 호감도 반영, 오늘 이미 했으면 표시하고 안내 문구를 올린다', () async {
       final (s, r, routes) = await loaded();
-      routes['POST /monsters/10/affection'] = {'gain': 1, 'affection': 7, 'affectionTier': 'HIGH'};
+      routes['POST /monsters/10/affection'] = {'gain': 2, 'affection': 70, 'affectionTier': 'HIGH'};
       final monkey = s.monsterByUid('10')!;
-      expect(await r.play(monkey), 1);
+      expect(await r.play(monkey), 2);
       expect(jsonDecode(requests.last.body), {'action': 'PLAY'});
-      expect((monkey.affection, monkey.playedToday), (7, true));
+      expect((monkey.affection, monkey.playedToday), (70, true));
 
       routes['POST /monsters/11/affection'] =
           _json({'code': 'ALREADY_DONE_TODAY', 'message': '오늘은 이미 했어요. 내일 또 해 주세요'}, 409);

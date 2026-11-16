@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:habit_monster/core/constants/economy.dart';
 import 'package:habit_monster/core/state/game_state.dart';
 import 'package:habit_monster/core/utils/format.dart';
 import 'package:habit_monster/features/shell/main_shell.dart';
@@ -30,34 +31,37 @@ Future<void> swipe(WidgetTester tester, Offset from, Offset step) async {
 
 void main() {
   group('GameState 교감 · 성실도', () {
-    test('쓰다듬기는 ♥+2, 최대치를 넘지 않는다', () {
+    test('쓰다듬기는 ♥+3, 최대치를 넘지 않는다', () {
       final s = GameState.sample(gold: 1240, balls: 1);
-      final spark = s.monsterByUid('m2')!; // 호감도 8
-      expect(s.pet(spark), 2);
-      expect(spark.affection, 10);
+      final spark = s.monsterByUid('m2')!; // 호감도 80
+      expect(s.pet(spark), 3);
+      expect(spark.affection, 83);
+      final full = s.monsterByUid('m1')!;
+      full.affection = 99;
+      expect(s.pet(full), 1); // 100에서 멈춤
       expect(spark.pettedToday, isTrue);
       final sprout = s.monsterByUid('m3')!;
-      sprout.affection = 10;
+      sprout.affection = 100;
       expect(s.pet(sprout), 0);
     });
 
-    test('놀아주기는 하루 1번만 ♥+1', () {
+    test('놀아주기는 하루 1번만 ♥+2', () {
       final s = GameState.sample(gold: 1240, balls: 1);
-      final wolf = s.monsterByUid('m1')!; // 호감도 4
-      expect(s.play(wolf), 1);
+      final wolf = s.monsterByUid('m1')!; // 호감도 40
+      expect(s.play(wolf), 2);
       expect(s.play(wolf), 0);
-      expect(wolf.affection, 5);
+      expect(wolf.affection, 42);
     });
 
     test('끌어 옮기기는 몬스터마다 하루 1번 ♥+1', () {
       final s = GameState.sample(gold: 1240, balls: 1);
-      final monkey = s.monsterByUid('m1')!; // 호감도 4
+      final monkey = s.monsterByUid('m1')!; // 호감도 40
       expect(s.drag(monkey), 1);
       expect(s.drag(monkey), 0);
-      expect(monkey.affection, 5);
+      expect(monkey.affection, 41);
       expect(monkey.draggedToday, isTrue);
       final mouse = s.monsterByUid('m2')!;
-      mouse.affection = 10;
+      mouse.affection = 100;
       expect(s.drag(mouse), 0); // 꽉 찼으면 안 오르고, 오늘 기회도 안 쓴다
       expect(mouse.draggedToday, isFalse);
     });
@@ -155,14 +159,14 @@ void main() {
     await tester.pump(const Duration(milliseconds: 500));
     await tester.pump(const Duration(milliseconds: 800));
     await tester.pump();
-    expect(spark.affection, aff + 1);
+    expect(spark.affection, aff + Economy.playAffectionGain);
     expect(find.text('던진 횟수 1'), findsOneWidget);
     await tester.pump(const Duration(seconds: 2));
     // 두 번째부터는 놀기만
     await swipe(tester, Offset(ground.center.dx, ground.bottom - 40), const Offset(14, -10));
     await tester.pump(const Duration(milliseconds: 1300));
     await tester.pump();
-    expect(spark.affection, aff + 1);
+    expect(spark.affection, aff + Economy.playAffectionGain);
     expect(find.text('던진 횟수 2'), findsOneWidget);
 
     // 타이머 정리
@@ -198,7 +202,7 @@ void main() {
     await tester.pump();
     final after = tester.getTopLeft(label);
     expect(after.dx, greaterThan(before.dx + 20));
-    expect(state.monsterByUid('m1')!.affection, 5);
+    expect(state.monsterByUid('m1')!.affection, 41);
     expect(find.byKey(const ValueKey('hearts_m1_1')), findsOneWidget); // 하트 뿅뿅
     expect(
         find.byWidgetPredicate((w) => w is Text && const ['여기도 괜찮네!', '우와, 높다!', '새 자리 좋아!'].contains(w.data)),
@@ -208,7 +212,7 @@ void main() {
     // 두 번째부터는 옮기기만
     await tester.drag(find.bySemanticsLabel('불씨 원숭이 정보 보기'), const Offset(-60, 0));
     await tester.pump();
-    expect(state.monsterByUid('m1')!.affection, 5);
+    expect(state.monsterByUid('m1')!.affection, 41);
     await tester.pump(const Duration(milliseconds: 1300));
     expect(find.byKey(const ValueKey('hearts_m1_1')), findsNothing); // 두 번째엔 하트 없음
     await tester.pump(const Duration(seconds: 4)); // 쉬는 시간 · 토스트가 끝나게

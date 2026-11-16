@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:habit_monster/core/constants/economy.dart';
 import 'package:habit_monster/core/state/game_state.dart';
 import 'package:habit_monster/core/state/local_game_repository.dart';
 import 'package:habit_monster/data/models.dart';
@@ -54,7 +55,7 @@ void main() {
       expect(s.monsters.map((m) => m.speciesId), ['monkey', 'squirrel', 'koala']); // 명상 길도 물방울 코알라
       final squirrel = s.monsters.firstWhere((m) => m.speciesId == 'squirrel');
       expect(s.chatPartnerUid, squirrel.uid);
-      expect(squirrel.affection, 3);
+      expect(squirrel.affection, Economy.starterAffection);
       expect(squirrel.inField, isTrue);
       c.dispose();
     });
