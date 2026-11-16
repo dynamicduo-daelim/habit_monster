@@ -85,7 +85,30 @@ journalctl -u habit-monster -f            # 로그 실시간
 sudoedit /etc/habit-monster/app.env       # 비밀값 바꾸기 → restart
 ```
 
-새 코드 배포: PC(`backend/server`)에서 `./gradlew bootJar` → `scp -i <pem> build/libs/<jar>.jar ubuntu@16.179.63.74:~/app-new.jar` → `sudo systemctl restart habit-monster`. DB 계약이 바뀐 jar면 **Supabase에 SQL을 먼저** 적용한다.
+새 코드 배포 (수동 — 아래 "자동 배포(CD)"가 같은 일을 대신 한다). DB 계약이 바뀐 jar면 **Supabase에 SQL을 먼저** 적용한다.
+
+```bash
+# 1) PC (backend/server): jar 만들기. PowerShell이면 .\gradlew.bat
+./gradlew bootJar                                     # → build/libs/server-0.0.1-SNAPSHOT.jar
+
+# 2) EC2 (ssh 접속 후): 지금 jar를 백업 — 새 jar가 안 뜰 때 돌아갈 곳이고, 자동 배포(CD)의 되돌림도 이 파일을 쓴다
+cp ~/app-new.jar ~/app-prev.jar
+
+# 3) PC: 새 jar 올리기
+scp -i <pem 경로> build/libs/server-0.0.1-SNAPSHOT.jar ubuntu@16.179.63.74:~/app-new.jar
+
+# 4) EC2: 다시 시작
+sudo systemctl restart habit-monster
+
+# 5) PC: 떴는지 확인 — 20~60초 뒤 401이면 정상 (그전엔 502일 수 있음)
+curl.exe -i https://api.habitmonster.me/api/v1/me/status
+
+# 안 뜨면 (EC2): 백업으로 되돌리기
+cp ~/app-prev.jar ~/app-new.jar && sudo systemctl restart habit-monster
+journalctl -u habit-monster -e                        # 왜 못 떴는지
+```
+
+> 2번을 빼먹으면 `app-prev.jar`가 옛 버전으로 남아서, 다음 번 자동 배포가 실패했을 때 **엉뚱한 옛 버전으로 되돌아간다**. 수동으로 배포했다면 꼭 백업부터.
 
 - `-Xmx256m`: EC2 메모리가 908MB · 스왑 없음. 11-06에 기본 설정 서버가 메모리 부족으로 강제 종료됐다(`Out of memory: Killed process … (java)`).
 - `app.env`에 든 이름 (8개): `SPRING_DATASOURCE_URL` · `SPRING_DATASOURCE_USERNAME` · `SPRING_DATASOURCE_PASSWORD` · `JWT_SECRET` · `GEMINI_API_KEY` · `KAKAO_APP_ID` · `GOOGLE_CLIENT_IDS` (11-11) · `APP_LLM_TIMEOUT_MS` (11-11, D-66). 옛 이름 `SPRING_DATASOURCE_*`는 `DB_*`보다 우선한다. 카카오 · 구글 값은 공개 값이라 `application-local.properties`와 같다.

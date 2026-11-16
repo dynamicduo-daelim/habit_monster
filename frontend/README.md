@@ -13,6 +13,9 @@ flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8081/api/v1
 
 # 실제 폰 (adb 연결): 먼저 adb reverse tcp:8081 tcp:8081
 flutter run --dart-define=API_BASE_URL=http://localhost:8081/api/v1
+
+# 배포 서버(EC2)에 연결 (에뮬레이터 · 폰 둘 다, https라 adb reverse 불필요 — 진짜 DB라 테스트 계정으로. 웹(Chrome)은 CORS가 꺼져 있어 안 됨)
+flutter run --dart-define=API_BASE_URL=https://api.habitmonster.me/api/v1
 ```
 
 ## 검사
@@ -21,3 +24,5 @@ flutter run --dart-define=API_BASE_URL=http://localhost:8081/api/v1
 flutter analyze
 flutter test
 ```
+
+PR을 `dev`로 올리면 CI(`frontend-check`)가 이 두 명령을 자동으로 돌려요 (Flutter 3.47.6 고정, `.github/workflows/ci-frontend.yml`). 통과해야 머지돼요.
