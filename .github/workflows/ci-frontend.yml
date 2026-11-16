@@ -1,0 +1,51 @@
+name: CI Frontend
+
+# 앱(frontend)의 코드 검사(analyze)와 테스트를 자동으로 돌린다. 지금은 dev만 대상 (D-73 · D-74).
+on:
+  pull_request:
+    branches: [dev]
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/ci-frontend.yml'
+  push:
+    branches: [dev]
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/ci-frontend.yml'
+
+# 같은 PR에 연달아 push하면 이전 실행은 취소 (낭비 방지)
+concurrency:
+  group: ci-frontend-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      # 로컬(3.47.6)과 같은 버전으로 고정 — "내 PC에서는 되는데"를 막는다
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: '3.47.6'
+          cache: true
+
+      # pubspec.lock이 git에 있어서 항상 같은 패키지 버전을 받는다
+      - name: 패키지 받기
+        run: flutter pub get
+
+      # 코드를 실행하지 않고 문법 · 타입 · 규칙 위반을 찾는다 (info도 실패로 침)
+      - name: 코드 검사
+        run: flutter analyze
+
+      # 앱 · 화면 테스트 (API_BASE_URL 등은 컴파일 때 넣는 값이라 테스트에는 필요 없다. 시크릿 불필요)
+      - name: 앱 테스트
+        run: flutter test
