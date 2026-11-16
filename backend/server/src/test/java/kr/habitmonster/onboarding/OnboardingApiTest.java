@@ -94,7 +94,7 @@ class OnboardingApiTest extends PostgresTest {
 		assertThat(jdbc.queryForObject("select period_start from goal.goal where user_id = ?", LocalDate.class, user))
 			.isEqualTo(dates.today()); // 목표 기간은 등록한 날부터 (명세 v5 보충 10-28)
 		assertThat(count("select dex_count from monster.monster_user where user_id = ?", user)).isEqualTo(2);
-		assertThat(count("select count(*) from monster.user_monster where user_id = ? and affection = 3 and acquired_via = 'STARTER'",
+		assertThat(count("select count(*) from monster.user_monster where user_id = ? and affection = 5 and acquired_via = 'STARTER'",
 				user)).isEqualTo(2);
 		assertThat(count("select count(*) from monster.starter_grant where user_id = ?", user)).isEqualTo(2);
 		assertThat(count("select count(*) from monster.dex_entry where user_id = ?", user)).isEqualTo(2);
