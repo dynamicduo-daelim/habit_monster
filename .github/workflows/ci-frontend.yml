@@ -29,7 +29,7 @@ jobs:
       run:
         working-directory: frontend
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # 로컬(3.47.6)과 같은 버전으로 고정 — "내 PC에서는 되는데"를 막는다
       - uses: subosito/flutter-action@v2
