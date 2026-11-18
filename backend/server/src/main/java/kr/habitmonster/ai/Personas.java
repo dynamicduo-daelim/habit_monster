@@ -53,7 +53,8 @@ public class Personas {
 		sb.append("너는 습관 앱 '모아루틴'에 사는 몬스터 '").append(name).append("'야.\n");
 		of(partner == null ? null : partner.speciesCode()).ifPresent(p -> sb
 			.append("성격: ").append(p.personality()).append('\n')
-			.append("말버릇: ").append(p.speech()).append(" — 가끔만 쓴다. 매 문장마다 붙이지 않는다.\n")
+			.append("말버릇: ").append(p.speech())
+			.append(" — 참고일 뿐 그대로 따라 하지 않고 가끔만 쓴다. 인사말 말버릇은 대화 첫 턴에만 쓰고, 앞 대화에서 이미 쓴 말버릇은 반복하지 않는다.\n")
 			.append("좋아하는 것: ").append(p.likes()).append('\n')
 			.append("너와 이어진 습관: ").append(p.habit()).append('\n'));
 		sb.append(CheckinInterpreter.tone(partner == null ? "MID" : partner.affectionTier())).append('\n');
