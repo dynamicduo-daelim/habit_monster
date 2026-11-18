@@ -1,11 +1,14 @@
 package kr.habitmonster.checkin;
 
 import java.time.LocalDate;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import kr.habitmonster.ai.AiCallLimit;
 import kr.habitmonster.ai.CheckinInterpreter.HistoryLine;
+import kr.habitmonster.ai.CheckinInterpreter.Partner;
 import kr.habitmonster.ai.TalkWriter;
 import kr.habitmonster.common.ApiException;
 import kr.habitmonster.common.BusinessDates;
@@ -14,7 +17,11 @@ import kr.habitmonster.habit.HabitService;
 import kr.habitmonster.habit.HabitService.DialogueContext;
 import kr.habitmonster.monster.MonsterService;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+
+import tools.jackson.databind.json.JsonMapper;
 
 /**
  * 체크인 뒤 자유 대화 {@code POST /chat/talk} (기획 {@code docs/기획/2026-11-15-몬스터-대화.md} B).
@@ -34,15 +41,22 @@ public class CheckinTalkService {
 	private final TalkWriter writer;
 	private final BusinessDates dates;
 	private final AiCallLimit callLimit;
+	private final JsonMapper json;
 
 	CheckinTalkService(HabitService habits, MonsterService monsters, TalkWriter writer, BusinessDates dates,
-			AiCallLimit callLimit) {
+			AiCallLimit callLimit, JsonMapper json) {
+		this.json = json;
 		this.habits = habits;
 		this.monsters = monsters;
 		this.writer = writer;
 		this.dates = dates;
 		this.callLimit = callLimit;
 	}
+
+	/** 문제 분석용 임시 대화 기록 (logback-spring.xml의 talk-log 파일). 기본 꺼짐 — 로컬 프로필에서만 켠다. */
+	private static final Logger TALK_LOG = LoggerFactory.getLogger("talk-log");
+
+	private static final int LOG_HISTORY_LINES = 3;
 
 	public TalkWriter.Reply talk(long userId, TalkRequest req) {
 		LocalDate today = dates.requireToday(req.businessDate()); // 업무 날짜 (다르면 409)
@@ -63,7 +77,33 @@ public class CheckinTalkService {
 		if (!callLimit.tryUse(userId, today)) { // 해석과 같은 하루 한도 (ai.daily_call_count)
 			throw new ApiException(ErrorCode.AI_RATE_LIMITED);
 		}
-		return writer.write(new TalkWriter.Request(CheckinChatService.partnerOf(monsters, userId), message, history,
-				checked.isPresent(), todayHabits, CheckinChatService.memoryOf(habits, userId)));
+		Partner partner = CheckinChatService.partnerOf(monsters, userId);
+		TalkWriter.Reply reply = writer.write(new TalkWriter.Request(partner, message, history, checked.isPresent(),
+				todayHabits, CheckinChatService.memoryOf(habits, userId)));
+		logTurn(userId, partner, message, history, reply);
+		return reply;
+	}
+
+	/** 한 턴을 JSON 한 줄로. 사용자 번호만 남기고 이름 · 이메일은 남기지 않는다. 기록 실패가 대화를 막지 않게 한다. */
+	private void logTurn(long userId, Partner partner, String message, List<HistoryLine> history, TalkWriter.Reply reply) {
+		if (!TALK_LOG.isInfoEnabled()) {
+			return;
+		}
+		try {
+			Map<String, Object> line = new LinkedHashMap<>();
+			line.put("userId", userId);
+			line.put("species", partner == null ? null : partner.speciesCode());
+			line.put("tier", partner == null ? null : partner.affectionTier());
+			line.put("before", history.subList(Math.max(0, history.size() - LOG_HISTORY_LINES), history.size()).stream()
+				.map(h -> h.role() + ": " + h.text()).toList());
+			line.put("user", message);
+			line.put("reply", reply.reply());
+			line.put("source", reply.source());
+			line.put("safety", reply.safety());
+			TALK_LOG.info(json.writeValueAsString(line));
+		}
+		catch (RuntimeException e) {
+			// 기록은 덤이다 — 실패해도 대답은 그대로 간다
+		}
 	}
 }

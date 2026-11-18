@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  자유 대화 기록용 임시 로그 (말투 문제를 분석하는 동안만). 로거 이름 talk-log → logs/talk.log, 14일 보관.
+  기본은 꺼짐(OFF) — 로컬 프로필(application-local.properties)에서만 app.talk-log.level=INFO로 켠다.
+  다른 로그는 스프링 기본(콘솔)과 같다.
+-->
+<configuration>
+	<include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+	<include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
+
+	<springProperty scope="context" name="TALK_LOG_LEVEL" source="app.talk-log.level" defaultValue="OFF"/>
+	<springProperty scope="context" name="TALK_LOG_DIR" source="app.talk-log.dir" defaultValue="logs"/>
+
+	<appender name="TALK_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+		<file>${TALK_LOG_DIR}/talk.log</file>
+		<rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+			<fileNamePattern>${TALK_LOG_DIR}/talk.%d{yyyy-MM-dd}.log</fileNamePattern>
+			<maxHistory>14</maxHistory>
+		</rollingPolicy>
+		<encoder>
+			<pattern>%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} %msg%n</pattern>
+			<charset>UTF-8</charset>
+		</encoder>
+	</appender>
+
+	<!-- additivity=false: 대화 원문이 콘솔 · 다른 로그로 새지 않게 -->
+	<logger name="talk-log" level="${TALK_LOG_LEVEL}" additivity="false">
+		<appender-ref ref="TALK_FILE"/>
+	</logger>
+
+	<root level="INFO">
+		<appender-ref ref="CONSOLE"/>
+	</root>
+</configuration>

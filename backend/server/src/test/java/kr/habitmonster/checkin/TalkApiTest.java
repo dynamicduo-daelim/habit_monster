@@ -205,6 +205,29 @@ class TalkApiTest extends PostgresTest {
 		assertThat(callCount("t6@habit.kr")).isZero(); // 거절된 요청은 세지 않는다
 	}
 
+	@Test
+	void 대답은_200자까지_받고_넘으면_200자에서_자른다() throws Exception {
+		String a = onboardedUser("l1@habit.kr");
+		modelSays("가".repeat(150), false); // 예전 상한(120)을 넘어도 된다
+		talk(a, "안녕").andExpect(jsonPath("$.reply").value("가".repeat(150))).andExpect(jsonPath("$.source").value("LLM"));
+		modelSays("나".repeat(250), false);
+		talk(a, "안녕").andExpect(jsonPath("$.reply").value("나".repeat(200)));
+	}
+
+	@Test
+	void 대화_규칙이_프롬프트에_들어간다_반복_금지_구체적_답_위기_신호_범위() throws Exception {
+		String a = onboardedUser("l2@habit.kr");
+		modelSays("응!", false);
+		talk(a, "안녕").andExpect(status().isOk());
+		assertThat(lastSystemPrompt()).contains("200자 이내")
+			.contains("반복하지 않는다") // 앞 대화의 위로 · 조언 · 말버릇
+			.contains("거절하거나 항의한 방법")
+			.contains("구체적으로 세 문장까지")
+			.contains("화남 · 속상함 · 다툼 · 피곤함은 위기 신호가 아니다")
+			.contains("'내'와 '네'")
+			.contains("인사말 말버릇은 대화 첫 턴에만");
+	}
+
 	// ---------- C. 기억 ----------
 
 	@Test
