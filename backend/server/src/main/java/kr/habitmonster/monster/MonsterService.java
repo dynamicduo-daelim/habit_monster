@@ -21,6 +21,7 @@ import kr.habitmonster.shop.ShopService;
 import kr.habitmonster.shop.ShopService.Consumed;
 import kr.habitmonster.monster.MonsterRepository.SpeciesRow;
 
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -67,13 +68,16 @@ public class MonsterService {
 	private final BusinessDates dates;
 	private final Dice dice;
 	private final ShopService shop;
+	private final ApplicationEventPublisher events;
 
-	MonsterService(MonsterRepository monsters, BalanceConfig config, BusinessDates dates, Dice dice, ShopService shop) {
+	MonsterService(MonsterRepository monsters, BalanceConfig config, BusinessDates dates, Dice dice, ShopService shop,
+			ApplicationEventPublisher events) {
 		this.monsters = monsters;
 		this.config = config;
 		this.dates = dates;
 		this.dice = dice;
 		this.shop = shop;
+		this.events = events;
 	}
 
 	// ---------- 조회 (3-2) ----------
@@ -389,12 +393,14 @@ public class MonsterService {
 		monsters.lockMonsterUser(userId);
 		MonsterRow m = mine(userId, userMonsterId);
 		int gain = Math.max(0, Math.min(step, config.affectionMax() - m.affection()));
-		if (!monsters.insertAffectionAction(m.userMonsterId(), dates.today(), action, gain)) {
+		LocalDate today = dates.today();
+		if (!monsters.insertAffectionAction(m.userMonsterId(), today, action, gain)) {
 			if ("DRAG".equals(action)) {
 				return new AffectionResult(0, m.affection(), config.affectionTier(m.affection()));
 			}
 			throw new ApiException(ErrorCode.ALREADY_DONE_TODAY);
 		}
+		events.publishEvent(new AffectionGiven(userId, m.userMonsterId(), action, today)); // 기록된 것만 (퀘스트, D-85)
 		int affection = m.affection() + gain;
 		if (gain > 0) {
 			monsters.updateAffection(m.userMonsterId(), affection);
@@ -402,13 +408,17 @@ public class MonsterService {
 		return new AffectionResult(gain, affection, config.affectionTier(affection));
 	}
 
-	/** 말 걸기: 호감도 단계에 맞는 대사 중 하나 (랜덤은 {@link Dice}). */
-	@Transactional(readOnly = true)
+	/**
+	 * 말 걸기: 호감도 단계에 맞는 대사 중 하나 (랜덤은 {@link Dice}). 명세 v8부터 퀘스트 {@code DAILY_TALK}이 이 결과로 진행되므로
+	 * 읽기 전용이 아닌 트랜잭션이다 (GET이지만 기록이 남는 예외 — 결정 D-87).
+	 */
+	@Transactional
 	public Line line(long userId, long userMonsterId) {
 		MonsterRow m = mine(userId, userMonsterId);
 		String tier = config.affectionTier(m.affection());
 		List<String> lines = monsters.lines(m.speciesId(), tier);
 		String line = lines.isEmpty() ? "..." : lines.get(Math.min(lines.size() - 1, (int) (dice.roll() * lines.size())));
+		events.publishEvent(new MonsterTalked(userId, m.userMonsterId(), dates.today()));
 		return new Line(tier, line);
 	}
 

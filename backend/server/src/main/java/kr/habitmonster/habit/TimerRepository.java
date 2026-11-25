@@ -61,6 +61,14 @@ class TimerRepository {
 			.params(userId, habitId).query(TimerHabit.class).optional();
 	}
 
+	/** 진행 중(ACTIVE)이고 타이머를 쓸 수 있는 측정 항목(분 · TARGET_RATIO — {@code TimerService.isTimerMeasure})인 습관이 있는지. */
+	boolean hasActiveTimerHabit(long userId) {
+		return db.sql("""
+			select exists (select 1 from habit.habit h join habit.measure_type m on m.id = h.measure_type_id
+			                where h.user_id = ? and h.status = 'ACTIVE' and m.unit = '분' and m.scoring_mode = 'TARGET_RATIO')""")
+			.param(userId).query(Boolean.class).single();
+	}
+
 	Optional<TimerRow> timer(long userId, long timerId) {
 		return db.sql("select " + COLUMNS + " from habit.habit_timer where user_id = ? and id = ?")
 			.params(userId, timerId).query(TimerRow.class).optional();
