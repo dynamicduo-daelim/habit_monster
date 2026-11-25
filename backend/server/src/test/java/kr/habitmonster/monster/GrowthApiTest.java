@@ -200,6 +200,7 @@ class GrowthApiTest extends PostgresTest {
 	void 끌기는_하루_한_번_오르고_두_번째는_오류없이_gain_0() throws Exception {
 		String access = onboardedUser(E);
 		long monkey = monster(E, 1);
+		as(access, get("/monsters/" + monkey)).andExpect(jsonPath("$.todayActions.drag").value(false)); // 끌기 전
 		act(access, monkey, "DRAG").andExpect(status().isOk()) // 시작 5 + 1
 			.andExpect(jsonPath("$.gain").value(1))
 			.andExpect(jsonPath("$.affection").value(6))
@@ -220,6 +221,36 @@ class GrowthApiTest extends PostgresTest {
 
 		doReturn(dates.today().plusDays(1)).when(dates).today(); // 다음 날엔 다시
 		act(access, monkey, "DRAG").andExpect(status().isOk()).andExpect(jsonPath("$.gain").value(1));
+	}
+
+	@Test
+	void 동시에_두_번_끌어도_둘_다_200이고_한_번만_오름() throws Exception {
+		String access = onboardedUser(E);
+		long monkey = monster(E, 1);
+		CountDownLatch start = new CountDownLatch(1);
+		ExecutorService pool = Executors.newFixedThreadPool(2);
+		List<Future<int[]>> results = new ArrayList<>();
+		for (int i = 0; i < 2; i++) {
+			results.add(pool.submit(() -> {
+				start.await();
+				var res = act(access, monkey, "DRAG").andReturn().getResponse();
+				int gain = res.getStatus() == 200 ? (int) com.jayway.jsonpath.JsonPath.read(res.getContentAsString(), "$.gain") : -1;
+				return new int[] { res.getStatus(), gain };
+			}));
+		}
+		start.countDown();
+		List<Integer> statuses = new ArrayList<>();
+		List<Integer> gains = new ArrayList<>();
+		for (Future<int[]> f : results) {
+			int[] r = f.get(20, TimeUnit.SECONDS);
+			statuses.add(r[0]);
+			gains.add(r[1]);
+		}
+		pool.shutdown();
+
+		assertThat(statuses).containsExactly(200, 200); // 오류 없이 (D-86)
+		assertThat(gains).containsExactlyInAnyOrder(1, 0); // 하나만 오름
+		assertThat(affection(monkey)).isEqualTo(6); // 시작 5 + 끌기 1 (한 번만)
 	}
 
 	@Test
