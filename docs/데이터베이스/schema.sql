@@ -28,6 +28,8 @@
 --     기록은 끝난 날(business_date를 끝낼 때 다시 적음), 00시에 끊지 않음. 최대 timer_max_minutes(일시정지 뺀 경과)
 --   * ai.daily_call_count 새로: AI 해석 호출 수 (사용자 · 날짜 1행, 한도 ai_daily_call_limit). 대화 원문은 저장하지 않음
 --   * 헬스 연동(habit.health_daily)은 다음 단계 — 이 판에 넣지 않음 (제안서 DB 4장)
+-- v1.10 2026-11-25 (API 명세 v7 — 필드 끌기 호감도, 결정 D-46 · D-86, 제안서 docs/제안/2026-11-25-DRAG-호감도.md)
+--   * monster.affection_action.action_type에 DRAG (몬스터마다 하루 1회 — 기존 기본 키). 간식 FEED는 이 판에 넣지 않음
 -- 설계 문서: 04_논리물리모델.md (v1.7 반영 전)
 -- MVP 밖 구성요소(결제, 수치 변경 이력, AI 기억·호출 로그)는 schema_later.sql (이 파일 다음에 적용)
 --
@@ -778,7 +780,7 @@ CREATE TRIGGER tg_encounter_no_reopen BEFORE UPDATE ON monster.explore_log
 CREATE TABLE monster.affection_action (
   user_monster_id  BIGINT       NOT NULL REFERENCES monster.user_monster(id),
   action_date      DATE         NOT NULL,
-  action_type      TEXT         NOT NULL CHECK (action_type IN ('PET','PLAY')),
+  action_type      TEXT         NOT NULL CHECK (action_type IN ('PET','PLAY','DRAG')),   -- v1.10 DRAG: 필드 끌기
   gain             SMALLINT     NOT NULL CHECK (gain >= 0),   -- 최대치면 0
   acted_at         TIMESTAMPTZ  NOT NULL DEFAULT now(),
   PRIMARY KEY (user_monster_id, action_date, action_type)    -- 하루 1회 (BR-59)

@@ -192,7 +192,76 @@ class GrowthApiTest extends PostgresTest {
 	@Test
 	void 다른_행동이면_400() throws Exception {
 		String access = onboardedUser(E);
-		act(access, monster(E, 1), "DRAG").andExpect(status().isBadRequest()); // 필드 끌기는 명세 · DB에 없음 (D-46)
+		act(access, monster(E, 1), "FEED").andExpect(status().isBadRequest()); // 간식은 아직 명세 · DB에 없음 (v1.10에서 뺌)
+		act(access, monster(E, 1), "drag").andExpect(status().isBadRequest()); // 대문자만
+	}
+
+	@Test
+	void 끌기는_하루_한_번_오르고_두_번째는_오류없이_gain_0() throws Exception {
+		String access = onboardedUser(E);
+		long monkey = monster(E, 1);
+		as(access, get("/monsters/" + monkey)).andExpect(jsonPath("$.todayActions.drag").value(false)); // 끌기 전
+		act(access, monkey, "DRAG").andExpect(status().isOk()) // 시작 5 + 1
+			.andExpect(jsonPath("$.gain").value(1))
+			.andExpect(jsonPath("$.affection").value(6))
+			.andExpect(jsonPath("$.affectionTier").value("LOW"));
+		act(access, monkey, "DRAG").andExpect(status().isOk()) // 409가 아니라 200 (D-86)
+			.andExpect(jsonPath("$.gain").value(0))
+			.andExpect(jsonPath("$.affection").value(6))
+			.andExpect(jsonPath("$.affectionTier").value("LOW"));
+		as(access, get("/monsters/" + monkey)).andExpect(jsonPath("$.todayActions.drag").value(true))
+			.andExpect(jsonPath("$.todayActions.pet").value(false));
+		assertThat(affection(monkey)).isEqualTo(6);
+		assertThat(jdbc.queryForObject(
+				"select count(*) from monster.affection_action where user_monster_id = ? and action_type = 'DRAG'",
+				Integer.class, monkey)).isEqualTo(1); // 기록도 하루 1줄
+
+		act(access, monkey, "PET").andExpect(status().isOk()).andExpect(jsonPath("$.gain").value(1)); // 끌기와 별개
+		act(access, monster(E, 6), "DRAG").andExpect(status().isOk()).andExpect(jsonPath("$.gain").value(1)); // 몬스터마다
+
+		doReturn(dates.today().plusDays(1)).when(dates).today(); // 다음 날엔 다시
+		act(access, monkey, "DRAG").andExpect(status().isOk()).andExpect(jsonPath("$.gain").value(1));
+	}
+
+	@Test
+	void 동시에_두_번_끌어도_둘_다_200이고_한_번만_오름() throws Exception {
+		String access = onboardedUser(E);
+		long monkey = monster(E, 1);
+		CountDownLatch start = new CountDownLatch(1);
+		ExecutorService pool = Executors.newFixedThreadPool(2);
+		List<Future<int[]>> results = new ArrayList<>();
+		for (int i = 0; i < 2; i++) {
+			results.add(pool.submit(() -> {
+				start.await();
+				var res = act(access, monkey, "DRAG").andReturn().getResponse();
+				int gain = res.getStatus() == 200 ? (int) com.jayway.jsonpath.JsonPath.read(res.getContentAsString(), "$.gain") : -1;
+				return new int[] { res.getStatus(), gain };
+			}));
+		}
+		start.countDown();
+		List<Integer> statuses = new ArrayList<>();
+		List<Integer> gains = new ArrayList<>();
+		for (Future<int[]> f : results) {
+			int[] r = f.get(20, TimeUnit.SECONDS);
+			statuses.add(r[0]);
+			gains.add(r[1]);
+		}
+		pool.shutdown();
+
+		assertThat(statuses).containsExactly(200, 200); // 오류 없이 (D-86)
+		assertThat(gains).containsExactlyInAnyOrder(1, 0); // 하나만 오름
+		assertThat(affection(monkey)).isEqualTo(6); // 시작 5 + 끌기 1 (한 번만)
+	}
+
+	@Test
+	void 호감도가_최대면_끌기도_gain_0() throws Exception {
+		String access = onboardedUser(E);
+		long monkey = monster(E, 1);
+		jdbc.update("update monster.user_monster set affection = 100 where id = ?", monkey);
+		act(access, monkey, "DRAG").andExpect(status().isOk())
+			.andExpect(jsonPath("$.gain").value(0))
+			.andExpect(jsonPath("$.affection").value(100))
+			.andExpect(jsonPath("$.affectionTier").value("HIGH"));
 	}
 
 	@Test
@@ -281,6 +350,7 @@ class GrowthApiTest extends PostgresTest {
 		potions("b@habit.kr", "POTION_S", 1);
 		feed(other, monkey, "POTION_S").andExpect(status().isNotFound());
 		act(other, monkey, "PET").andExpect(status().isNotFound());
+		act(other, monkey, "DRAG").andExpect(status().isNotFound()); // 끌기도 200 gain 0이 아니라 404
 		as(other, get("/monsters/" + monkey + "/line")).andExpect(status().isNotFound());
 		move(other, monkey, "BAG").andExpect(status().isNotFound());
 		json(other, put("/me/partner"), "{\"userMonsterId\": " + monkey + "}").andExpect(status().isNotFound());

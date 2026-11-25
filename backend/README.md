@@ -92,7 +92,7 @@
 | GET | /inventory | `{items[{itemCode, name, quantity}]}` — 0개는 뺌 (D-39) |
 | POST | /shop/purchases | **Idempotency-Key 필수**. 201 `{purchaseId, totalPrice, gold, itemCode, quantity}` (`quantity` = 산 뒤 가방 개수). 가격은 서버의 상점 가격. 400 수량 1 ~ 99 밖 · 없는 아이템, 422 `NOT_ENOUGH_GOLD` (아무것도 안 남음) |
 | POST | /monsters/{id}/feed | **Idempotency-Key 필수**. 200 `{expGained, levelBefore, levelAfter, stageBefore, stageAfter, evolved, remainingQuantity}`. 400 물약이 아닌 코드, 404 남의 몬스터, 422 `MAX_LEVEL` · `NO_ITEM` |
-| POST | /monsters/{id}/affection | `{action: PET \| PLAY}` → 200 `{gain, affection, affectionTier}` (최대면 gain 0). 하루 1번씩 — 409 `ALREADY_DONE_TODAY`. 키 없음(명세). DRAG는 400 (D-46) |
+| POST | /monsters/{id}/affection | `{action: PET \| PLAY \| DRAG}` → 200 `{gain, affection, affectionTier}` (최대면 gain 0). 하루 1번씩 — PET · PLAY는 409 `ALREADY_DONE_TODAY`, **DRAG는 200 gain 0** (명세 v7 · D-86). 키 없음(명세) |
 | GET | /monsters/{id}/line | `{affectionTier, line}` — 호감도 단계 대사 중 하나 |
 | PATCH | /monsters/{id}/location | `{location: FIELD \| BAG}` → `{userMonsterId, location, fieldCount}`. 422 `FIELD_LIMIT` (필드 1마리 넣기 · 5마리 꺼내기) |
 | PUT | /me/partner | `{userMonsterId}` → `{partnerMonsterId}`. 가방에 있어도 됨 |

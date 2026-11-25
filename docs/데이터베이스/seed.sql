@@ -6,6 +6,7 @@
 --                  6개 카테고리 모두 스타터, 대사 전부 적재
 -- v1.8 보충 2026-10-28: 목표 기간 일수 weekly_goal_days 7 · monthly_goal_days 30 (등록한 날부터, API 명세 v5 보충 10-28)
 -- v1.9 2026-11-04: 자기보고 상한 · 경험치 계수 (D-62) · 타이머 최대 분 · AI 호출 한도 · 확신 기준 (API 명세 v6)
+-- v1.10 2026-11-25: 필드 끌기 호감도 affection_drag_gain (API 명세 v7, D-86)
 -- =====================================================================
 
 -- 카테고리 (HTML CATS)
@@ -400,6 +401,7 @@ INSERT INTO config.balance_config (key, value, description) VALUES
  ('affection_tiers',            '{"MID":30,"HIGH":70}', '호감도 단계 하한'),
  ('affection_pet_gain',         '1',          '쓰다듬기 (하루 1회)'),
  ('affection_play_gain',        '2',          '놀아주기 (하루 1회)'),
+ ('affection_drag_gain',        '1',          '필드에서 끌어 옮기기 (몬스터마다 하루 1회) (v1.10)'),
  ('starter_affection',          '5',          '초기 몬스터 시작 호감도 (카테고리마다 1마리)'),
  ('freeze_after_days',          '7',          '동결 전환 미접속 일수 (동결 시 하락 대상은 I-07 미결)'),
  ('idempotency_ttl_hours',      '24',         '중복 요청 방지 키 보관 시간 (v1.7)'),

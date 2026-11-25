@@ -45,7 +45,7 @@ public class MonsterService {
 			String imageKey, int displayHeight, String facing, String location, boolean isPartner) {
 	}
 
-	public record TodayActions(boolean pet, boolean play) {
+	public record TodayActions(boolean pet, boolean play, boolean drag) {
 	}
 
 	/**
@@ -97,7 +97,8 @@ public class MonsterService {
 		return new MonsterDetail(m.userMonsterId(), m.speciesId(), m.name(), m.code(), m.categoryCode(),
 				config.stageOf(m.level()), m.rarity(), m.level(), expInLevel, max ? null : perLevel,
 				config.nextEvolutionLevel(m.level()), m.affection(), config.affectionMax(), config.affectionTier(m.affection()),
-				new TodayActions(actions.contains("PET"), actions.contains("PLAY")), m.location(), m.isPartner());
+				new TodayActions(actions.contains("PET"), actions.contains("PLAY"), actions.contains("DRAG")), m.location(),
+				m.isPartner());
 	}
 
 	@Transactional(readOnly = true)
@@ -367,22 +368,31 @@ public class MonsterService {
 	}
 
 	/**
-	 * 쓰다듬기(PET) · 놀아주기(PLAY) — 몬스터마다 하루 1번씩. 오른 만큼(최대 {@code affection_max})을 기록한다.
-	 * 필드 끌기(앱의 D-20)는 명세 · DB에 없어 받지 않는다 (결정 D-46).
+	 * 쓰다듬기(PET) · 놀아주기(PLAY) · 필드 끌기(DRAG, 명세 v7) — 몬스터마다 하루 1번씩. 오른 만큼(최대 {@code affection_max})을
+	 * 기록한다. DRAG는 홈에서 자주 하는 평범한 동작이라, 오늘 이미 끌었으면 409 대신 200 {@code gain 0}을 돌려준다 (D-86).
 	 *
-	 * @throws ApiException 400 다른 행동, 404 남의 몬스터, 409 {@code ALREADY_DONE_TODAY}
+	 * @throws ApiException 400 다른 행동, 404 남의 몬스터, 409 {@code ALREADY_DONE_TODAY}(PET · PLAY만)
 	 */
 	@Transactional
 	public AffectionResult affection(long userId, long userMonsterId, AffectionRequest req) {
 		String action = req.action();
-		if (!"PET".equals(action) && !"PLAY".equals(action)) {
+		int step;
+		if ("PET".equals(action)) {
+			step = config.affectionPetGain();
+		} else if ("PLAY".equals(action)) {
+			step = config.affectionPlayGain();
+		} else if ("DRAG".equals(action)) {
+			step = config.affectionDragGain();
+		} else {
 			throw new ApiException(ErrorCode.INVALID_REQUEST);
 		}
 		monsters.lockMonsterUser(userId);
 		MonsterRow m = mine(userId, userMonsterId);
-		int step = action.equals("PET") ? config.affectionPetGain() : config.affectionPlayGain();
 		int gain = Math.max(0, Math.min(step, config.affectionMax() - m.affection()));
 		if (!monsters.insertAffectionAction(m.userMonsterId(), dates.today(), action, gain)) {
+			if ("DRAG".equals(action)) {
+				return new AffectionResult(0, m.affection(), config.affectionTier(m.affection()));
+			}
 			throw new ApiException(ErrorCode.ALREADY_DONE_TODAY);
 		}
 		int affection = m.affection() + gain;

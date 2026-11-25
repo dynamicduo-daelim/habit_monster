@@ -35,7 +35,8 @@ public class BalanceConfig {
 		"explore_daily_free", "explore_daily_all_missed", "explore_miss_rate", "explore_rarity_weight",
 		"explore_unowned_multiplier", "duplicate_gold", "capture_rate",
 		"monster_exp_per_level", "monster_max_level", "evolve_levels", "field_max", "field_min",
-		"affection_max", "affection_tiers", "affection_pet_gain", "affection_play_gain", "starter_affection",
+		"affection_max", "affection_tiers", "affection_pet_gain", "affection_play_gain", "affection_drag_gain",
+		"starter_affection",
 		"timer_max_minutes", "self_report_max_score", "exp_coef_ratio", "exp_coef_range", "exp_coef_binary",
 		"exp_coef_verified", "ai_daily_call_limit", "ai_min_confidence");
 
@@ -149,6 +150,8 @@ public class BalanceConfig {
 	public int affectionMax() { return integer("affection_max"); }
 	public int affectionPetGain() { return integer("affection_pet_gain"); }
 	public int affectionPlayGain() { return integer("affection_play_gain"); }
+	/** 필드 끌기 (몬스터마다 하루 1회, v1.10 · D-86). */
+	public int affectionDragGain() { return integer("affection_drag_gain"); }
 	public int starterAffection() { return integer("starter_affection"); }
 
 	/** 진화 단계: 0 기본 · 1 1차 · 2 최종 = 넘은 진화 레벨 수. */
