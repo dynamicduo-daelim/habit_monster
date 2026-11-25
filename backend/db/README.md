@@ -1,6 +1,22 @@
 # DB 공식 설계 메모 — 앱 · 서버에 맞추기
 
-## v1.9 (2026-11-04) — 지금 기준 (API 명세 v6 — AI 챗봇 체크인 · 습관 타이머, D-62 · D-63)
+## v1.10 (2026-11-25) — 지금 기준 (API 명세 v7 — 필드 끌기 호감도 DRAG, D-46 · D-86)
+
+윤서 요청(11-25)으로 Claude가 썼다. 근거는 `docs/제안/2026-11-25-DRAG-호감도.md` · 퀘스트 1단계(`docs/quest/1-DRAG.md`).
+
+**바뀐 것**
+- `monster.affection_action.action_type`에 `DRAG` (몬스터마다 하루 1회 — 기존 기본 키가 막음). 간식 `FEED`는 이 판에 넣지 않음
+- 시드 설정 키 `affection_drag_gain` 1
+- `verify.sql` 3개 (DRAG 1회 · 같은 날 2회 불가 · S-29 설정값)
+
+**검증 (11-25)**
+- 임시 PostgreSQL 16에서 `schema → seed → schema_later → verify → verify_later` **200개 모두 통과** (197 + 새 3)
+- **v1.9 스키마 · 시드로 만든 DB에 `migrate-v1.10.sql`을 두 번 실행** → `schema_later` → 새 `verify` · `verify_later` 200개 통과. (`schema_later`를 마이그레이션보다 먼저 적용하면 L-B1 "도입 시점 값 = 이력 출발점"이 1건 차이로 FAIL — 마이그레이션이 넣은 키가 출발점 이후라서. 실제 DB에는 `schema_later`가 없다)
+- 서버 테스트 215개 통과 (새 키는 구현 전이라 `BalanceConfig.NOT_USED_BY_SERVER`에 둠) → 서버 구현(11-25)에서 `REQUIRED`로 옮김, 217개 통과
+
+**이미 만든 DB에 적용** — 로컬 Docker DB, 배포한 Supabase DB 둘 다 `backend/db/migrate-v1.10.sql`을 한 번 실행 (데이터는 그대로, 두 번 실행해도 안전). **서버 배포보다 먼저** (서버 구현 뒤에는 키가 없으면 서버가 뜨지 않는다). 실행 전에 제약 이름이 `affection_action_action_type_check`인지 확인.
+
+## v1.9 (2026-11-04) — (API 명세 v6 — AI 챗봇 체크인 · 습관 타이머, D-62 · D-63)
 
 윤서 요청(11-02)으로 Claude가 썼다. 근거는 `docs/제안/2026-10-30-AI챗봇-DB변경.md` 3차 검토본.
 

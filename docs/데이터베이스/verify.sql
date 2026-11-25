@@ -11,6 +11,7 @@
 --       S-2를 "스타터 없는 카테고리 0개" 검사로 (6개 카테고리 모두 스타터)
 -- v1.9: 체크인 근거(evidence · rewarded_evidence 불변 · score_capped), 습관 타이머(habit_timer — 습관마다 하나 · 도는 것은
 --       사용자당 하나 · 상태-시각 일치 · 끝난 날 기록), AI 호출 수(daily_call_count), 설정 키 8개
+-- v1.10: 끌기(DRAG) 하루 1회 · 설정 키 affection_drag_gain
 -- =====================================================================
 CREATE TEMP TABLE _result (id text, ok boolean, note text);
 
@@ -591,6 +592,10 @@ SELECT pg_temp.expect_ok  ('BR-59 쓰다듬기 1회',
   $$INSERT INTO monster.affection_action SELECT id,'2026-10-05','PET',2,now() FROM monster.user_monster WHERE user_id = 1 AND species_id = 1 AND acquired_via = 'STARTER'$$);
 SELECT pg_temp.expect_fail('BR-59 같은 날 쓰다듬기 2회 불가',
   $$INSERT INTO monster.affection_action SELECT id,'2026-10-05','PET',2,now() FROM monster.user_monster WHERE user_id = 1 AND species_id = 1 AND acquired_via = 'STARTER'$$);
+SELECT pg_temp.expect_ok  ('v1.10 끌기(DRAG) 1회 — 같은 날 쓰다듬기와 별개',
+  $$INSERT INTO monster.affection_action SELECT id,'2026-10-05','DRAG',1,now() FROM monster.user_monster WHERE user_id = 1 AND species_id = 1 AND acquired_via = 'STARTER'$$);
+SELECT pg_temp.expect_fail('v1.10 같은 날 끌기 2회 불가 (하루 1회)',
+  $$INSERT INTO monster.affection_action SELECT id,'2026-10-05','DRAG',1,now() FROM monster.user_monster WHERE user_id = 1 AND species_id = 1 AND acquired_via = 'STARTER'$$);
 SELECT pg_temp.expect_ok  ('먹이 = 가방 소모 + 성장 기록 (같은 소모 키, 한 트랜잭션)',
   $$INSERT INTO shop.item_consumption (user_id, item_code, quantity, consumer_key) VALUES (1,'POTION_S',1,'FEED:f1');
     UPDATE shop.inventory SET quantity = quantity - 1 WHERE user_id = 1 AND item_code = 'POTION_S';
@@ -751,6 +756,11 @@ SELECT 'S-28 설정값 v1.9 (상한 20 · 계수 1.0/0.9/0.8 · 확인됨 1.2 ·
    AND (SELECT value FROM config.balance_config WHERE key = 'ai_min_confidence') = '0.6'::jsonb
    AND (SELECT (value #>> '{}')::numeric FROM config.balance_config WHERE key = 'self_report_max_score')
        <= (SELECT (value #>> '{}')::numeric FROM config.balance_config WHERE key = 'score_max'), '';
+
+-- S-29 (v1.10) 설정 키
+INSERT INTO _result
+SELECT 'S-29 설정값 v1.10 (끌기 호감도 1)',
+       (SELECT value FROM config.balance_config WHERE key = 'affection_drag_gain') = '1'::jsonb, '';
 
 -- ---------- api: 중복 요청 방지 키 (v1.7) ----------
 SELECT pg_temp.expect_ok  ('v1.7 키 등록 (처리 중)',

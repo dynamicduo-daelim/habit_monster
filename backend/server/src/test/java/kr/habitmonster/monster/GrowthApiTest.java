@@ -192,7 +192,45 @@ class GrowthApiTest extends PostgresTest {
 	@Test
 	void 다른_행동이면_400() throws Exception {
 		String access = onboardedUser(E);
-		act(access, monster(E, 1), "DRAG").andExpect(status().isBadRequest()); // 필드 끌기는 명세 · DB에 없음 (D-46)
+		act(access, monster(E, 1), "FEED").andExpect(status().isBadRequest()); // 간식은 아직 명세 · DB에 없음 (v1.10에서 뺌)
+		act(access, monster(E, 1), "drag").andExpect(status().isBadRequest()); // 대문자만
+	}
+
+	@Test
+	void 끌기는_하루_한_번_오르고_두_번째는_오류없이_gain_0() throws Exception {
+		String access = onboardedUser(E);
+		long monkey = monster(E, 1);
+		act(access, monkey, "DRAG").andExpect(status().isOk()) // 시작 5 + 1
+			.andExpect(jsonPath("$.gain").value(1))
+			.andExpect(jsonPath("$.affection").value(6))
+			.andExpect(jsonPath("$.affectionTier").value("LOW"));
+		act(access, monkey, "DRAG").andExpect(status().isOk()) // 409가 아니라 200 (D-86)
+			.andExpect(jsonPath("$.gain").value(0))
+			.andExpect(jsonPath("$.affection").value(6))
+			.andExpect(jsonPath("$.affectionTier").value("LOW"));
+		as(access, get("/monsters/" + monkey)).andExpect(jsonPath("$.todayActions.drag").value(true))
+			.andExpect(jsonPath("$.todayActions.pet").value(false));
+		assertThat(affection(monkey)).isEqualTo(6);
+		assertThat(jdbc.queryForObject(
+				"select count(*) from monster.affection_action where user_monster_id = ? and action_type = 'DRAG'",
+				Integer.class, monkey)).isEqualTo(1); // 기록도 하루 1줄
+
+		act(access, monkey, "PET").andExpect(status().isOk()).andExpect(jsonPath("$.gain").value(1)); // 끌기와 별개
+		act(access, monster(E, 6), "DRAG").andExpect(status().isOk()).andExpect(jsonPath("$.gain").value(1)); // 몬스터마다
+
+		doReturn(dates.today().plusDays(1)).when(dates).today(); // 다음 날엔 다시
+		act(access, monkey, "DRAG").andExpect(status().isOk()).andExpect(jsonPath("$.gain").value(1));
+	}
+
+	@Test
+	void 호감도가_최대면_끌기도_gain_0() throws Exception {
+		String access = onboardedUser(E);
+		long monkey = monster(E, 1);
+		jdbc.update("update monster.user_monster set affection = 100 where id = ?", monkey);
+		act(access, monkey, "DRAG").andExpect(status().isOk())
+			.andExpect(jsonPath("$.gain").value(0))
+			.andExpect(jsonPath("$.affection").value(100))
+			.andExpect(jsonPath("$.affectionTier").value("HIGH"));
 	}
 
 	@Test
@@ -281,6 +319,7 @@ class GrowthApiTest extends PostgresTest {
 		potions("b@habit.kr", "POTION_S", 1);
 		feed(other, monkey, "POTION_S").andExpect(status().isNotFound());
 		act(other, monkey, "PET").andExpect(status().isNotFound());
+		act(other, monkey, "DRAG").andExpect(status().isNotFound()); // 끌기도 200 gain 0이 아니라 404
 		as(other, get("/monsters/" + monkey + "/line")).andExpect(status().isNotFound());
 		move(other, monkey, "BAG").andExpect(status().isNotFound());
 		json(other, put("/me/partner"), "{\"userMonsterId\": " + monkey + "}").andExpect(status().isNotFound());
