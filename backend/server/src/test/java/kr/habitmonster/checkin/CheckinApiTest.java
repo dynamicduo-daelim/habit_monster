@@ -2,6 +2,7 @@ package kr.habitmonster.checkin;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
+import static org.mockito.Mockito.doReturn;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -20,20 +21,34 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
 import kr.habitmonster.common.BusinessDates;
+import kr.habitmonster.config.BalanceConfig;
 import kr.habitmonster.idempotency.IdempotencyFilter;
 import kr.habitmonster.support.PostgresTest;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
-/** 체크인 (API 명세 v5 "5. 챗봇 — 체크인", 3-3단계) — 명세 예시를 그대로 테스트로. */
+/**
+ * 체크인 (API 명세 v5 "5. 챗봇 — 체크인", 3-3단계) — 명세 예시를 그대로 테스트로.
+ * 체크인 보상만 정확히 보려고 <b>퀘스트는 끈다</b> (v8부터 첫 제출이면 "오늘의 기록" 3G가 더해짐 — 그 연결은 {@code QuestApiTest}).
+ */
 class CheckinApiTest extends PostgresTest {
 
 	@Autowired
 	BusinessDates dates;
+
+	@MockitoSpyBean
+	BalanceConfig config;
+
+	@BeforeEach
+	void questsOff() {
+		doReturn(false).when(config).questEnabled();
+	}
 
 	/** 명세 예시의 습관 4개: 스쿼트(횟수 3) · 걷기(30분) · 전공 공부(60분, 기간을 채우는 습관) · 영양제(O/X). */
 	static final String SPEC_ONBOARDING = """

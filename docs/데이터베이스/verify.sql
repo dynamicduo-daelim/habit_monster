@@ -12,6 +12,7 @@
 -- v1.9: 체크인 근거(evidence · rewarded_evidence 불변 · score_capped), 습관 타이머(habit_timer — 습관마다 하나 · 도는 것은
 --       사용자당 하나 · 상태-시각 일치 · 끝난 날 기록), AI 호출 수(daily_call_count), 설정 키 8개
 -- v1.10: 끌기(DRAG) 하루 1회 · 설정 키 affection_drag_gain
+-- v1.11: 퀘스트 (user_quest 기간당 1행 · 진행도 ≤ 목표 · 완료-시각 일치 · 마스터 FK · QUEST_DAILY 적립 · quest 권한) · quest_enabled
 -- =====================================================================
 CREATE TEMP TABLE _result (id text, ok boolean, note text);
 
@@ -52,7 +53,9 @@ INSERT INTO _cross_fk_expected VALUES
  ('ai.checkin_dialogue','identity.users'), ('ai.checkin_dialogue','habit.checkin_submission'),
  ('api.idempotency_record','identity.users'),
  -- v1.9
- ('ai.daily_call_count','identity.users');
+ ('ai.daily_call_count','identity.users'),
+ -- v1.11
+ ('quest.user_quest','identity.users');
 -- schema_later.sql을 적용한 DB라면 그 블록의 FK도 허용 목록에 포함
 INSERT INTO _cross_fk_expected
 SELECT * FROM (VALUES
@@ -67,7 +70,7 @@ JOIN pg_class t ON t.oid = c.conrelid JOIN pg_namespace tn ON tn.oid = t.relname
 JOIN pg_class r ON r.oid = c.confrelid JOIN pg_namespace rn ON rn.oid = r.relnamespace
 WHERE c.contype = 'f' AND t.relnamespace <> r.relnamespace;
 INSERT INTO _result
-SELECT 'S-1 스키마 간 FK = 허용 목록과 일치 (MVP 19쌍, 나중 블록 포함 24쌍)',
+SELECT 'S-1 스키마 간 FK = 허용 목록과 일치 (MVP 21쌍, 나중 블록 포함 26쌍 — v1.11)',
        NOT EXISTS (SELECT * FROM _cross_fk_actual EXCEPT SELECT * FROM _cross_fk_expected)
        AND NOT EXISTS (SELECT * FROM _cross_fk_expected EXCEPT SELECT * FROM _cross_fk_actual),
        (SELECT count(*) FROM _cross_fk_actual) || '쌍';
@@ -762,6 +765,33 @@ INSERT INTO _result
 SELECT 'S-29 설정값 v1.10 (끌기 호감도 1)',
        (SELECT value FROM config.balance_config WHERE key = 'affection_drag_gain') = '1'::jsonb, '';
 
+-- ---------- v1.11 quest ----------
+SELECT pg_temp.expect_ok  ('v1.11 일일 퀘스트 행',
+  $$INSERT INTO quest.user_quest (user_id, period_start, quest_code, target, reward_gold) VALUES (1,'2026-10-05','DAILY_PET',1,1)$$);
+SELECT pg_temp.expect_fail('v1.11 같은 날 같은 퀘스트는 1행',
+  $$INSERT INTO quest.user_quest (user_id, period_start, quest_code, target, reward_gold) VALUES (1,'2026-10-05','DAILY_PET',1,1)$$);
+SELECT pg_temp.expect_fail('v1.11 없는 퀘스트 코드 불가',
+  $$INSERT INTO quest.user_quest (user_id, period_start, quest_code, target, reward_gold) VALUES (1,'2026-10-05','NOPE',1,1)$$);
+SELECT pg_temp.expect_fail('v1.11 진행도는 목표를 넘을 수 없음',
+  $$UPDATE quest.user_quest SET progress = 2 WHERE user_id = 1 AND quest_code = 'DAILY_PET'$$);
+SELECT pg_temp.expect_fail('v1.11 DONE이면 완료 시각 필수',
+  $$UPDATE quest.user_quest SET status = 'DONE', progress = 1 WHERE user_id = 1 AND quest_code = 'DAILY_PET'$$);
+SELECT pg_temp.expect_ok  ('v1.11 완료 + QUEST_DAILY 적립 (ref_id = user_quest.id)',
+  $$UPDATE quest.user_quest SET status = 'DONE', progress = 1, completed_at = now() WHERE user_id = 1 AND quest_code = 'DAILY_PET';
+    UPDATE wallet.wallet SET balance = balance + 1 WHERE user_id = 1;
+    INSERT INTO wallet.wallet_ledger (user_id, amount, balance_after, reason_code, ref_id)
+    SELECT 1, 1, w.balance, 'QUEST_DAILY', q.id::text FROM wallet.wallet w, quest.user_quest q
+    WHERE w.user_id = 1 AND q.user_id = 1 AND q.quest_code = 'DAILY_PET'$$);
+SELECT pg_temp.expect_fail('v1.11 같은 퀘스트 골드 두 번 불가 (원장 UNIQUE)',
+  $$INSERT INTO wallet.wallet_ledger (user_id, amount, balance_after, reason_code, ref_id)
+    SELECT 1, 1, w.balance + 1, 'QUEST_DAILY', q.id::text FROM wallet.wallet w, quest.user_quest q
+    WHERE w.user_id = 1 AND q.user_id = 1 AND q.quest_code = 'DAILY_PET'$$);
+INSERT INTO _result
+SELECT 'S-30 설정값 · 시드 v1.11 (quest_enabled true · 일일 퀘스트 4개, 보상 3/1/1/1)',
+       (SELECT value FROM config.balance_config WHERE key = 'quest_enabled') = 'true'::jsonb
+   AND (SELECT string_agg(code || ':' || reward_gold, ',' ORDER BY sort_order) FROM quest.quest_def WHERE kind = 'DAILY' AND is_active)
+       = 'DAILY_CHECKIN:3,DAILY_PET:1,DAILY_TIMER:1,DAILY_TALK:1', '';
+
 -- ---------- api: 중복 요청 방지 키 (v1.7) ----------
 SELECT pg_temp.expect_ok  ('v1.7 키 등록 (처리 중)',
   $$INSERT INTO api.idempotency_record (user_id, http_method, request_path, idempotency_key, request_hash, locked_until)
@@ -815,6 +845,12 @@ SELECT 'S-17 app_ai: 읽기 권한 없이 스키마 간 FK 행 저장 가능 (�
 INSERT INTO _result
 SELECT 'S-4 app_core는 ai 스키마 접근 불가 (탈퇴 시 삭제는 ai 모듈이 수행)',
        NOT has_schema_privilege('app_core','ai','USAGE'), '';
+INSERT INTO _result
+SELECT 'S-31 app_core는 quest 읽기·쓰기 가능, app_ai는 못 봄 (v1.11)',
+       has_table_privilege('app_core','quest.user_quest','INSERT')
+   AND has_table_privilege('app_core','quest.user_quest','UPDATE')
+   AND has_table_privilege('app_core','quest.quest_def','SELECT')
+   AND NOT has_schema_privilege('app_ai','quest','USAGE'), '';
 INSERT INTO _result
 SELECT 'S-27 app_core는 중복 요청 키 읽기·쓰기·삭제 가능 (v1.7)',
        has_table_privilege('app_core','api.idempotency_record','INSERT')

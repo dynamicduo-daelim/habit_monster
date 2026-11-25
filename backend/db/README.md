@@ -1,6 +1,24 @@
 # DB 공식 설계 메모 — 앱 · 서버에 맞추기
 
-## v1.10 (2026-11-25) — 지금 기준 (API 명세 v7 — 필드 끌기 호감도 DRAG, D-46 · D-86)
+## v1.11 (2026-11-25) — 지금 기준 (API 명세 v8 — 퀘스트 기반 + 일일 퀘스트, D-83 · D-85 · D-87)
+
+윤서 요청(11-25)으로 Claude가 썼다. 근거는 `docs/제안/2026-11-25-퀘스트-기반-일일.md` · 퀘스트 2단계(`docs/quest/2-기반-일일퀘스트.md`).
+
+**바뀐 것**
+- `quest` 스키마 새로 (권한 반복문에도 추가): `quest.quest_def`(퀘스트 마스터 — 종류 · 제목 · 목표 횟수 · 보상) · `quest.user_quest`(사용자 · 기간 시작일 · 퀘스트 1행 — 유니크, 진행도 ≤ 목표, `DONE` ↔ 완료 시각). 잠금(시간 습관 없음 등)은 저장하지 않고 조회 때 계산
+- 원장 사유 `QUEST_DAILY` (`ref_id` = `user_quest.id`)
+- 시드: 일일 퀘스트 4개(`DAILY_CHECKIN` 3G · `DAILY_PET` · `DAILY_TIMER` · `DAILY_TALK` 1G) · 설정 키 `quest_enabled`
+- 사용자 잠금 순서 끝에 `quest` — `… → wallet → quest` (D-87)
+- `verify.sql` +9 (S-1 허용 FK에 `quest.user_quest → identity.users`, MVP 21쌍) · `verify_later.sql` L-A5 25 → 26쌍
+
+**검증 (11-25)**
+- 임시 PostgreSQL 16에서 새 DB `schema → seed → schema_later → verify → verify_later` **209개 모두 통과** (200 + 새 9)
+- v1.10 스키마 · 시드(`HEAD`)로 만든 DB에 `migrate-v1.11.sql`을 **두 번** 실행 → `schema_later` → 새 `verify` · `verify_later` 209개 통과
+- 서버 테스트 218개 통과 (`quest_enabled`는 구현 전이라 `BalanceConfig.NOT_USED_BY_SERVER`에 둠)
+
+**이미 만든 DB에 적용** — 로컬 Docker DB · Supabase 둘 다 `backend/db/migrate-v1.11.sql`을 한 번 (v1.10 적용 뒤, 두 번 실행해도 안전). **새 서버 배포보다 먼저**. 권한(`app_core`)은 그 역할이 있는 DB에서만 준다.
+
+## v1.10 (2026-11-25) — (API 명세 v7 — 필드 끌기 호감도 DRAG, D-46 · D-86)
 
 윤서 요청(11-25)으로 Claude가 썼다. 근거는 `docs/제안/2026-11-25-DRAG-호감도.md` · 퀘스트 1단계(`docs/quest/1-DRAG.md`).
 

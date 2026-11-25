@@ -28,8 +28,8 @@ SELECT pg_temp.expect_fail('L-A4 같은 권한으로 슬롯 두 번 지급 불�
 SELECT pg_temp.expect_fail('L-A4b 없는 권한으로 슬롯 지급 불가 (v1.3 스키마 간 FK)',
   $$INSERT INTO goal.goal_slot_grant (user_id, entitlement_id, slots) VALUES (1,999999,1)$$);
 INSERT INTO _result
-SELECT 'L-A5 스키마 간 FK 25쌍 = 허용 목록 (MVP 20 + 나중 블록 5, v1.9)',
-       (SELECT count(*) FROM _cross_fk_actual) = 25
+SELECT 'L-A5 스키마 간 FK 26쌍 = 허용 목록 (MVP 21 + 나중 블록 5, v1.11)',
+       (SELECT count(*) FROM _cross_fk_actual) = 26
        AND NOT EXISTS (SELECT * FROM _cross_fk_actual EXCEPT SELECT * FROM _cross_fk_expected),
        (SELECT count(*) FROM _cross_fk_actual) || '쌍';
 SELECT pg_temp.expect_ok  ('L-A7 새 권한 종류 = INSERT 한 줄',

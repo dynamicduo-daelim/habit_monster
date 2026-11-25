@@ -17,6 +17,7 @@ import kr.habitmonster.habit.TimerRepository.DayMinutes;
 import kr.habitmonster.habit.TimerRepository.TimerHabit;
 import kr.habitmonster.habit.TimerRepository.TimerRow;
 
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -61,13 +62,16 @@ public class TimerService {
 	private final BusinessDates dates;
 	private final BalanceConfig config;
 	private final Clock clock;
+	private final ApplicationEventPublisher events;
 
-	TimerService(TimerRepository timers, HabitRepository habits, BusinessDates dates, BalanceConfig config, Clock clock) {
+	TimerService(TimerRepository timers, HabitRepository habits, BusinessDates dates, BalanceConfig config, Clock clock,
+			ApplicationEventPublisher events) {
 		this.timers = timers;
 		this.habits = habits;
 		this.dates = dates;
 		this.config = config;
 		this.clock = clock;
+		this.events = events;
 	}
 
 	/** 시작. 검사 순서: 본인 습관(404) → 업무 날짜(409) → 타이머 습관(422) → 이미 있는 타이머(409, {@code timerId}). */
@@ -135,7 +139,7 @@ public class TimerService {
 				if (req.focusMinutes() != null) {
 					minutes = Math.min(minutes, req.focusMinutes());
 				}
-				timers.stop(t.id(), at(now), dates.dateOf(now), minutes, "USER", pausedSecondsNow(t, now));
+				stop(userId, t, now, minutes, "USER", pausedSecondsNow(t, now));
 			}
 		}
 		return view(userId, timers.timer(userId, timerId).orElseThrow(), now);
@@ -178,12 +182,21 @@ public class TimerService {
 		for (TimerRow t : timers.open(userId)) {
 			if (t.habitId() == habitId) {
 				int minutes = (int) Math.min(elapsedSeconds(t, now) / 60, config.timerMaxMinutes());
-				timers.stop(t.id(), at(now), dates.dateOf(now), minutes, "HABIT_STOPPED", pausedSecondsNow(t, now));
+				stop(userId, t, now, minutes, "HABIT_STOPPED", pausedSecondsNow(t, now));
 			}
 		}
 	}
 
-	/** 탈퇴 — 끝나지 않은 타이머를 끝낸다 (기록 행은 통계용으로 남는다). */
+	/**
+	 * 진행 중인 습관 중 타이머를 쓸 수 있는 것(분 단위 시간 습관)이 있는지. 퀘스트 {@code DAILY_TIMER}의 잠금 판정 —
+	 * {@link #start}의 검사와 같은 기준.
+	 */
+	@Transactional(readOnly = true)
+	public boolean hasTimerHabit(long userId) {
+		return timers.hasActiveTimerHabit(userId);
+	}
+
+	/** 탈퇴 — 끝나지 않은 타이머를 끝낸다 (기록 행은 통계용으로 남는다). 퀘스트 이벤트는 보내지 않는다. */
 	void endAll(long userId) {
 		Instant now = clock.instant();
 		settle(userId, now);
@@ -202,9 +215,16 @@ public class TimerService {
 		for (TimerRow t : timers.open(userId)) {
 			if (t.running() && elapsedSeconds(t, now) >= maxSeconds) {
 				Instant end = Instant.ofEpochMilli(t.startedMs()).plusSeconds(t.pausedSeconds() + maxSeconds);
-				timers.stop(t.id(), at(end), dates.dateOf(end), config.timerMaxMinutes(), "MAX_DURATION", 0);
+				stop(userId, t, end, config.timerMaxMinutes(), "MAX_DURATION", 0);
 			}
 		}
+	}
+
+	/** 타이머를 끝내 기록하고 {@link TimerStopped}를 알린다 (탈퇴 정리 {@link #endAll}만 알리지 않는다). */
+	private void stop(long userId, TimerRow t, Instant end, int minutes, String reason, int pausedSeconds) {
+		LocalDate day = dates.dateOf(end);
+		timers.stop(t.id(), at(end), day, minutes, reason, pausedSeconds);
+		events.publishEvent(new TimerStopped(userId, t.habitId(), day, minutes, reason));
 	}
 
 	private static boolean isTimerHabit(TimerHabit h) {

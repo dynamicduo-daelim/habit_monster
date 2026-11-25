@@ -8,5 +8,7 @@ package kr.habitmonster.wallet;
  * PERIOD_BONUS → habit_period.id / GOAL_* → goal.id / DUPLICATE → explore_log.id / SHOP_PURCHASE → purchase.id
  */
 public enum LedgerReason {
-	CHECKIN, LEVELUP, PERIOD_BONUS, GOAL_WEEKLY, GOAL_MONTHLY, DUPLICATE, SHOP_PURCHASE, ADJUST
+	CHECKIN, LEVELUP, PERIOD_BONUS, GOAL_WEEKLY, GOAL_MONTHLY, DUPLICATE, SHOP_PURCHASE, ADJUST,
+	/** 일일 퀘스트 완료 (v1.11) — {@code ref_id} = {@code quest.user_quest.id} */
+	QUEST_DAILY
 }

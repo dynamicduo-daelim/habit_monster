@@ -53,6 +53,15 @@ public class WalletService {
 		return credit(userId, amount, reason, refId, null);
 	}
 
+	/**
+	 * 지갑 행만 잠근다 (사용자 잠금 순서 {@code … → wallet → quest}, 결정 D-87). 퀘스트는 골드를 주지 않는 진행에도 이것부터 불러
+	 * 모든 경로가 "지갑 다음 퀘스트" 한 방향이 되게 한다. 이미 잠근 트랜잭션이면 그대로 지나간다.
+	 */
+	@Transactional
+	public void lock(long userId) {
+		wallets.lockBalance(userId).orElseThrow(() -> new IllegalStateException("지갑 없음: " + userId));
+	}
+
 	/** @param memo 운영 보정(ADJUST)이면 필수 */
 	@Transactional
 	public Change credit(long userId, int amount, LedgerReason reason, String refId, String memo) {

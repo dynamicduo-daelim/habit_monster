@@ -30,6 +30,9 @@
 --   * 헬스 연동(habit.health_daily)은 다음 단계 — 이 판에 넣지 않음 (제안서 DB 4장)
 -- v1.10 2026-11-25 (API 명세 v7 — 필드 끌기 호감도, 결정 D-46 · D-86, 제안서 docs/제안/2026-11-25-DRAG-호감도.md)
 --   * monster.affection_action.action_type에 DRAG (몬스터마다 하루 1회 — 기존 기본 키). 간식 FEED는 이 판에 넣지 않음
+-- v1.11 2026-11-25 (API 명세 v8 — 퀘스트 기반 + 일일 퀘스트, 결정 D-83 · D-85 · D-87, 제안서 docs/제안/2026-11-25-퀘스트-기반-일일.md)
+--   * quest 스키마 새로: quest.quest_def(퀘스트 마스터 — 보상 · 목표 횟수) · quest.user_quest(사용자 · 기간 · 퀘스트 1행, 잠금은 저장 안 함)
+--   * 원장 사유 QUEST_DAILY (ref_id = user_quest.id). 사용자 잠금 순서 끝에 quest (wallet 다음, D-87)
 -- 설계 문서: 04_논리물리모델.md (v1.7 반영 전)
 -- MVP 밖 구성요소(결제, 수치 변경 이력, AI 기억·호출 로그)는 schema_later.sql (이 파일 다음에 적용)
 --
@@ -47,7 +50,8 @@
 --     각 테이블의 idempotency_key·consumer_key는 DB 쪽 마지막 방어선으로 유지한다.
 --     서비스를 실제로 분리하게 되면 그때 아웃박스로 전환한다 (04 문서 7장).
 --  3-1) 사용자 단위 잠금 행은 SELECT … FOR NO KEY UPDATE로 잡고, 순서를 고정한다 (교착 방지):
---       habit.habit_user → goal.goal_user → monster.monster_user → shop.inventory → wallet.wallet
+--       habit.habit_user → goal.goal_user → monster.monster_user → shop.inventory → wallet.wallet → quest(user_quest 행)
+--       (v1.11, D-87: 퀘스트는 항상 지갑 행을 먼저 잠근 뒤 user_quest를 다룬다 — 체크인은 골드 지급으로 지갑을 잠근 뒤 퀘스트가 진행되므로)
 --       (FOR NO KEY UPDATE는 다른 트랜잭션의 FK 삽입이 잡는 KEY SHARE 잠금과 충돌하지 않음)
 --       골드·볼·물약 차감은 조건부 UPDATE(… WHERE balance >= ?) 또는 위 잠금으로 처리하고,
 --       CHECK(… >= 0) 위반은 애플리케이션이 422로 바꾼다.
@@ -81,6 +85,7 @@ CREATE SCHEMA IF NOT EXISTS monster;
 CREATE SCHEMA IF NOT EXISTS config;
 CREATE SCHEMA IF NOT EXISTS ai;
 CREATE SCHEMA IF NOT EXISTS api;     -- v1.7: 요청 처리 공통 (중복 요청 방지 키)
+CREATE SCHEMA IF NOT EXISTS quest;   -- v1.11: 퀘스트
 -- payment 스키마는 schema_later.sql (v1.2)
 -- outbox_event / processed_event 제거 (v1.2: 단일 트랜잭션)
 
@@ -475,6 +480,7 @@ CREATE TABLE wallet.wallet (
 -- 새 보상 추가 = INSERT ('EVENT_REWARD','CREDIT') 한 줄. 양방향 사유(ADJUST)는 두 행.
 -- ref_id: CHECKIN → daily_checkin.id / LEVELUP → daily_checkin.id:카테고리 코드 /
 --         PERIOD_BONUS → habit_period.id / GOAL_* → goal.id / DUPLICATE → explore_log.id / SHOP_PURCHASE → purchase.id
+--         QUEST_* → quest.user_quest.id (v1.11)
 CREATE TABLE wallet.ledger_reason (
   code         TEXT          NOT NULL,
   direction    TEXT          NOT NULL CHECK (direction IN ('CREDIT','DEBIT')),
@@ -490,7 +496,8 @@ INSERT INTO wallet.ledger_reason (code, direction, description) VALUES
  ('DUPLICATE','CREDIT','탐색에서 가진 종 등장 → 볼 없이 골드'),   -- v1.7
  ('SHOP_PURCHASE','DEBIT','상점 구매'),
  ('ADJUST','CREDIT','운영 보정 (지급·환불)'),
- ('ADJUST','DEBIT','운영 보정 (회수)');
+ ('ADJUST','DEBIT','운영 보정 (회수)'),
+ ('QUEST_DAILY','CREDIT','일일 퀘스트 완료');   -- v1.11, ref_id = quest.user_quest.id
 
 CREATE TABLE wallet.wallet_ledger (
   id             BIGINT       GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -903,8 +910,41 @@ CREATE TABLE api.idempotency_record (
 CREATE INDEX ix_idempotency_expiry ON api.idempotency_record (expires_at);   -- 만료 정리
 
 -- =====================================================================
+-- quest (v1.11) — 쓰기 · 읽기: 퀘스트 모듈
+--  * 진행은 다른 모듈이 보내는 이벤트로만 오른다 (같은 트랜잭션, D-85). 완료 골드는 wallet 모듈 경유 (QUEST_*)
+--  * 기간마다 첫 조회(또는 첫 이벤트) 때 행을 만든다 — 스케줄러 없음 (D-64)
+--  * 잠금(시간 습관 없음 등)은 저장하지 않고 조회 때 계산 → 하루 중간에 조건이 바뀌면 바로 풀린다
+--  * 행을 지우지 않는다 (원칙 7). 놓친 퀘스트는 IN_PROGRESS로 남을 뿐 "실패" 상태가 없다 (기획: 놓쳐도 흔적 없음)
+-- =====================================================================
+CREATE TABLE quest.quest_def (
+  code          TEXT         PRIMARY KEY,
+  kind          TEXT         NOT NULL CHECK (kind IN ('DAILY','WEEKLY','SURPRISE','CONDITIONAL')),
+  title         VARCHAR(40)  NOT NULL,
+  target_count  SMALLINT     NOT NULL CHECK (target_count >= 1),
+  reward_gold   INT          NOT NULL CHECK (reward_gold >= 0),
+  sort_order    SMALLINT     NOT NULL,
+  is_active     BOOLEAN      NOT NULL DEFAULT true     -- 지우지 않고 끈다 (원칙 7)
+);
+
+CREATE TABLE quest.user_quest (
+  id            BIGINT       GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  user_id       BIGINT       NOT NULL REFERENCES identity.users(id),
+  period_start  DATE         NOT NULL,   -- 일일 = 그날, 주간 = 그 주 월요일, 월간 = 1일
+  quest_code    TEXT         NOT NULL REFERENCES quest.quest_def(code),
+  progress      SMALLINT     NOT NULL DEFAULT 0 CHECK (progress >= 0),
+  target        SMALLINT     NOT NULL CHECK (target >= 1),       -- 만들 때 quest_def에서 고정
+  reward_gold   INT          NOT NULL CHECK (reward_gold >= 0),  -- 만들 때 고정 (마스터를 바꿔도 지난 퀘스트는 그대로)
+  status        TEXT         NOT NULL DEFAULT 'IN_PROGRESS' CHECK (status IN ('IN_PROGRESS','DONE')),
+  created_at    TIMESTAMPTZ  NOT NULL DEFAULT now(),
+  completed_at  TIMESTAMPTZ  NULL,
+  CONSTRAINT uq_user_quest UNIQUE (user_id, period_start, quest_code),
+  CONSTRAINT ck_user_quest_done     CHECK ((status = 'DONE') = (completed_at IS NOT NULL)),
+  CONSTRAINT ck_user_quest_progress CHECK (progress <= target)
+);
+
+-- =====================================================================
 -- 권한 (v1.2): 역할 2개
---  * app_core — 경제·회원 도메인 전체 (identity, habit, goal, wallet, shop, monster) + api + config 읽기
+--  * app_core — 경제·회원 도메인 전체 (identity, habit, goal, wallet, shop, monster, quest) + api + config 읽기
 --               모듈 경계는 DB 역할이 아니라 코드 규칙(아키텍처 테스트)으로 지킨다.
 --  * app_ai   — ai 스키마 + config 읽기만. 경제 데이터 격리는 DB가 강제한다 (S-9).
 --  config 쓰기는 마이그레이션 실행 역할(소유자)만.
@@ -919,7 +959,7 @@ BEGIN
     CREATE ROLE app_ai NOLOGIN;
   END IF;
 
-  FOREACH s IN ARRAY ARRAY['identity','habit','goal','wallet','shop','monster','api'] LOOP
+  FOREACH s IN ARRAY ARRAY['identity','habit','goal','wallet','shop','monster','api','quest'] LOOP   -- v1.11 quest
     EXECUTE format('GRANT USAGE ON SCHEMA %I TO app_core', s);
     EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA %I TO app_core', s);
     EXECUTE format('GRANT USAGE ON ALL SEQUENCES IN SCHEMA %I TO app_core', s);
