@@ -96,8 +96,9 @@ class QuestWeeklyApiTest extends PostgresTest {
 				name);
 	}
 
+	/** 주간 퀘스트 보상으로 생긴 선물 금액 (v10부터 선물함으로, D-89). */
 	List<Integer> weeklyGold() {
-		return jdbc.queryForList("select amount from wallet.wallet_ledger where user_id = ? and reason_code = 'QUEST_WEEKLY'",
+		return jdbc.queryForList("select gold from gift.gift where user_id = ? and source_code = 'QUEST_WEEKLY'",
 				Integer.class, userIdOf(E));
 	}
 

@@ -7,6 +7,7 @@ import java.util.List;
 
 import kr.habitmonster.auth.AuthService;
 import kr.habitmonster.common.BusinessDates;
+import kr.habitmonster.gift.GiftService;
 import kr.habitmonster.habit.HabitService;
 import kr.habitmonster.habit.HabitService.TodayCheckin;
 import kr.habitmonster.habit.HabitService.TodayHabit;
@@ -27,10 +28,10 @@ public class StatusService {
 
 	/**
 	 * 상단 바. {@code dayCount}는 명세에 더한 값 — 온보딩한 날이 DAY 1 (결정 D-37).
-	 * 체크인 전에는 탐색 남은/전체가 0 / 0.
+	 * 체크인 전에는 탐색 남은/전체가 0 / 0. {@code hasGift}는 받지 않은 선물이 있는지 — 홈 아이콘의 점 (명세 v10).
 	 */
 	public record Status(LocalDate businessDate, int dayCount, int currentStreak, long gold, int ballCount,
-			boolean checkedInToday, int exploreRemaining, int exploreTotal, int endedHabitCount) {
+			boolean checkedInToday, int exploreRemaining, int exploreTotal, int endedHabitCount, boolean hasGift) {
 	}
 
 	/** 오늘 요약 (보상 기준 = 첫 제출 값). 체크인 전이면 {@code goldEarned} · {@code overallRate}가 null. */
@@ -43,15 +44,17 @@ public class StatusService {
 	private final WalletService wallet;
 	private final ShopService shop;
 	private final MonsterService monsters;
+	private final GiftService gifts;
 	private final BusinessDates dates;
 
 	StatusService(AuthService auth, HabitService habits, WalletService wallet, ShopService shop, MonsterService monsters,
-			BusinessDates dates) {
+			GiftService gifts, BusinessDates dates) {
 		this.auth = auth;
 		this.habits = habits;
 		this.wallet = wallet;
 		this.shop = shop;
 		this.monsters = monsters;
+		this.gifts = gifts;
 		this.dates = dates;
 	}
 
@@ -61,7 +64,7 @@ public class StatusService {
 		ExploreQuota quota = monsters.exploreQuota(userId);
 		return new Status(today, dayCount(userId, today), habits.currentStreak(userId), wallet.balance(userId),
 				shop.quantity(userId, ShopService.BALL), habits.checkedInToday(userId), quota.remaining(), quota.total(),
-				habits.endedHabitCount(userId));
+				habits.endedHabitCount(userId), gifts.hasGift(userId));
 	}
 
 	@Transactional(readOnly = true)

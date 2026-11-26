@@ -84,7 +84,7 @@
 | GET | /measure-types?categories=ex,st | 카테고리 순서로 `{categoryCode, measureTypes[], presets[]}`. 생략하면 전체, 모르는 코드면 400. RANGE(수면)만 `rangeBelow` · `rangeAbove` (D-28) |
 | POST | /onboarding | **Idempotency-Key 필수**(A3). 201 `{starters[{userMonsterId, speciesId, categoryCode, name, imageKey, location}], partnerMonsterId, habitIds, goalIds}`. 선택 필드 `partnerCategory`(D-36). 틀리면 400 + `errors` 전부, 이미 끝냈으면 409 `ALREADY_ONBOARDED`. 시작 골드 · 볼 0 (D-35) |
 | POST | /me/attendance | `{date, alreadyAttended, currentStreak, longestStreak}`. 하루 여러 번 불러도 1행 |
-| GET | /me/status | `{businessDate, dayCount, currentStreak, gold, ballCount, checkedInToday, exploreRemaining, exploreTotal, endedHabitCount}` — `dayCount`는 더한 값 (D-37) |
+| GET | /me/status | `{businessDate, dayCount, currentStreak, gold, ballCount, checkedInToday, exploreRemaining, exploreTotal, endedHabitCount, hasGift}` — `dayCount`는 더한 값 (D-37). `hasGift` = 받지 않은 선물이 있음 → 홈 점 (명세 v10, D-89) |
 | GET | /me/today | `{businessDate, checkedIn, goldEarned, overallRate, habits[]}`. 체크인 전이면 보상 필드 null, 습관은 오늘 체크인 대상 |
 | GET | /monsters?location=FIELD\|BAG | 생략하면 전체. `imageKey` · `stage` · `isPartner` |
 | GET | /monsters/{id} | `expToNextLevel` 대신 `expRequired`(B2), `todayActions{pet, play}`. 남의 몬스터 · 없는 몬스터는 404 (C3) |
@@ -100,7 +100,10 @@
 | POST | /habits | **Idempotency-Key 필수**. `{categoryCode, measureTypeId, name, dailyTarget, periodCode}` → 201 (`GET /habits`의 한 줄). 시작일 = 오늘 체크인 전이면 오늘, 후면 내일. 400 값 형식, 422 `CATEGORY_LOCKED` · `HABIT_LIMIT`(진행 중 + 기간 완료 5개) (10-23, D-47) |
 | POST | /habits/{id}/renew | **Idempotency-Key 필수**. `{periodCode, dailyTarget?}` → 200 (새 기간, `filledDays` 0). 404 남의 습관, 400, 409 `HABIT_NOT_ENDED` (10-23) |
 | POST | /habits/{id}/stop | 키 없음. 200 `{habitId, status: STOPPED}`. 404, 409 `HABIT_ALREADY_STOPPED`, 422 `LAST_HABIT`(마지막 1개) (10-23) |
-| GET | /quests | **(명세 v8 · v9 10장)** `{businessDate, enabled, daily[{code, title, progress, target, rewardGold, status IN_PROGRESS·DONE·LOCKED, lockReason?}], weekStart, weekly[같은 모양]}`. **v9 주간**: 주 4일 출석 · 성실도 `quest_weekly_rate_threshold`(80)% 이상인 날 2일 · 카테고리 3곳(연 카테고리 < 3이면 `NOT_ENOUGH_CATEGORIES`), 진행도는 이번 주 기록에서 계산(출석 · 체크인 첫 제출 알림과 조회 때, 내려가지 않음), 원장 `QUEST_WEEKLY` (D-88) — 그날 첫 조회 때 일일 4개 생성, 잠금은 조회 때 계산(`NO_TIMER_HABIT`), `quest_enabled` false면 `enabled false · daily []`. 진행은 이벤트로(체크인 첫 제출 · 쓰다듬기 · 타이머 끝 · 말 걸기), 완료 순간 자동 지급(원장 `QUEST_DAILY`) (11-25, D-85 · D-87) |
+| GET | /quests | **(명세 v8 · v9 10장)** `{businessDate, enabled, daily[{code, title, progress, target, rewardGold, status IN_PROGRESS·DONE·LOCKED, lockReason?}], weekStart, weekly[같은 모양]}`. **v9 주간**: 주 4일 출석 · 성실도 `quest_weekly_rate_threshold`(80)% 이상인 날 2일 · 카테고리 3곳(연 카테고리 < 3이면 `NOT_ENOUGH_CATEGORIES`), 진행도는 이번 주 기록에서 계산(출석 · 체크인 첫 제출 알림과 조회 때, 내려가지 않음), 원장 `QUEST_WEEKLY` (D-88) — 그날 첫 조회 때 일일 4개 생성, 잠금은 조회 때 계산(`NO_TIMER_HABIT`), `quest_enabled` false면 `enabled false · daily []`. 진행은 이벤트로(체크인 첫 제출 · 쓰다듬기 · 타이머 끝 · 말 걸기). **v10**: 완료 순간 지갑이 아니라 **선물함에 선물**(출처 `QUEST_DAILY` · `QUEST_WEEKLY`) — 받을 때 원장 적립 (11-26, D-89. v8 ~ v9는 즉시 지급) (11-25, D-85 · D-87) |
+| GET | /gifts | **(명세 v10 11장)** `{gifts[{id, source, title, gold, itemCode, itemName, quantity, createdAt}]}` — 받지 않은 것만, 최신순 (11-26, D-89) |
+| POST | /gifts/{giftId}/claim | **Idempotency-Key 필수**, 본문 · `businessDate` 없음. 200 `{claimedCount, goldReceived, items[{itemCode, quantity}], gold, ballCount}`. 404 없는 · 남의 선물, 409 `GIFT_ALREADY_CLAIMED`(새 키로 다시 받음 — 같은 키 재전송은 첫 200). 선물 행을 먼저 잠그고 → 가방 → 지갑(원장 사유 = 출처, ref = 선물 id) |
+| POST | /gifts/claim-all | **Idempotency-Key 필수**. 받기와 같은 모양(합계). 받을 것이 없으면 200 `claimedCount 0` |
 | GET | /goals | `{weekly, monthly}` 각각 `{slotsTotal, slotsUsed, rewardGold, goals[{goalId, goalType, periodStart, periodEnd, title, detail, status}]}` — 기간이 남은 목표만 (등록한 날부터 7 · 30일, 명세 v5 보충 10-28, D-48) |
 | POST | /goals | **Idempotency-Key 필수**. `{goalType, title, detail?}` → 201 (목록의 한 줄). 400 값 형식, 422 `GOAL_SLOT_FULL` (기간이 남은 목표 = 진행 중 + 완료) (10-28) |
 | PATCH | /goals/{id} | 보낸 필드만. `detail: null` = 지우기, `title: null` · `goalType` = 400. 404 · 409 `GOAL_COMPLETED` · `GOAL_PERIOD_ENDED` (10-28) |
