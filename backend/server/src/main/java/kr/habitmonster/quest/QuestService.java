@@ -1,6 +1,10 @@
 package kr.habitmonster.quest;
 
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
+import java.time.YearMonth;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
 
@@ -14,7 +18,9 @@ import kr.habitmonster.habit.HabitService;
 import kr.habitmonster.habit.HabitService.PeriodRecord;
 import kr.habitmonster.habit.TimerService;
 import kr.habitmonster.quest.QuestRepository.Advanced;
+import kr.habitmonster.quest.QuestRepository.MonthRow;
 import kr.habitmonster.quest.QuestRepository.QuestRow;
+import kr.habitmonster.shop.ShopService;
 import kr.habitmonster.wallet.WalletService;
 
 import org.springframework.stereotype.Service;
@@ -32,6 +38,8 @@ import org.springframework.transaction.annotation.Transactional;
  * <li>목표에 닿는 순간 <b>선물함에 선물 한 줄</b> (명세 v10, D-89 — 출처 {@code QUEST_DAILY} · {@code QUEST_WEEKLY}, 출처 번호 =
  * {@code user_quest.id}). 골드는 사용자가 받을 때 지갑에 들어간다 (v8 ~ v9: 완료 즉시 지갑)</li>
  * <li><b>항상 지갑을 먼저 잠근다</b> — 사용자 잠금 순서 {@code … → wallet → quest} (D-87). 선물은 그 뒤 새 행만 넣는다</li>
+ * <li>월간 배지 (v11, D-96): 완료할 때마다 그달 수 +1 ({@code quest.user_month}, 처음엔 그달 기존 완료 수로 시작) →
+ * 목표에 닿으면 배지 한 번 + 성실볼 선물 ({@code QUEST_MONTHLY})</li>
  * </ul>
  */
 @Service
@@ -57,10 +65,24 @@ public class QuestService {
 			@JsonInclude(JsonInclude.Include.NON_NULL) String lockReason) {
 	}
 
-	/** {@code GET /quests}. 깜짝 · 월간은 다음 단계에서 칸을 더한다. */
-	public record Quests(LocalDate businessDate, boolean enabled, List<QuestView> daily, LocalDate weekStart,
-			List<QuestView> weekly) {
+	/** 이번 달 진행 (v11). {@code completed}는 목표를 넘어도 계속 센다. */
+	public record Monthly(LocalDate monthStart, int completed, int target, boolean badgeEarned) {
 	}
+
+	/** {@code GET /quests}. 꺼져 있으면 {@code monthly}는 null. 깜짝은 다음 단계에서 칸을 더한다. */
+	public record Quests(LocalDate businessDate, boolean enabled, List<QuestView> daily, LocalDate weekStart,
+			List<QuestView> weekly, Monthly monthly) {
+	}
+
+	/** 배지 보관함의 한 칸 — {@code month}는 "2026-11". */
+	public record Badge(String month, OffsetDateTime earnedAt) {
+	}
+
+	/** {@code GET /quests/badges} — 받은 달만, 최신순. */
+	public record Badges(List<Badge> badges) {
+	}
+
+	private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
 
 	private final QuestRepository quests;
 	private final WalletService wallet;
@@ -87,12 +109,60 @@ public class QuestService {
 		LocalDate today = dates.today();
 		LocalDate week = dates.weekStart();
 		if (!config.questEnabled()) {
-			return new Quests(today, false, List.of(), week, List.of());
+			return new Quests(today, false, List.of(), week, List.of(), null);
 		}
 		wallet.lock(userId); // D-87: 지갑 → 퀘스트
 		quests.createMissing(userId, today, DAILY);
 		syncWeekly(userId, today, week);
-		return new Quests(today, true, views(userId, today, DAILY), week, views(userId, week, WEEKLY));
+		return new Quests(today, true, views(userId, today, DAILY), week, views(userId, week, WEEKLY),
+				monthly(userId));
+	}
+
+	/** 배지 보관함 — 받은 달만, 최신순 (퀘스트를 꺼도 지난 배지는 보인다). */
+	@Transactional(readOnly = true)
+	public Badges badges(long userId) {
+		return new Badges(quests.badges(userId).stream()
+			.map(b -> new Badge(YearMonth.from(b.monthStart()).toString(),
+					OffsetDateTime.ofInstant(Instant.ofEpochMilli(b.earnedMs()), SEOUL)))
+			.toList());
+	}
+
+	/**
+	 * 조회 때 이번 달 진행. 그달 줄이 없으면 그달 기존 완료 수로 만들고, 이미 목표를 넘었으면 배지도 여기서 준다
+	 * (이 기능 배포 전에 20개를 채운 경우). 지갑을 잠근 뒤 부른다.
+	 */
+	private Monthly monthly(long userId) {
+		LocalDate month = dates.monthStart();
+		MonthRow m = quests.ensureMonth(userId, month, dates.startOf(month), dates.startOf(month.plusMonths(1)));
+		boolean earned = m.badgeEarned() || badgeIfReached(userId, m);
+		return new Monthly(month, m.completedCount(), config.questMonthlyTarget(), earned);
+	}
+
+	/** 퀘스트 하나를 완료했을 때: 그달 수 +1 → 목표에 닿으면 배지 (D-96). 지갑을 잠근 뒤 부른다. */
+	private void countMonthly(long userId, long completedQuestId) {
+		LocalDate month = dates.monthStart();
+		MonthRow m = quests.countCompletion(userId, month, dates.startOf(month), dates.startOf(month.plusMonths(1)),
+				completedQuestId);
+		badgeIfReached(userId, m);
+	}
+
+	/** 목표에 닿았으면 배지 시각을 조건부로 채우고(한 번만) 성실볼을 선물함으로 보낸다. 이번에 받았으면 true. */
+	private boolean badgeIfReached(long userId, MonthRow m) {
+		int target = config.questMonthlyTarget();
+		if (m.badgeEarned() || m.completedCount() < target) {
+			return false;
+		}
+		return quests.earnBadge(m.id(), target).map(id -> {
+			int balls = config.questMonthlyBallReward();
+			gifts.send(userId, GiftSource.QUEST_MONTHLY, String.valueOf(id), badgeTitle(m.monthStart()), 0,
+					balls > 0 ? ShopService.BALL : null, balls);
+			return true;
+		}).orElse(false);
+	}
+
+	/** 선물 제목 — "2026년 11월 배지". */
+	static String badgeTitle(LocalDate month) {
+		return month.getYear() + "년 " + month.getMonthValue() + "월 배지";
 	}
 
 	/**
@@ -143,13 +213,18 @@ public class QuestService {
 		}
 	}
 
-	/** 목표에 닿았으면 조건부로 완료하고(한 번만 성공) 그 행의 보상을 선물함으로 보낸다 (D-89). */
+	/**
+	 * 목표에 닿았으면 조건부로 완료하고(한 번만 성공) 그 행의 보상을 선물함으로 보낸다 (D-89).
+	 * 완료했으면 그달 완료 수도 센다 (월간 배지, D-96).
+	 */
 	private void completeIfReached(long userId, Advanced a, String kind) {
 		if (a.progress() < a.target()) {
 			return;
 		}
-		quests.complete(a.id()).ifPresent(
-				c -> gifts.send(userId, SOURCE.get(kind), String.valueOf(a.id()), c.title(), c.rewardGold(), null, 0));
+		quests.complete(a.id()).ifPresent(c -> {
+			gifts.send(userId, SOURCE.get(kind), String.valueOf(a.id()), c.title(), c.rewardGold(), null, 0);
+			countMonthly(userId, a.id());
+		});
 	}
 
 	private List<QuestView> views(long userId, LocalDate period, String kind) {

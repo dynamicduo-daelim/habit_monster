@@ -95,10 +95,27 @@ public class CheckinInterpreter {
 	/** 위기 신호가 키워드로만 걸렸을 때 (AI가 놓쳤거나 실패) 몬스터 대답 대신. 숫자 · 상담 번호 같은 안내 문구는 넣지 않는다 (사용자 11-02). */
 	static final String SAFETY_REPLY = "많이 힘들었구나. 혼자 견디지 말고 믿을 수 있는 사람에게 꼭 이야기해 줘.";
 
-	/** {@code reply}에 사용자가 말하지 않은 숫자가 있을 때 대신하는 대본형 대답. */
-	static final String NUMBER_FREE_REPLY = "알려줘서 고마워! 아래에서 기록을 확인해 줘.";
+	/** {@code reply}에 사용자가 말하지 않은 숫자가 있을 때 대신하는 대본형 대답 (11-26: 확인 카드가 없어져 "아래에서 확인"을 뺌). */
+	static final String NUMBER_FREE_REPLY = "알려줘서 고마워!";
 
 	private static final Pattern NUMBER = Pattern.compile("\\d+(?:\\.\\d+)?");
+
+	/**
+	 * 말에 양이 들어 있는지 (11-26): 숫자, 한글 수 + 단위("한 시간" · "삼십 분" · "두 잔"), "반시간",
+	 * 목표만큼("다 했어" · "목표만큼" · "꽉 채워"). 없으면 "했어"류 — 모델이 목표값을 지어 넣어도 기록하지 않고 되묻는다.
+	 */
+	private static final Pattern AMOUNT_WORDS = Pattern.compile(
+			"(?:한|두|세|석|네|넉|다섯|여섯|일곱|여덟|아홉|열|스무|스물|서른|마흔|쉰|예순|일|이|삼|사|오|육|칠|팔|구|십|백|천)+"
+					+ "\\s*(?:시간|분|번|회|개|잔|권|장|쪽|페이지|세트|바퀴|킬로|키로|걸음|리터|점|초|줄|문제|단어|곡|편)"
+					+ "|반\\s*시간|다\\s*했|목표만큼|목표\\s*(?:채|달성|다)|꽉\\s*채|전부\\s*했");
+
+	/** 양처럼 보이지만 양이 아닌 말 ("이번에" · "저번에"). */
+	private static final Pattern NOT_AMOUNT = Pattern.compile("이번|저번|요번|지난번");
+
+	/** 11-26: 모델 실패 때 대답. 방금 한 질문을 그대로 되풀이하지 않는다 (같은 질문이 두 번 보였다). */
+	static String retryReply(String habitName) {
+		return "잠깐 못 들었어. '" + habitName + "' 다시 말해 줄래?";
+	}
 
 	private final LlmClient llm;
 	private final JsonMapper json;
@@ -158,6 +175,8 @@ public class CheckinInterpreter {
 			.append("8. 의료 · 다이어트 · 약 조언을 하지 않는다. 힘든 감정이나 위기 신호(자해 등)가 보이면 safety=true, reply는 걱정하는 말과 도움을 구하라는 말로.\n")
 			.append("9. 습관과 상관없는 말엔 짧게 받아 주고 습관 이야기로 돌아온다.\n")
 			.append("10. reply는 60자 이내, 반말, 이모지 없이.\n")
+			.append("11. O·X가 아닌 습관은 사용자가 양(숫자 · '한 시간' · '반시간' 등)을 말하지 않으면 목표값을 넣지 않는다. ")
+			.append("'했어' · '응'만 말하면 answers에 넣지 말고 askAgain으로 얼마나 했는지 묻는다.\n")
 			.append("오늘 습관 (id | 이름 | 카테고리 | 단위 | 목표 | 측정):\n");
 		for (HabitContext h : req.habits()) {
 			sb.append(h.habitId()).append(" | ").append(h.name()).append(" | ").append(h.categoryName()).append(" | ")
@@ -208,7 +227,10 @@ public class CheckinInterpreter {
 			String evidence = Set.of("SHORT", "DETAILED").contains(a.path("evidence").asString("")) ? a.path("evidence").asString()
 					: "SHORT";
 			Number value = done ? fit(h, a.path("value")) : 0;
-			if (confidence < config.aiMinConfidence() || value == null) {
+			// 양을 재는 습관인데 말에 양이 없으면 모델 값(대개 목표값)을 믿지 않는다 — 타이머 기록이 있으면 그 값이 근거 (11-26)
+			boolean noAmount = done && !"BINARY".equals(h.scoringMode()) && !saidAmount(req.message())
+					&& (h.timerMinutes() == null || h.timerMinutes() <= 0);
+			if (confidence < config.aiMinConfidence() || value == null || noAmount) {
 				if (ask == null && !req.askedAgain().contains(h.habitId())) {
 					ask = new AskAgain(h.habitId(), "'" + h.name() + "' 얼마나 했는지 알려줄래?");
 				}
@@ -228,20 +250,52 @@ public class CheckinInterpreter {
 		if (reply.isBlank()) {
 			return template(req);
 		}
-		if (!numbersFromUser(reply, req.message())) {
-			reply = NUMBER_FREE_REPLY; // 지어낸 숫자(점수 · 골드 등)를 막는다. 사용자가 말한 숫자의 맞장구는 된다
+		if (!numbersFromUser(reply, req.message(), recordedNumbers(answers.values(), byId))) {
+			reply = NUMBER_FREE_REPLY; // 지어낸 숫자(점수 · 골드 등)를 막는다. 사용자가 말한 숫자 · 기록한 값의 맞장구는 된다
 		}
 		return new Result(reply, List.copyOf(answers.values()), ask, root.path("safety").asBoolean(false), "LLM");
 	}
 
+	/** 말에 양이 들어 있는지 ({@link #AMOUNT_WORDS}). */
+	static boolean saidAmount(String message) {
+		String m = message == null ? "" : NOT_AMOUNT.matcher(message).replaceAll(" ");
+		return NUMBER.matcher(m).find() || AMOUNT_WORDS.matcher(m).find();
+	}
+
 	/**
-	 * {@code reply}의 숫자가 모두 사용자가 이번 말에 쓴 숫자인지 (명세 v6 5장 검사 6). AI는 해석 단계에서 점수 · 골드를 모르므로
-	 * 그 밖의 숫자는 지어낸 것이다. 한글로 쓴 숫자("이십오 점")는 못 막는다.
+	 * 이번에 기록한 값 — 대답에 써도 되는 숫자 (11-26: "반시간 했어" → "30분 했구나"가 지어낸 숫자로 막혔다).
+	 * 분 단위는 시간으로 바꾼 값도 (60 → 1, 90 → 1.5).
 	 */
-	static boolean numbersFromUser(String reply, String message) {
+	static Set<String> recordedNumbers(Iterable<Answer> answers, Map<Long, HabitContext> byId) {
+		Set<String> out = new java.util.HashSet<>();
+		for (Answer a : answers) {
+			if (!a.done() || a.value() == null) {
+				continue;
+			}
+			BigDecimal v = new BigDecimal(a.value().toString());
+			out.add(v.stripTrailingZeros().toPlainString());
+			HabitContext h = byId.get(a.habitId());
+			if (h != null && "분".equals(h.unit())) {
+				BigDecimal hours = v.divide(BigDecimal.valueOf(60), 2, java.math.RoundingMode.HALF_UP);
+				out.add(hours.stripTrailingZeros().toPlainString());
+			}
+		}
+		return out;
+	}
+
+	/**
+	 * {@code reply}의 숫자가 모두 사용자가 이번 말에 쓴 숫자이거나 이번에 기록한 값인지 (명세 v6 5장 검사 6).
+	 * AI는 해석 단계에서 점수 · 골드를 모르므로 그 밖의 숫자는 지어낸 것이다. 한글로 쓴 숫자("이십오 점")는 못 막는다.
+	 */
+	static boolean numbersFromUser(String reply, String message, Set<String> recorded) {
 		Set<String> said = NUMBER.matcher(message == null ? "" : message).results().map(m -> normalize(m.group()))
-			.collect(Collectors.toSet());
+			.collect(Collectors.toCollection(java.util.HashSet::new));
+		said.addAll(recorded);
 		return NUMBER.matcher(reply).results().map(m -> normalize(m.group())).allMatch(said::contains);
+	}
+
+	static boolean numbersFromUser(String reply, String message) {
+		return numbersFromUser(reply, message, Set.of());
 	}
 
 	private static String normalize(String n) {
@@ -291,7 +345,7 @@ public class CheckinInterpreter {
 		HabitContext next = req.habits().stream()
 			.filter(h -> req.askingHabitId() != null ? h.habitId() == req.askingHabitId() : !drafted.contains(h.habitId()))
 			.findFirst().orElse(null);
-		String reply = next == null ? "오늘 습관을 다 들었어! 확인해 볼까?" : "'" + next.name() + "' 오늘 했어? 아래 버튼으로 알려줘!";
+		String reply = next == null ? "잠깐 못 들었어. 다시 말해 줄래?" : retryReply(next.name());
 		return new Result(reply, List.of(), null, false, "TEMPLATE");
 	}
 

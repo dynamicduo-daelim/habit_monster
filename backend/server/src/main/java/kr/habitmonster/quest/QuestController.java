@@ -1,5 +1,6 @@
 package kr.habitmonster.quest;
 
+import kr.habitmonster.quest.QuestService.Badges;
 import kr.habitmonster.quest.QuestService.Quests;
 
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -21,5 +22,11 @@ class QuestController {
 	@GetMapping("/quests")
 	Quests quests(@AuthenticationPrincipal Jwt jwt) {
 		return quests.today(Long.parseLong(jwt.getSubject()));
+	}
+
+	/** 월간 배지 보관함 — 받은 달만 (명세 v11). */
+	@GetMapping("/quests/badges")
+	Badges badges(@AuthenticationPrincipal Jwt jwt) {
+		return quests.badges(Long.parseLong(jwt.getSubject()));
 	}
 }

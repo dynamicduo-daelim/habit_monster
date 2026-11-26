@@ -8,5 +8,7 @@ public enum GiftSource {
 	/** 일일 퀘스트 완료 — {@code source_ref} = {@code quest.user_quest.id} */
 	QUEST_DAILY,
 	/** 주간 퀘스트 완료 — {@code source_ref} = {@code quest.user_quest.id} */
-	QUEST_WEEKLY
+	QUEST_WEEKLY,
+	/** 월간 배지 성실볼 (v1.14) — {@code source_ref} = {@code quest.user_month.id}. 골드 없음 (원장 사유 없음) */
+	QUEST_MONTHLY
 }
