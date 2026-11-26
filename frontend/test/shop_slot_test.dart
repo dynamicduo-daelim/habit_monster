@@ -45,7 +45,7 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     final s = GameState.sample(gold: 1240, balls: 1);
-    await tester.pumpWidget(withGame(s, const MaterialApp(home: MainShell())));
+    await tester.pumpWidget(withGame(s, const MaterialApp(home: MainShell(initialTab: MainShell.homeTab))));
     await tester.tap(find.bySemanticsLabel('상점'));
     await tester.pump();
     await tester.tap(find.text('90G')); // 중급
@@ -70,7 +70,7 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     final s = GameState.sample(gold: 1240, balls: 1)..gold = 500;
-    await tester.pumpWidget(withGame(s, const MaterialApp(home: MainShell())));
+    await tester.pumpWidget(withGame(s, const MaterialApp(home: MainShell(initialTab: MainShell.homeTab))));
     await tester.tap(find.bySemanticsLabel('상점'));
     await tester.pump();
     await tester.tap(find.text('400G'));
@@ -96,7 +96,7 @@ void main() {
     s.monsters.addAll([OwnedMonster(uid: 'x1', speciesId: 'chicken'), OwnedMonster(uid: 'x2', speciesId: 'squirrel')]);
     s.discoveredSpecies.addAll(['chicken', 'squirrel']);
     s.caughtSpecies.addAll(['chicken', 'squirrel']);
-    await tester.pumpWidget(withGame(s, const MaterialApp(home: MainShell())));
+    await tester.pumpWidget(withGame(s, const MaterialApp(home: MainShell(initialTab: MainShell.homeTab))));
     await tester.tap(find.text('도감'));
     await tester.pump();
     expect(find.text('카테고리 슬롯 3/4'), findsOneWidget);

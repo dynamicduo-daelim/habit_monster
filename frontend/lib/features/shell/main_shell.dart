@@ -28,16 +28,23 @@ import '../../core/theme/app_theme.dart';
 /// 하위 화면에서 `MainShell.of(context)`로 탭 이동([MainShellState.goTab])과
 /// 토스트([MainShellState.toast])를 쓸 수 있다.
 class MainShell extends StatefulWidget {
-  const MainShell({super.key, this.showTutorial = false});
+  const MainShell({super.key, this.showTutorial = false, this.initialTab = todayTab});
 
-  /// 온보딩을 막 끝내고 처음 들어왔으면 튜토리얼부터 보여준다.
+  /// 온보딩을 막 끝내고 처음 들어왔으면 튜토리얼부터 보여준다 (필드 탭에서).
   final bool showTutorial;
 
-  static const int homeTab = 0;
+  /// 처음 보이는 탭 (기본: 오늘).
+  final int initialTab;
+
+  // 아래 탭: 오늘 · 챗봇 · 필드 · 도감 · 통계 — 처음 화면은 습관 중심의 "오늘", 가운데가 필드(옛 홈) (11-26 피드백 12, D-97)
+  static const int todayTab = 0;
   static const int chatTab = 1;
-  static const int habitsTab = 2;
+  static const int homeTab = 2; // 필드 (옛 홈 화면)
   static const int dexTab = 3;
   static const int statsTab = 4;
+
+  /// 예전 이름 — 습관 리스트는 이제 "오늘" 탭.
+  static const int habitsTab = todayTab;
 
   static MainShellState of(BuildContext context) => context.findAncestorStateOfType<MainShellState>()!;
 
@@ -49,7 +56,7 @@ class MainShell extends StatefulWidget {
 }
 
 class MainShellState extends State<MainShell> {
-  int _tab = 0;
+  late int _tab = widget.showTutorial ? MainShell.homeTab : widget.initialTab;
 
   /// 홈 밖에서 상점을 열어 달라는 요청 (상단 바의 성실볼 칩, 11-26). 홈 화면이 듣고 상점을 연다.
   final shopRequests = ValueNotifier<int>(0);
@@ -63,10 +70,10 @@ class MainShellState extends State<MainShell> {
   bool _toastCoin = false;
   Timer? _toastTimer;
 
-  static const _tabs = ['홈', '챗봇', '습관', '도감', '통계'];
+  static const _tabs = ['오늘', '챗봇', '필드', '도감', '통계'];
 
   /// 탭 순서 → `PixelIcons.nav`(시안 순서: 홈 · 챗봇 · 통계 · 도감 · 목표)의 아이콘 번호. 습관 탭은 목표 탭의 체크리스트 아이콘을 물려받았다.
-  static const _tabIcons = [0, 1, 4, 3, 2];
+  static const _tabIcons = [4, 1, 0, 3, 2]; // 오늘 = 체크리스트, 필드 = 집 아이콘
 
   /// 탭 안에서 잠깐 바꾸는 곡 (홈의 상점 → 상점 곡, 챗봇의 탐색 → 탐색 곡).
   final Map<int, BgmTrack> _musicOverrides = {};
@@ -108,7 +115,6 @@ class MainShellState extends State<MainShell> {
   final _walletKey = GlobalKey();
   final _monsterKeys = [for (var i = 0; i < Economy.fieldCapacity; i++) GlobalKey()];
   final _iconsKey = GlobalKey();
-  final _sheetKey = GlobalKey();
   final _tabKeys = [for (var i = 0; i < _tabs.length; i++) GlobalKey()];
 
   /// 홈으로 돌아가 튜토리얼을 처음부터 보여준다 (설정의 "다시 보기").
@@ -128,9 +134,9 @@ class MainShellState extends State<MainShell> {
           body: '함께하는 몬스터가 여기서 지내요. 몬스터를 누르면 쓰다듬고, 간식을 주고, 같이 놀 수 있어요.',
         ),
         TutorialStep(
-          targets: [_sheetKey],
-          title: '오늘의 성실도',
-          body: '오늘 습관을 얼마나 지켰는지 보여줘요. 위로 밀면 습관마다 받은 점수가 나와요.',
+          targets: [_tabKeys[MainShell.todayTab]],
+          title: '오늘 탭',
+          body: '앱을 열면 가장 먼저 보이는 곳이에요. 오늘 할 습관과 성실도, 루틴몬 한 마리의 응원이 있어요.',
         ),
         TutorialStep(
           targets: [_tabKeys[MainShell.chatTab]],
@@ -150,9 +156,9 @@ class MainShellState extends State<MainShell> {
           body: '상점에서 물건을 사고, 가방에서 꺼내 써요. 출석부에서는 연속 출석을 보고, 습관에서는 새 습관을 추가하거나 그만둘 수 있어요.',
         ),
         TutorialStep(
-          targets: [_tabKeys[MainShell.habitsTab], _tabKeys[MainShell.dexTab]],
-          title: '습관과 도감',
-          body: '습관 탭에서 오늘 습관을 한눈에 보고, 새 습관을 추가할 수 있어요. 도감에는 만난 루틴몬이 기록돼요.',
+          targets: [_tabKeys[MainShell.homeTab], _tabKeys[MainShell.dexTab]],
+          title: '필드와 도감',
+          body: '가운데 필드 탭이 지금 이 화면이에요. 도감에는 만난 루틴몬이 기록돼요.',
         ),
         const TutorialStep(
           title: '이제 시작해 볼까요?',
@@ -229,15 +235,14 @@ class MainShellState extends State<MainShell> {
                     child: IndexedStack(
                       index: _tab,
                       children: [
+                        HabitsScreen(active: _tab == MainShell.todayTab),
+                        ChatScreen(active: _tab == MainShell.chatTab, keyboardOpen: keyboardOpen),
                         HomeScreen(
                           active: _tab == MainShell.homeTab,
                           tutorial: _tutorial,
                           monsterKeys: _monsterKeys,
                           iconsKey: _iconsKey,
-                          sheetKey: _sheetKey,
                         ),
-                        ChatScreen(active: _tab == MainShell.chatTab, keyboardOpen: keyboardOpen),
-                        const HabitsScreen(),
                         DexScreen(active: _tab == MainShell.dexTab),
                         StatsScreen(active: _tab == MainShell.statsTab),
                       ],

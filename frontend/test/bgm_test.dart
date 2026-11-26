@@ -32,7 +32,7 @@ void main() {
     final s = GameState.sample(gold: 1240, balls: 1);
     await tester.pumpWidget(withGame(
       s,
-      BgmScope(notifier: bgm, child: const MaterialApp(home: MainShell())),
+      BgmScope(notifier: bgm, child: const MaterialApp(home: MainShell(initialTab: MainShell.homeTab))),
     ));
     await tester.pump();
     expect(bgm.lastRequested, BgmTrack.home);

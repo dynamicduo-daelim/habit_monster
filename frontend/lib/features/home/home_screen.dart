@@ -21,7 +21,6 @@ import '../shell/main_shell.dart';
 import 'attendance_popup.dart';
 import 'bag_overlay.dart';
 import 'habit_manage_screen.dart';
-import 'habit_sheet.dart';
 import 'home_parts.dart';
 import '../gift/gift_box_screen.dart';
 import 'monster_overlay.dart';
@@ -47,7 +46,6 @@ class HomeScreen extends StatefulWidget {
     this.tutorial = false,
     this.monsterKeys,
     this.iconsKey,
-    this.sheetKey,
   });
 
   /// 홈 탭이 보이는 중인지 (아니면 돌아다니기/말풍선을 멈춘다).
@@ -59,7 +57,6 @@ class HomeScreen extends StatefulWidget {
   /// 튜토리얼이 가리킬 곳: 필드 몬스터들(필드 순서대로) · 오른쪽 위 아이콘들 · 아래 시트.
   final List<GlobalKey>? monsterKeys;
   final GlobalKey? iconsKey;
-  final GlobalKey? sheetKey;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -183,7 +180,7 @@ class _HomeScreenState extends State<HomeScreen> {
     const monH = MonsterSpecies.fieldBox + labelH;
     final minX = leftGap, maxX = max(minX, w - columnW - rightGap);
     final minY = max(fieldBarBottom, grassPx - MonsterSpecies.fieldBox + 6);
-    final maxY = max(minY, h - HabitSheet.closedHeightFor(GameScope.read(context).activeHabits.length) - monH);
+    final maxY = max(minY, h - 12 - monH); // 바텀시트를 뺐다 — 습관은 첫 화면 "오늘" 탭에 (11-26, D-97)
     var px = (x / 100 * w).clamp(minX, maxX), py = (y / 100 * h).clamp(minY, maxY);
 
     // 버튼 영역과 겹치면 왼쪽으로 비키거나 아래로 내려가기 중 덜 움직이는 쪽
@@ -580,15 +577,6 @@ class _HomeScreenState extends State<HomeScreen> {
                     child: const Text('◀', style: TextStyle(fontSize: 11, color: AppColors.text)),
                   ),
                 ),
-              ),
-            ),
-            Positioned(
-              left: _fieldInset,
-              right: _fieldInset,
-              bottom: _fieldInset,
-              child: HabitSheet(
-                key: widget.sheetKey,
-                maxHeight: box.maxHeight,
               ),
             ),
             if (_overlay == HomeOverlayKind.shop)

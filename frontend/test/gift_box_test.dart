@@ -80,7 +80,7 @@ void main() {
     }
     s.confirmCheckin({'h1': 0, 'h2': 0, 'h3': 0});
     final gold = s.gold;
-    await tester.pumpWidget(withGame(s, const MaterialApp(home: MainShell())));
+    await tester.pumpWidget(withGame(s, const MaterialApp(home: MainShell(initialTab: MainShell.homeTab))));
     await tester.pump();
     final icon = find.bySemanticsLabel('선물함, 받을 선물 있음'); // 개수 없이 점만 (명세 v10)
     expect(icon, findsOneWidget);

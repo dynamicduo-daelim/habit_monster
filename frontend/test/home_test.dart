@@ -108,19 +108,11 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     final state = GameState.sample(gold: 1240, balls: 1);
-    await tester.pumpWidget(withGame(state, const MaterialApp(home: MainShell())));
+    await tester.pumpWidget(withGame(state, const MaterialApp(home: MainShell(initialTab: MainShell.homeTab))));
     await tester.pump();
 
-    // 슬라이드 시트
-    expect(find.byKey(const ValueKey('habit-sheet-summary')), findsOneWidget);
-    await tester.tap(find.byKey(const ValueKey('habit-sheet-summary')));
-    await tester.pump(const Duration(milliseconds: 400));
-    // 펼치면 오늘의 성실도만 (습관 리스트는 가운데 습관 탭으로, 2026-11-25)
-    expect(find.text('오늘의 성실도'), findsOneWidget);
-    expect(find.text('습관 리스트'), findsNothing);
-    expect(find.text('챗봇에게 오늘 습관 체크받기'), findsNothing);
-    await tester.tap(find.bySemanticsLabel('시트 접기'));
-    await tester.pump(const Duration(milliseconds: 400));
+    // 필드에는 바텀시트가 없다 — 습관은 첫 화면 "오늘" 탭 (11-26, D-97)
+    expect(find.byKey(const ValueKey('habit-sheet-summary')), findsNothing);
 
     // 상점에서 하급 물약 사기
     await tester.tap(find.bySemanticsLabel('상점'));
@@ -203,7 +195,7 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     final state = GameState.sample(gold: 1240, balls: 1);
-    await tester.pumpWidget(withGame(state, const MaterialApp(home: MainShell())));
+    await tester.pumpWidget(withGame(state, const MaterialApp(home: MainShell(initialTab: MainShell.homeTab))));
     await tester.pump();
     // 테스트에선 그림을 읽기 전엔 크기가 0이라 누를 곳이 없다 → 먼저 읽어 둔다
     await tester.runAsync(() async {
@@ -246,7 +238,7 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     final state = GameState.sample(gold: 1240, balls: 1);
-    await tester.pumpWidget(withGame(state, const MaterialApp(home: MainShell())));
+    await tester.pumpWidget(withGame(state, const MaterialApp(home: MainShell(initialTab: MainShell.homeTab))));
     await tester.pump();
 
     final shop = find.text('상점'); // 아이콘 이름표
@@ -273,7 +265,7 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     final state = GameState.sample(gold: 1240, balls: 1);
-    await tester.pumpWidget(withGame(state, const MaterialApp(home: MainShell())));
+    await tester.pumpWidget(withGame(state, const MaterialApp(home: MainShell(initialTab: MainShell.homeTab))));
     await tester.pump();
     await tester.runAsync(() async {
       for (final e in find.byType(Image).evaluate()) {

@@ -61,7 +61,7 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     final s = state ?? GameState.sample();
-    await tester.pumpWidget(withGame(s, const MaterialApp(home: MainShell())));
+    await tester.pumpWidget(withGame(s, const MaterialApp(home: MainShell(initialTab: MainShell.homeTab))));
     await tester.pump();
     return s;
   }
@@ -146,7 +146,7 @@ void main() {
     final s = GameState.sample();
     s.addHabit(name: '스쿼트', categoryId: 'ex', measureIndex: 1, target: 30, periodIndex: 0);
     s.addHabit(name: '홈트', categoryId: 'ex', measureIndex: 0, target: 20, periodIndex: 0);
-    await tester.pumpWidget(withGame(s, const MaterialApp(home: MainShell())));
+    await tester.pumpWidget(withGame(s, const MaterialApp(home: MainShell(initialTab: MainShell.homeTab))));
     await tester.pump();
     await tester.tap(find.bySemanticsLabel('습관 관리'));
     await tester.pump();

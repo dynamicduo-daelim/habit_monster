@@ -20,7 +20,7 @@
 - `data/models.dart`, `data/catalog.dart` 카테고리 · 도감 · 상점 · 대사
 - `core/widgets/pixel_icon.dart` 시안의 픽셀 SVG path를 그리는 PixelIcon (path 데이터는 `data/pixel_icons.dart`)
 - `features/` onboarding(인트로 + 1~2단계) · shell(상단 바 + 탭 5개 + `MainShell.of(context)`로 탭 이동/토스트)
-  · home(필드 · 말풍선 · 슬라이드 시트 · 상점/가방/교감 창) · dex(도감) · habits(가운데 습관 탭, 11-25에 목표 탭을 대신함 — 목표 코드는 앱에서 전부 지움, D-91)
+  · home(필드 · 말풍선 · 슬라이드 시트 · 상점/가방/교감 창) · dex(도감) · habits(첫 화면 \"오늘\" 탭 — 습관 · 랜덤 루틴몬 말풍선, 11-26 D-97. 가운데 탭은 home(필드). 목표 코드는 앱에서 전부 지움, D-91)
   · chat(대본형 습관 체크 + 탐색, 대사는 `ChatBrain`) · stats(통계 — 탭을 열 때마다 `GameRepository.loadStats`)
   · tutorial(온보딩 직후 홈을 짚어 주는 `TutorialOverlay`, 설정에서 다시 보기) · home의 출석부(`attendance_popup.dart`)
 - `core/widgets/help_button.dart` 낯선 말 옆 ? 버튼 `HelpButton` + 설명 창 `showInfoPopup` (시안에 없는 추가 기능)
