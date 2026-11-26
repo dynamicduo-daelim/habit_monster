@@ -50,6 +50,15 @@ class MainShell extends StatefulWidget {
 
 class MainShellState extends State<MainShell> {
   int _tab = 0;
+
+  /// 홈 밖에서 상점을 열어 달라는 요청 (상단 바의 성실볼 칩, 11-26). 홈 화면이 듣고 상점을 연다.
+  final shopRequests = ValueNotifier<int>(0);
+
+  /// 홈 탭으로 가서 상점을 연다.
+  void openShop() {
+    goTab(MainShell.homeTab);
+    shopRequests.value++;
+  }
   String? _toastText;
   bool _toastCoin = false;
   Timer? _toastTimer;
@@ -182,6 +191,7 @@ class MainShellState extends State<MainShell> {
   @override
   void dispose() {
     _toastTimer?.cancel();
+    shopRequests.dispose();
     super.dispose();
   }
 
@@ -352,7 +362,7 @@ class _TopBar extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               const SizedBox(width: 8),
-                  BallChip(count: s.balls),
+                  BallChip(count: s.balls, onTap: () => MainShell.maybeOf(context)?.openShop()),
                 ],
               ),
               const SizedBox(width: 4),

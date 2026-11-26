@@ -152,6 +152,11 @@ class OnboardingController extends ChangeNotifier {
 
   void addHabit() {
     if (!canAddHabit) return;
+    final norm = draftName.text.replaceAll(RegExp(r'\s+'), '').toLowerCase();
+    if (habits.any((h) => h.name.replaceAll(RegExp(r'\s+'), '').toLowerCase() == norm)) {
+      onToast('이미 등록한 습관이에요'); // 같은 습관 두 번 등록 막기 (11-26)
+      return;
+    }
     if (habits.length >= Economy.maxActiveHabits) {
       onToast('습관 퀘스트는 최대 ${Economy.maxActiveHabits}개까지');
       return;

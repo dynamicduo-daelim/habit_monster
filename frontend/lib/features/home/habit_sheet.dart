@@ -20,7 +20,9 @@ class HabitSheet extends StatefulWidget {
   /// 홈 본문 높이 (펼친 높이가 넘지 않게).
   final double maxHeight;
 
-  static const double closedHeight = 70; // 테두리 4 + 손잡이 24 + 총점 막대 8 + 6 + 습관별 작은 막대 줄 18 + 아래 여백 10 (11-26)
+  /// 접힌 높이: 테두리 4 + 손잡이 24 + 총점 막대 8 + 6 + 습관 한 줄 18 × [habits] + 아래 여백 8.
+  /// 접힌 채로 습관마다 이름 · 막대 · 점수가 보인다 (11-26 — 아이콘 대신 습관 리스트).
+  static double closedHeightFor(int habits) => 50 + 18.0 * habits;
   static const double openHeight = 310; // 성실도 카드 + 반영 습관 3줄 + 안내 (습관 리스트를 탭으로 옮겨 470 → 310)
 
   @override
@@ -46,7 +48,7 @@ class _HabitSheetState extends State<HabitSheet> {
     final pct = score / GameState.maxDailyScore;
     return AnimatedContainer(
       duration: const Duration(milliseconds: 250),
-      height: _open ? openH : HabitSheet.closedHeight,
+      height: _open ? openH : HabitSheet.closedHeightFor(s.activeHabits.length),
       decoration: BoxDecoration(
         color: AppColors.nightDeep,
         borderRadius: BorderRadius.circular(14),
@@ -59,7 +61,7 @@ class _HabitSheetState extends State<HabitSheet> {
           borderRadius: BorderRadius.circular(12),
           child: OverflowBox(
             alignment: Alignment.topCenter,
-            maxHeight: math.max(openH, HabitSheet.closedHeight) - 4, // 위아래 테두리 2 + 2
+            maxHeight: math.max(openH, HabitSheet.closedHeightFor(s.activeHabits.length)) - 4, // 위아래 테두리 2 + 2
             child: Column(
               children: [
                 Semantics(
@@ -148,20 +150,13 @@ class _Summary extends StatelessWidget {
         behavior: HitTestBehavior.opaque,
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(14, 0, 14, 10),
+          padding: const EdgeInsets.fromLTRB(14, 0, 14, 8),
           child: Column(
             children: [
               _ProgressBar(pct: pct, color: AppColors.gold, height: 8),
               const SizedBox(height: 6),
-              // 습관마다 작은 막대 (분야 아이콘 + 받은 점수 / 25) — 접힌 채로도 무엇을 했는지 (11-26)
-              Row(
-                children: [
-                  for (var i = 0; i < s.activeHabits.length; i++) ...[
-                    if (i > 0) const SizedBox(width: 8),
-                    Expanded(child: _MiniHabitBar(s: s, habit: s.activeHabits[i])),
-                  ],
-                ],
-              ),
+              // 습관마다 한 줄: 이름 · 막대 · 점수 (펼친 화면의 습관 리스트를 접힌 채로, 11-26)
+              for (final h in s.activeHabits) _MiniHabitBar(s: s, habit: h),
             ],
           ),
         ),
@@ -259,7 +254,7 @@ class _ScorePage extends StatelessWidget {
   }
 }
 
-/// 접힌 시트의 습관 하나: 분야 아이콘 + 얇은 막대 (체크 전이면 빈 막대).
+/// 접힌 시트의 습관 한 줄 (높이 18): 분야 아이콘 · 이름 · 막대 · 받은 점수 (체크 전이면 빈 막대 · "–").
 class _MiniHabitBar extends StatelessWidget {
   const _MiniHabitBar({required this.s, required this.habit});
   final GameState s;
@@ -267,20 +262,35 @@ class _MiniHabitBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final score = s.rewardedScoreOf(habit) ?? 0;
-    return Row(
-      children: [
-        CategoryIcon(habit.categoryId, size: 16, outline: 0),
-        const SizedBox(width: 4),
-        Expanded(
-          child: _ProgressBar(
-            pct: score / Economy.maxSincerityPerHabit,
-            color: Catalog.category(habit.categoryId).color,
-            height: 6,
-            border: 1.5,
+    final score = s.rewardedScoreOf(habit);
+    return SizedBox(
+      height: 18,
+      child: Row(
+        children: [
+          CategoryIcon(habit.categoryId, size: 14, outline: 0),
+          const SizedBox(width: 6),
+          SizedBox(
+            width: 92,
+            child: Text(habit.name,
+                maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11, color: AppColors.text)),
           ),
-        ),
-      ],
+          const SizedBox(width: 6),
+          Expanded(
+            child: _ProgressBar(
+              pct: (score ?? 0) / Economy.maxSincerityPerHabit,
+              color: Catalog.category(habit.categoryId).color,
+              height: 6,
+              border: 1.5,
+            ),
+          ),
+          const SizedBox(width: 6),
+          SizedBox(
+            width: 38,
+            child: Text(score == null ? '–' : '$score/${Economy.maxSincerityPerHabit}',
+                textAlign: TextAlign.right, style: const TextStyle(fontSize: 10, color: AppColors.textMuted)),
+          ),
+        ],
+      ),
     );
   }
 }

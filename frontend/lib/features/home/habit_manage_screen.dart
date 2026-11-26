@@ -93,6 +93,10 @@ class _HabitManageScreenState extends State<HabitManageScreen> {
   }
 
   void _pickPreset(int i, (String, int, double) p) {
+    if (GameScope.read(context).hasHabitNamed(p.$1)) {
+      _toast('이미 있는 습관이에요 · ${p.$1}');
+      return;
+    }
     _preset = i;
     _custom = false;
     _c.pickPreset(p);
@@ -102,6 +106,10 @@ class _HabitManageScreenState extends State<HabitManageScreen> {
   /// 맨 위 칸에 직접 적고 [만들기] (또는 자판의 완료) → 확인 창 (11-26 — 직접 적기를 더 쉽게).
   void _pickTyped() {
     if (_c.draftName.text.trim().isEmpty) return;
+    if (GameScope.read(context).hasHabitNamed(_c.draftName.text)) {
+      _toast('이미 있는 습관이에요');
+      return;
+    }
     FocusManager.instance.primaryFocus?.unfocus();
     _preset = null;
     _custom = false;
@@ -134,6 +142,10 @@ class _HabitManageScreenState extends State<HabitManageScreen> {
     if (_busy || !_c.canAddHabit) return;
     final s = GameScope.read(context);
     final name = _c.draftName.text.trim();
+    if (s.hasHabitNamed(name)) {
+      _toast('이미 있는 습관이에요 · $name'); // 같은 습관 중복 등록 막기 (11-26, 서버 모드도 보내기 전에)
+      return;
+    }
     setState(() => _busy = true);
     final h = await runGameAction(
       context,
@@ -384,50 +396,59 @@ class _HabitCard extends StatelessWidget {
     final cat = Catalog.category(habit.categoryId);
     final m = cat.measures[habit.measureIndex];
     return Container(
-      padding: const EdgeInsets.fromLTRB(12, 12, 10, 12),
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
       decoration: BoxDecoration(
         color: AppColors.nightPanel,
+        borderRadius: BorderRadius.circular(10),
         border: Border.all(color: AppColors.nightLine, width: 3),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          CategoryIcon(habit.categoryId, size: 32),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(habit.name,
-                    style: const TextStyle(fontFamily: AppTheme.pixelFont, fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.text)),
-                const SizedBox(height: 7),
-                Wrap(
-                  spacing: 5,
-                  runSpacing: 5,
+          Row(
+            children: [
+              CategoryIcon(habit.categoryId, size: 32),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _Chip(cat.short),
-                    _Chip(m.isOX ? '했다 / 못 했다' : '하루 ${formatNum(habit.target)}${m.unit}'),
-                    _Chip('${Catalog.periods[habit.periodIndex].$1} 도전'),
+                    Text(habit.name,
+                        style: const TextStyle(
+                            fontFamily: AppTheme.pixelFont, fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.text)),
+                    const SizedBox(height: 7),
+                    Wrap(
+                      spacing: 5,
+                      runSpacing: 5,
+                      children: [
+                        _Chip(cat.short),
+                        _Chip(m.isOX ? '했다 / 못 했다' : '하루 ${formatNum(habit.target)}${m.unit}'),
+                        _Chip('${Catalog.periods[habit.periodIndex].$1} 도전'),
+                      ],
+                    ),
                   ],
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-          const SizedBox(width: 8),
-          Semantics(
-            container: true, // 이름 · 칩과 한 덩어리로 읽히지 않게
-            button: true,
-            label: '${habit.name} 그만두기',
-            excludeSemantics: true,
-            onTap: onRemove,
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
+          // 그만두기는 카드 아래 오른쪽에 작게 (11-26 — 눈에 덜 띄게, 실수로 누르지 않게)
+          Align(
+            alignment: Alignment.centerRight,
+            child: Semantics(
+              container: true,
+              button: true,
+              label: '${habit.name} 그만두기',
+              excludeSemantics: true,
               onTap: onRemove,
-              child: Container(
-                constraints: const BoxConstraints(minHeight: 40),
-                alignment: Alignment.center,
-                padding: const EdgeInsets.symmetric(horizontal: 10),
-                decoration: BoxDecoration(border: Border.all(color: AppColors.nightLine2, width: 2)),
-                child: const Text('그만두기', style: TextStyle(fontSize: 11.5, color: AppColors.textMuted)),
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: onRemove,
+                child: const Padding(
+                  padding: EdgeInsets.fromLTRB(12, 8, 2, 8),
+                  child: Text('그만두기',
+                      style: TextStyle(
+                          fontSize: 11, color: AppColors.textMuted, decoration: TextDecoration.underline, decorationColor: AppColors.textMuted)),
+                ),
               ),
             ),
           ),

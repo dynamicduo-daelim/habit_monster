@@ -607,6 +607,13 @@ class GameState extends ChangeNotifier {
 
   /// 새 습관을 등록한다. 꽉 찼거나, 열지 않은 카테고리거나, 이름 · 목표가 비었으면 null.
   /// 오늘 이미 체크인을 확정했다면 이 습관은 내일부터 보상에 반영된다 (보상은 첫 확정 기준).
+  /// 같은 이름의 습관이 이미 있는지 (앞뒤 빈칸 · 대소문자 · 띄어쓰기 무시). 중복 등록을 막는다 (11-26).
+  bool hasHabitNamed(String name) {
+    String norm(String v) => v.replaceAll(RegExp(r'\s+'), '').toLowerCase();
+    final n = norm(name);
+    return n.isNotEmpty && habits.any((h) => norm(h.name) == n);
+  }
+
   Habit? addHabit({
     required String name,
     required String categoryId,
@@ -616,6 +623,7 @@ class GameState extends ChangeNotifier {
   }) {
     final trimmed = name.trim();
     if (!canAddHabit || trimmed.isEmpty || target <= 0 || !pickedCategories.contains(categoryId)) return null;
+    if (hasHabitNamed(trimmed)) return null; // 같은 이름은 두 번 만들지 않는다 (11-26 피드백 "습관 겹침")
     final h = Habit(
       id: 'nh${_habitSeq++}',
       name: trimmed,
@@ -657,21 +665,13 @@ class GameState extends ChangeNotifier {
         ..addAll(habits);
     }
 
-    // 고르지 않은 길의 몬스터는 데리고 시작하지 않는다.
-    monsters.removeWhere((m) => !pickedCategories.contains(Catalog.speciesById(m.speciesId).categoryId));
-    discoveredSpecies
-      ..clear()
-      ..addAll(monsters.map((m) => m.speciesId));
-    caughtSpecies
-      ..clear()
-      ..addAll(monsters.map((m) => m.speciesId));
-
-    // 고른 길마다 초기 몬스터 1마리. 대화 상대는 고른 첫 파트너, 안 골랐으면 원래 상대나 첫 몬스터.
-    for (final c in pickedCategories) {
-      final m = grantStarter(c);
-      if (m != null && c == starterCategory) chatPartnerUid = m.uid;
-    }
-    if (monsterByUid(chatPartnerUid) == null) chatPartnerUid = monsters.firstOrNull?.uid;
+    // 처음에는 루틴몬 1마리만 — 고른 첫 파트너(안 골랐으면 첫 길)의 스타터 (11-26 피드백 "초반 루틴몬은 1마리").
+    // 나머지 길의 몬스터는 탐색으로 만난다. 서버는 아직 길마다 1마리(명세 v10 `starters`) — 제안 docs/제안/2026-11-26-스타터-1마리.md
+    monsters.clear();
+    discoveredSpecies.clear();
+    caughtSpecies.clear();
+    final first = starterCategory ?? pickedCategories.first;
+    chatPartnerUid = grantStarter(first)?.uid;
     notifyListeners();
   }
 

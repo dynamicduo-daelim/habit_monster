@@ -104,8 +104,14 @@ class _HomeScreenState extends State<HomeScreen> {
       if (mounted) setState(() => _tick++);
     });
     _chatter = Timer.periodic(const Duration(milliseconds: 5200), (_) => _chatterStep());
-    WidgetsBinding.instance.addPostFrameCallback((_) => _openingChatter());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _openingChatter();
+      _shopRequests = MainShell.maybeOf(context)?.shopRequests?..addListener(_openShop);
+    });
   }
+
+  /// 상단 바 성실볼 칩 → 상점 (셸이 보내는 요청).
+  ValueNotifier<int>? _shopRequests;
 
   bool get _idle => widget.active && !widget.tutorial && _overlay == HomeOverlayKind.none;
 
@@ -177,7 +183,7 @@ class _HomeScreenState extends State<HomeScreen> {
     const monH = MonsterSpecies.fieldBox + labelH;
     final minX = leftGap, maxX = max(minX, w - columnW - rightGap);
     final minY = max(fieldBarBottom, grassPx - MonsterSpecies.fieldBox + 6);
-    final maxY = max(minY, h - HabitSheet.closedHeight - monH);
+    final maxY = max(minY, h - HabitSheet.closedHeightFor(GameScope.read(context).activeHabits.length) - monH);
     var px = (x / 100 * w).clamp(minX, maxX), py = (y / 100 * h).clamp(minY, maxY);
 
     // 버튼 영역과 겹치면 왼쪽으로 비키거나 아래로 내려가기 중 덜 움직이는 쪽
@@ -373,6 +379,7 @@ class _HomeScreenState extends State<HomeScreen> {
     for (final t in [_wander, _firstWander, _bob, _chatter, _talkClear, ..._heartClear.values, ..._rest.values]) {
       t?.cancel();
     }
+    _shopRequests?.removeListener(_openShop);
     super.dispose();
   }
 
