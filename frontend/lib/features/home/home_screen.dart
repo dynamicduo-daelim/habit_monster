@@ -507,6 +507,16 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   const SizedBox(height: 6),
                   _IconSpot(
+                    label: '선물함',
+                    semantic: s.pendingGiftCount > 0 ? '선물함, 받을 선물 ${s.pendingGiftCount}개' : '선물함',
+                    icon: PixelIcons.fieldGift,
+                    labelColor: AppColors.text,
+                    bob: iconUp ? -_iconBob : 0,
+                    count: s.pendingGiftCount,
+                    onTap: () => GiftBoxScreen.open(context),
+                  ),
+                  const SizedBox(height: 6),
+                  _IconSpot(
                     label: '출석',
                     semantic: '출석부',
                     icon: PixelIcons.fieldCalendar,
@@ -532,16 +542,6 @@ class _HomeScreenState extends State<HomeScreen> {
                       shell.goTab(MainShell.habitsTab);
                       shell.toast(msg);
                     },
-                  ),
-                  const SizedBox(height: 6),
-                  _IconSpot(
-                    label: '선물함',
-                    semantic: s.pendingGiftCount > 0 ? '선물함, 받을 선물 ${s.pendingGiftCount}개' : '선물함',
-                    icon: PixelIcons.fieldGift,
-                    labelColor: AppColors.text,
-                    bob: iconUp ? -_iconBob : 0,
-                    count: s.pendingGiftCount,
-                    onTap: () => GiftBoxScreen.open(context),
                   ),
                 ],
               ),
