@@ -58,6 +58,18 @@ class QuestRepository {
 	}
 
 	/**
+	 * 진행도를 계산값으로 맞춘다 (주간 — 기록에서 계산). {@code GREATEST}라 내려가지 않고, 목표에서 멈춘다.
+	 * 진행 중인 행만 — 이미 끝났으면 비어 있다.
+	 */
+	Optional<Advanced> raise(long userId, LocalDate periodStart, String questCode, int value) {
+		return db.sql("""
+			update quest.user_quest set progress = greatest(progress, least(?, target))
+			 where user_id = ? and period_start = ? and quest_code = ? and status = 'IN_PROGRESS'
+			returning id, progress, target""")
+			.params(value, userId, periodStart, questCode).query(Advanced.class).optional();
+	}
+
+	/**
 	 * 목표에 닿은 행을 완료로 바꾼다 — 조건부 UPDATE라 한 번만 성공한다. 바꿨으면 그 행의 보상(만들 때 고정한 값),
 	 * 이미 완료였으면 비어 있다.
 	 */

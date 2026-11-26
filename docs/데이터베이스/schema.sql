@@ -33,6 +33,8 @@
 -- v1.11 2026-11-25 (API 명세 v8 — 퀘스트 기반 + 일일 퀘스트, 결정 D-83 · D-85 · D-87, 제안서 docs/제안/2026-11-25-퀘스트-기반-일일.md)
 --   * quest 스키마 새로: quest.quest_def(퀘스트 마스터 — 보상 · 목표 횟수) · quest.user_quest(사용자 · 기간 · 퀘스트 1행, 잠금은 저장 안 함)
 --   * 원장 사유 QUEST_DAILY (ref_id = user_quest.id). 사용자 잠금 순서 끝에 quest (wallet 다음, D-87)
+-- v1.12 2026-11-25 (API 명세 v9 — 주간 퀘스트, 결정 D-88, 제안서 docs/제안/2026-11-25-퀘스트-주간.md)
+--   * 원장 사유 QUEST_WEEKLY 하나만. 테이블 변경 없음 (주간 퀘스트는 시드, 판정은 출석 · 체크인 기록에서 계산)
 -- 설계 문서: 04_논리물리모델.md (v1.7 반영 전)
 -- MVP 밖 구성요소(결제, 수치 변경 이력, AI 기억·호출 로그)는 schema_later.sql (이 파일 다음에 적용)
 --
@@ -497,7 +499,8 @@ INSERT INTO wallet.ledger_reason (code, direction, description) VALUES
  ('SHOP_PURCHASE','DEBIT','상점 구매'),
  ('ADJUST','CREDIT','운영 보정 (지급·환불)'),
  ('ADJUST','DEBIT','운영 보정 (회수)'),
- ('QUEST_DAILY','CREDIT','일일 퀘스트 완료');   -- v1.11, ref_id = quest.user_quest.id
+ ('QUEST_DAILY','CREDIT','일일 퀘스트 완료'),    -- v1.11, ref_id = quest.user_quest.id
+ ('QUEST_WEEKLY','CREDIT','주간 퀘스트 완료');   -- v1.12, ref_id = quest.user_quest.id
 
 CREATE TABLE wallet.wallet_ledger (
   id             BIGINT       GENERATED ALWAYS AS IDENTITY PRIMARY KEY,

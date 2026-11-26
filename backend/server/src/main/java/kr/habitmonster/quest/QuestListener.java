@@ -1,6 +1,7 @@
 package kr.habitmonster.quest;
 
 import kr.habitmonster.checkin.CheckinSubmitted;
+import kr.habitmonster.habit.Attended;
 import kr.habitmonster.habit.TimerStopped;
 import kr.habitmonster.monster.AffectionGiven;
 import kr.habitmonster.monster.MonsterTalked;
@@ -22,9 +23,17 @@ class QuestListener {
 		this.quests = quests;
 	}
 
+	/** 일일 "오늘의 기록" + 주간(성실도 좋은 날 · 카테고리)을 다시 계산. */
 	@EventListener
 	void on(CheckinSubmitted e) {
 		quests.progressDaily(e.userId(), e.businessDate(), QuestService.DAILY_CHECKIN);
+		quests.refreshWeekly(e.userId(), e.businessDate());
+	}
+
+	/** 주간 "주 4일 출석"을 다시 계산. */
+	@EventListener
+	void on(Attended e) {
+		quests.refreshWeekly(e.userId(), e.businessDate());
 	}
 
 	@EventListener

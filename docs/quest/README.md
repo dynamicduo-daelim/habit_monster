@@ -11,7 +11,7 @@
 | --- | --- | --- | --- |
 | 1 | [1-DRAG.md](1-DRAG.md) | 필드 끌기 호감도 DRAG 되살리기 (D-46). 퀘스트와 독립, 혼자 배포 가능 | 서버 끝(11-25) — 명세 v7 · DB v1.10 · 서버 · 테스트. 남은 것: 배포 · 앱(프론트 담당) |
 | 2 | [2-기반-일일퀘스트.md](2-기반-일일퀘스트.md) | `quest` 스키마 · 원장 사유 · 이벤트 연결 · `GET /quests` · 일일 4개 · A3 잠금 | 서버 끝(11-25) — 명세 v8 · DB v1.11 · 서버 · 테스트 11개. 남은 것: 배포 · 앱(프론트 담당) |
-| 3 | [3-주간퀘스트.md](3-주간퀘스트.md) | B1 주 4일 출석 · B2 80% 이상인 날 2일 · B3 카테고리 3곳(잠금) | |
+| 3 | [3-주간퀘스트.md](3-주간퀘스트.md) | B1 주 4일 출석 · B2 80% 이상인 날 2일 · B3 카테고리 3곳(잠금) | 서버 끝(11-25) — 명세 v9 · DB v1.12 · 서버 · 테스트 8개. DB 적용 끝(11-26). 남은 것: 배포 · 앱 |
 | 4 | [4-월간배지.md](4-월간배지.md) | 20개 완료 → 배지 + 성실볼 · `GET /quests/badges` | |
 | — | | **여기까지 1차** | |
 | 5 | [5-업적-칭호-1차.md](5-업적-칭호-1차.md) | 업적 일부 + `displayTitle`(최근 1개 자동) | |
@@ -36,6 +36,7 @@
 | 퀘스트 진행을 올리는 방식 | 직접 호출 대신 **Spring 이벤트**(`publishEvent` → `@EventListener`), **동기 · 같은 트랜잭션** | D-85 |
 | 잠금 순서 | **`habit_user → goal_user → monster_user → inventory → wallet → quest`** — 퀘스트는 항상 지갑을 먼저 잠근다 (D-85의 "퀘스트 → 지갑"은 체크인 경로 때문에 지킬 수 없어 바꿈) | D-87 |
 | 칭호 표시 | 최근 획득 1개 자동 | D-83 |
+| 주간 진행도 | 알림 · 조회 때마다 이번 주 기록에서 다시 계산 (내려가지 않음) — 일일은 알림마다 +1 | D-88 |
 
 ## 이벤트 목록 (보내는 곳 → 받는 곳)
 
@@ -43,11 +44,11 @@
 
 | 이벤트 | 보내는 곳 | 언제 | 받는 곳 (단계) |
 | --- | --- | --- | --- |
-| `checkin.CheckinSubmitted(userId, businessDate)` | `CheckinService.submit` 끝 (지갑 잠근 뒤) | 첫 제출만 (PUT 아님) | `DAILY_CHECKIN` (2) · 주간 B2 · B3 (3) · 업적 (5) |
+| `checkin.CheckinSubmitted(userId, businessDate)` | `CheckinService.submit` 끝 (지갑 잠근 뒤) | 첫 제출만 (PUT 아님) | `DAILY_CHECKIN` (2) · 주간 다시 계산 (3) · 업적 (5) |
 | `monster.AffectionGiven(userId, userMonsterId, action, businessDate)` | `MonsterService.affection` | 기록이 들어갔을 때만 (409 · DRAG 두 번째는 안 보냄) | `DAILY_PET`(PET만) (2) · 업적 · 깜짝 (5 ~ 7) |
 | `monster.MonsterTalked(userId, userMonsterId, businessDate)` | `MonsterService.line` | 성공 | `DAILY_TALK` (2) · 깜짝 (6 · 7) |
 | `habit.TimerStopped(userId, habitId, businessDate, minutes, endReason)` | `TimerService.stop` (USER · MAX_DURATION · HABIT_STOPPED) | 탈퇴 정리는 안 보냄 · 날짜는 끝난 날 | `DAILY_TIMER` (2) · 업적 (5) |
-| `AttendanceMarked` (안) | 출석 | | 3 · 5 |
+| `habit.Attended(userId, businessDate)` | `HabitService.attend` | 그날 첫 출석만 | 주간 `WEEKLY_ATTEND` (3) · 업적 (5) |
 | `MonsterFed` · `Explored` · `CaptureTried` · `ItemPurchased` · `PartnerChanged` · `MonsterMoved` · `CategoryUnlocked` · `DexViewed` · `GoalCompleted` · `HabitPeriodCompleted` (안) | 각 모듈 | | 5 ~ 8 |
 
 ## 정할 것
