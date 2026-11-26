@@ -16,7 +16,7 @@ import '../home/habit_sheet.dart' show SincerityHelp;
 import '../shell/main_shell.dart';
 
 /// 하단 가운데 "습관" 탭: 오늘 습관을 한눈에.
-/// 위에서부터 제목 + [+ 새 습관] → 체크 수 · 성실도 → 챗봇 체크받기(파트너 그림) → 습관마다 한 줄(체크 상태는 아이콘).
+/// 위에서부터 제목 + [+ 새 습관] → 체크 수 · 성실도 → 습관마다 한 줄(체크 상태는 아이콘) → 맨 아래 챗봇 체크받기(파트너 그림).
 /// 목표 탭 자리를 대신한다 (기획 2026-11-25-습관-탭-목표-제거 · 11-26 다듬기).
 class HabitsScreen extends StatelessWidget {
   const HabitsScreen({super.key});
@@ -44,11 +44,6 @@ class HabitsScreen extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         _TodayCard(s: s),
-        // 챗봇 체크를 마치면 버튼을 없앤다 (사용자 요청 10-29)
-        if (!s.checkedInToday && s.habits.isNotEmpty && shell != null) ...[
-          const SizedBox(height: 12),
-          _ChatCheckButton(s: s, onTap: () => shell.goTab(MainShell.chatTab)),
-        ],
         const SizedBox(height: 14),
         if (s.habits.isEmpty)
           const Padding(
@@ -60,6 +55,11 @@ class HabitsScreen extends StatelessWidget {
             HabitRow(s: s, habit: h, counted: !s.checkedInToday || s.isCounted(h)),
             const SizedBox(height: 8),
           ],
+        // 맨 아래: 챗봇 체크받기 (11-26 사용자 — 목록을 다 본 뒤에). 체크를 마치면 버튼을 없앤다 (10-29)
+        if (!s.checkedInToday && s.habits.isNotEmpty && shell != null) ...[
+          const SizedBox(height: 6),
+          _ChatCheckButton(s: s, onTap: () => shell.goTab(MainShell.chatTab)),
+        ],
       ],
     );
   }
