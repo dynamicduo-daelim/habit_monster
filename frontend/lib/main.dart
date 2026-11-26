@@ -8,6 +8,7 @@ import 'core/auth/auth_service.dart';
 import 'core/auth/http_auth_service.dart';
 import 'core/auth/login_prefs.dart';
 import 'core/state/study_timer.dart';
+import 'core/state/unlocks.dart';
 import 'core/auth/social_login.dart';
 import 'core/config/app_config.dart';
 
@@ -21,5 +22,9 @@ Future<void> main() async {
   // 게임 API는 로그인 쪽 토큰을 빌려 쓴다 (재발급도 한곳에서)
   final api = server == null ? null : ApiClient(baseUrl: AppConfig.apiBaseUrl, tokens: server);
   runApp(HabitMonsterApp(
-      authService: auth, api: api, loginPrefs: SecureLoginPrefsStore(), timerStore: SecureStudyTimerStore()));
+      authService: auth,
+      api: api,
+      loginPrefs: SecureLoginPrefsStore(),
+      timerStore: SecureStudyTimerStore(),
+      unlockStore: SecureUnlockStore()));
 }

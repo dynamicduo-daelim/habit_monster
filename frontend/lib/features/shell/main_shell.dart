@@ -20,6 +20,8 @@ import '../habits/habits_screen.dart';
 import '../home/home_screen.dart';
 import '../stats/stats_screen.dart';
 import '../tutorial/tutorial_overlay.dart';
+import '../../core/state/unlocks.dart';
+import '../../core/utils/format.dart';
 import 'game_action.dart';
 import '../../core/theme/app_theme.dart';
 
@@ -123,7 +125,15 @@ class MainShellState extends State<MainShell> {
     setState(() => _tutorial = true);
   }
 
-  List<TutorialStep> get _tutorialSteps => [
+  List<TutorialStep> get _tutorialSteps {
+    final field = _isOpen(Feature.field);
+    return [for (final st in _allTutorialSteps) if (field || !_fieldSteps.contains(st.title)) st];
+  }
+
+  /// 필드가 열려야 보이는 안내 (단계별 열기 — 필드가 열릴 때 따로 안내한다).
+  static const _fieldSteps = {'나의 필드', '상점 · 가방 · 출석 · 습관', '필드와 도감'};
+
+  List<TutorialStep> get _allTutorialSteps => [
         const TutorialStep(
           title: '모아루틴에 온 걸 환영해요!',
           body: '습관을 지키면 루틴몬이 함께 자라는 곳이에요. 루틴몬은 여기 사는 동물 친구들이에요. 화면을 하나씩 알려 드릴게요.',
@@ -201,8 +211,83 @@ class MainShellState extends State<MainShell> {
     super.dispose();
   }
 
+  // ---------- 단계별 열기 (D-98) ----------
+  Unlocks? get _unlocks => UnlocksScope.maybeOf(context);
+
+  /// 열린 기능인지 (저장소가 없으면 전부 열림).
+  bool _isOpen(Feature f) => _unlocks?.isOpen(f) ?? true;
+
+  static const _tabFeature = {MainShell.homeTab: Feature.field, MainShell.dexTab: Feature.dex, MainShell.statsTab: Feature.stats};
+  bool _tabOpen(int i) => _tabFeature[i] == null || _isOpen(_tabFeature[i]!);
+
+  /// 홈 아이콘 (선물함 · 가방) — 비추기 대상.
+  final bagKey = GlobalKey();
+  final giftKey = GlobalKey();
+
+  bool _tabInit = false;
+  final List<Feature> _celebrate = []; // 축하 창을 띄울 차례
+  bool _celebrating = false;
+  List<TutorialStep>? _spotlight; // 열린 자리를 비추는 안내 한 장
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_tabInit) return;
+    _tabInit = true;
+    // 필드가 아직 잠겨 있으면 튜토리얼도 오늘 탭에서
+    if (widget.showTutorial && !_isOpen(Feature.field)) _tab = MainShell.todayTab;
+  }
+
+  /// 게임이 바뀔 때마다 (그린 뒤) 조건을 다시 보고, 새로 열린 기능을 축하한다.
+  void _checkUnlocks(GameState s) {
+    final u = _unlocks;
+    if (u == null || !u.loaded || !u.fresh) return;
+    final opened = u.evaluate(s);
+    if (opened.isEmpty && _celebrate.isEmpty) return;
+    _celebrate.addAll(opened);
+    _nextCelebration();
+  }
+
+  Future<void> _nextCelebration() async {
+    if (_celebrating || _tutorial || _spotlight != null || _celebrate.isEmpty || !mounted) return;
+    _celebrating = true;
+    final f = _celebrate.removeAt(0);
+    final go = await showGeneralDialog<bool>(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: '닫기',
+      barrierColor: AppColors.black.withValues(alpha: 0.55),
+      pageBuilder: (ctx, _, __) => _UnlockPopup(feature: f),
+    );
+    _celebrating = false;
+    if (!mounted) return;
+    if (go == true) {
+      final tab = switch (f) { Feature.dex => MainShell.dexTab, Feature.stats => MainShell.statsTab, _ => MainShell.homeTab };
+      goTab(tab);
+      final target = switch (f) {
+        Feature.bag => bagKey,
+        Feature.gift => giftKey,
+        Feature.field => _tabKeys[MainShell.homeTab],
+        Feature.dex => _tabKeys[MainShell.dexTab],
+        Feature.stats => _tabKeys[MainShell.statsTab],
+      };
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          setState(() => _spotlight = [TutorialStep(targets: [target], title: '${f.label}${josaIGa(f.label)} 열렸어요!', body: f.description)]);
+        }
+      });
+    } else {
+      _nextCelebration();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final s = GameScope.of(context);
+    UnlocksScope.maybeOf(context); // 열림이 바뀌면 다시 그림
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _checkUnlocks(s);
+    });
     return Stack(
       children: [
         _scaffold(context),
@@ -210,8 +295,21 @@ class MainShellState extends State<MainShell> {
           Positioned.fill(
             child: TutorialOverlay(
               steps: _tutorialSteps,
-              guide: _tutorialGuide(GameScope.of(context)),
-              onDone: () => setState(() => _tutorial = false),
+              guide: _tutorialGuide(s),
+              onDone: () {
+                setState(() => _tutorial = false);
+                _nextCelebration();
+              },
+            ),
+          ),
+        if (_spotlight != null)
+          Positioned.fill(
+            child: TutorialOverlay(
+              steps: _spotlight!,
+              onDone: () {
+                setState(() => _spotlight = null);
+                _nextCelebration();
+              },
             ),
           ),
       ],
@@ -242,6 +340,8 @@ class MainShellState extends State<MainShell> {
                           tutorial: _tutorial,
                           monsterKeys: _monsterKeys,
                           iconsKey: _iconsKey,
+                          bagKey: bagKey,
+                          giftKey: giftKey,
                         ),
                         DexScreen(active: _tab == MainShell.dexTab),
                         StatsScreen(active: _tab == MainShell.statsTab),
@@ -273,7 +373,7 @@ class MainShellState extends State<MainShell> {
           child: Row(
             children: [
               for (var i = 0; i < _tabs.length; i++)
-                Expanded(
+                if (_tabOpen(i)) Expanded(
                   child: GestureDetector(
                     behavior: HitTestBehavior.opaque,
                     onTap: () => goTab(i),
@@ -530,6 +630,40 @@ class _SettingsPopup extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// 새 기능이 열렸을 때 축하 창: 이름 · 한 줄 설명 · [보러 가기] / [나중에] (D-98).
+class _UnlockPopup extends StatelessWidget {
+  const _UnlockPopup({required this.feature});
+  final Feature feature;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      type: MaterialType.transparency,
+      child: PopupCard(
+        title: '새 기능!',
+        ribbonColor: AppColors.gold,
+        ribbonText: AppColors.night,
+        maxWidth: 300,
+        children: [
+          Text('${feature.label}${josaIGa(feature.label)} 열렸어요!',
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontFamily: AppTheme.pixelFont, fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.brownText)),
+          const SizedBox(height: 8),
+          Text(feature.description,
+              textAlign: TextAlign.center, style: const TextStyle(fontSize: 13, height: 1.6, color: AppColors.brownText)),
+          const SizedBox(height: 16),
+          PixelButton(label: '보러 가기', onPressed: () => Navigator.of(context).pop(true)),
+          const SizedBox(height: 6),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('나중에', style: TextStyle(fontSize: 13, color: AppColors.brownMuted)),
+          ),
+        ],
       ),
     );
   }

@@ -22,6 +22,7 @@ import 'attendance_popup.dart';
 import 'bag_overlay.dart';
 import 'habit_manage_screen.dart';
 import 'home_parts.dart';
+import '../../core/state/unlocks.dart';
 import '../gift/gift_box_screen.dart';
 import 'monster_overlay.dart';
 import 'purchase_popups.dart';
@@ -46,6 +47,8 @@ class HomeScreen extends StatefulWidget {
     this.tutorial = false,
     this.monsterKeys,
     this.iconsKey,
+    this.bagKey,
+    this.giftKey,
   });
 
   /// 홈 탭이 보이는 중인지 (아니면 돌아다니기/말풍선을 멈춘다).
@@ -57,6 +60,10 @@ class HomeScreen extends StatefulWidget {
   /// 튜토리얼이 가리킬 곳: 필드 몬스터들(필드 순서대로) · 오른쪽 위 아이콘들 · 아래 시트.
   final List<GlobalKey>? monsterKeys;
   final GlobalKey? iconsKey;
+
+  /// 가방 · 선물함 아이콘 — 단계별 열기 때 그 자리를 비춘다 (D-98).
+  final GlobalKey? bagKey;
+  final GlobalKey? giftKey;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -404,6 +411,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     _syncShopMusic();
     final s = GameScope.of(context);
+    final unlocks = UnlocksScope.maybeOf(context); // 단계별 열기 (D-98)
     final mons = s.fieldMonsters;
     final sel = s.monsterByUid(_selUid);
     _syncTopBar(_overlay == HomeOverlayKind.monster && sel != null);
@@ -501,7 +509,9 @@ class _HomeScreenState extends State<HomeScreen> {
                     onTap: _openShop,
                   ),
                   const SizedBox(height: 6),
+                  if (unlocks?.isOpen(Feature.bag) ?? true)
                   _IconSpot(
+                    key: widget.bagKey,
                     label: '가방',
                     semantic: '내 가방',
                     icon: PixelIcons.fieldBag,
@@ -509,8 +519,10 @@ class _HomeScreenState extends State<HomeScreen> {
                     bob: iconUp ? 0 : -_iconBob,
                     onTap: () => setState(() => _overlay = HomeOverlayKind.bag),
                   ),
+                  if (unlocks?.isOpen(Feature.gift) ?? true) ...[
                   const SizedBox(height: 6),
                   _IconSpot(
+                    key: widget.giftKey,
                     label: '선물함',
                     semantic: s.hasPendingGift ? '선물함, 받을 선물 있음' : '선물함',
                     icon: PixelIcons.fieldGift,
@@ -519,6 +531,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     badge: s.hasPendingGift, // 점만 — 개수는 할 일처럼 보이지 않게 (명세 v10 · D-89)
                     onTap: () => GiftBoxScreen.open(context),
                   ),
+                  ],
                   const SizedBox(height: 6),
                   _IconSpot(
                     label: '출석',
@@ -818,6 +831,7 @@ class _TalkBubble extends StatelessWidget {
 
 class _IconSpot extends StatelessWidget {
   const _IconSpot({
+    super.key,
     required this.label,
     required this.semantic,
     required this.icon,

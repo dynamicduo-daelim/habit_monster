@@ -8,6 +8,8 @@ import '../../core/theme/app_colors.dart';
 import '../../core/widgets/pixel_widgets.dart';
 import '../shell/game_action.dart';
 import '../shell/main_shell.dart';
+import '../../core/state/game_state.dart';
+import '../../core/state/unlocks.dart';
 import 'onboarding_controller.dart';
 import 'step_categories.dart';
 import 'step_habits.dart';
@@ -56,6 +58,9 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
     }, onError: _toast);
     if (ok != true || !mounted) return;
     AuthScope.maybeRead(context)?.completeOnboarding(); // 다음 로그인부터는 바로 홈
+    // 새로 시작: 오늘 · 챗봇만 열고 해 볼 때마다 하나씩 연다 (D-98)
+    await UnlocksScope.maybeOf(context)?.startFresh(GameScope.read(context).dayCount);
+    if (!mounted) return;
     // 처음 들어가는 홈이니 튜토리얼부터
     Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => const MainShell(showTutorial: true)));
   }
