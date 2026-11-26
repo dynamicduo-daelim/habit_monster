@@ -55,6 +55,107 @@ class GameState extends ChangeNotifier {
   /// 방금 새 습관 화면에서 등록한 습관 (습관 탭의 NEW 표시용, 화면에만 쓰고 저장하지 않는다 — 기획 2026-11-26).
   String? lastAddedHabitId;
 
+  // ---------- 퀘스트 · 선물함 (시연 모드, 기획 2026-11-26-선물함) ----------
+  /// 오늘 몬스터에게 말을 걸었는지 · 공부 타이머로 기록했는지 (시연 퀘스트용, 저장하지 않음).
+  bool talkedToday = false;
+  bool timerUsedToday = false;
+
+  /// 받은 퀘스트 보상 (퀘스트 코드 + 날짜/주 키). 받기 전까지 선물함에 남는다.
+  final Set<String> claimedQuestRewards = {};
+
+  void noteTalked() {
+    if (talkedToday) return;
+    talkedToday = true;
+    notifyListeners();
+  }
+
+  void noteTimerUsed() {
+    if (timerUsedToday) return;
+    timerUsedToday = true;
+    notifyListeners();
+  }
+
+  static String _dayKey(DateTime d) => '${d.year}-${d.month}-${d.day}';
+  static DateTime _monday(DateTime now) => DateTime(now.year, now.month, now.day).subtract(Duration(days: now.weekday - 1));
+  String _rewardKey(Quest q, DateTime now) => '${q.code}@${q.weekly ? _dayKey(_monday(now)) : _dayKey(now)}';
+
+  static Quest _q(String code, String title, int progress, int target, int gold, {bool weekly = false, String? lock}) => Quest(
+        code: code,
+        title: title,
+        progress: progress.clamp(0, target),
+        target: target,
+        rewardGold: gold,
+        status: lock != null ? QuestStatus.locked : (progress >= target ? QuestStatus.done : QuestStatus.inProgress),
+        lockReason: lock,
+        weekly: weekly,
+      );
+
+  /// 시연 일일 퀘스트 4개 (명세 v9: 오늘의 기록 3G · 쓰다듬기 · 타이머 · 말 걸기 각 1G).
+  List<Quest> demoDailyQuests() {
+    final hasTimeHabit = activeHabits.any((h) => measureOf(h).unit == '분');
+    return [
+      _q('DAILY_CHECKIN', '오늘의 기록', checkedInToday ? 1 : 0, 1, 3),
+      _q('DAILY_PET', '몬스터 쓰다듬기', monsters.any((m) => m.pettedToday) ? 1 : 0, 1, 1),
+      _q('DAILY_TIMER', '타이머 한 번 쓰기', timerUsedToday ? 1 : 0, 1, 1, lock: hasTimeHabit ? null : 'NO_TIMER_HABIT'),
+      _q('DAILY_TALK', '몬스터에게 말 걸기', talkedToday ? 1 : 0, 1, 1),
+    ];
+  }
+
+  /// 시연 주간 퀘스트 3개 (각 5G). 출석은 이번 주 월요일 ~ 오늘, 성실도 · 카테고리는 시연이라 오늘만 센다.
+  List<Quest> demoWeeklyQuests({DateTime? now}) {
+    final t = now ?? DateTime.now();
+    final monday = _monday(t);
+    var attended = 0;
+    for (var d = monday; !d.isAfter(t); d = d.add(const Duration(days: 1))) {
+      if (attendedOn(d, today: t)) attended++;
+    }
+    final goodDay = checkedInToday && todayScore >= (maxDailyScore * 0.8).ceil() ? 1 : 0;
+    final cats = {
+      for (final h in activeHabits)
+        if ((todayRecords[h.id] ?? 0) > 0) h.categoryId,
+    }.length;
+    return [
+      _q('WEEKLY_ATTEND', '주 4일 출석', attended, 4, 5, weekly: true),
+      _q('WEEKLY_GOOD_DAYS', '성실도 80% 이상인 날 2일', goodDay, 2, 5, weekly: true),
+      _q('WEEKLY_CATEGORIES', '카테고리 3곳 체크인', cats, 3, 5,
+          weekly: true, lock: pickedCategories.length < 3 ? 'NOT_ENOUGH_CATEGORIES' : null),
+    ];
+  }
+
+  /// 완료했지만 아직 받지 않은 시연 퀘스트 (선물함 배지 · 목록).
+  List<Quest> demoClaimable({DateTime? now}) {
+    final t = now ?? DateTime.now();
+    return [
+      for (final q in [...demoDailyQuests(), ...demoWeeklyQuests(now: t)])
+        if (q.done && !claimedQuestRewards.contains(_rewardKey(q, t))) q,
+    ];
+  }
+
+  /// 선물함 배지 숫자. 서버 모드(자동 지급)에서는 0.
+  int get pendingGiftCount => questsAutoPaid ? 0 : demoClaimable().length;
+
+  /// 서버 모드에서 퀘스트 보상이 자동 지급되는지 (`HttpGameRepository`가 켠다).
+  bool questsAutoPaid = false;
+
+  QuestBoard demoQuestBoard() => QuestBoard(
+        enabled: true,
+        daily: demoDailyQuests(),
+        weekly: demoWeeklyQuests(),
+        autoPaid: false,
+        claimable: demoClaimable(),
+      );
+
+  /// 선물 받기: 완료했고 아직 안 받았으면 골드를 주고 받은 골드를, 아니면 0.
+  int claimQuestReward(Quest q, {DateTime? now}) {
+    final t = now ?? DateTime.now();
+    final key = _rewardKey(q, t);
+    if (!q.done || claimedQuestRewards.contains(key)) return 0;
+    claimedQuestRewards.add(key);
+    gold += q.rewardGold;
+    notifyListeners();
+    return q.rewardGold;
+  }
+
   /// 오늘 출석했는지 = 오늘 앱(홈)에 들어왔는지. 습관 체크인과는 별개다 (2026-10-10, 결정 D-15).
   bool attendedToday = false;
 

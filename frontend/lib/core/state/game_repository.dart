@@ -88,6 +88,13 @@ abstract class GameRepository {
   /// 통계 화면 값. 탭을 열 때마다 부른다 (서버: `GET /stats`, 시연: 앱 값 + 샘플 7일).
   Future<StatsData> loadStats();
 
+  // ---------- 퀘스트 · 선물함 (/quests, 명세 v9 10장 · 기획 2026-11-26-선물함) ----------
+  /// 오늘 · 이번 주 퀘스트와 받을 선물. 선물함을 열 때마다 부른다.
+  Future<QuestBoard> loadQuests();
+
+  /// 선물 받기 → 받은 골드. 서버 모드는 수령 API가 없어 부르지 않는다 (자동 지급).
+  Future<int> claimQuestReward(Quest q);
+
   // ---------- 챗봇 대화 해석 (AI, 결정 D-57) ----------
   /// 사용자가 쓴 말을 AI로 해석한다 (서버: `POST /checkins/today/interpret`). 확정하지 않는다.
   /// [history]는 직전 대화 (BOT · USER, 최대 10개), [draft]는 지금까지 정한 답.

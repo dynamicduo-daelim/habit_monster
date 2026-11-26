@@ -54,6 +54,7 @@ class HttpGameRepository implements GameRepository {
   /// 몬스터 목록엔 호감도 · 경험치가 없어서 마리마다 상세(`GET /monsters/{id}`)를 같이 부른다 (명세 그대로).
   @override
   Future<void> load() async {
+    state.questsAutoPaid = true; // 서버는 퀘스트 보상을 완료 순간 지급 (명세 v9)
     final r = await Future.wait([
       api.get('/me/status'),
       api.get('/me/today'),
@@ -533,6 +534,42 @@ class HttpGameRepository implements GameRepository {
     final res = await api.get('/monsters/${m.uid}/line') as Map<String, dynamic>;
     return res['line'] as String?;
   }
+
+  // ---------- 퀘스트 · 선물함 (명세 v9 10장) ----------
+
+  /// 오늘 · 이번 주 퀘스트 (`GET /quests`). 서버는 완료 순간 골드를 지급하므로 [QuestBoard.autoPaid] (받기 없음).
+  /// 서버에 수령 API가 생기면 `claimable`을 채운다 — 제안 `docs/제안/2026-11-26-퀘스트-보상-선물함.md`.
+  @override
+  Future<QuestBoard> loadQuests() async {
+    final res = await api.get('/quests') as Map<String, dynamic>;
+    List<Quest> parse(String key, {required bool weekly}) => [
+          for (final q in ((res[key] as List?) ?? const []).cast<Map<String, dynamic>>())
+            Quest(
+              code: q['code'] as String,
+              title: q['title'] as String,
+              progress: q['progress'] as int,
+              target: q['target'] as int,
+              rewardGold: q['rewardGold'] as int,
+              status: switch (q['status']) {
+                'DONE' => QuestStatus.done,
+                'LOCKED' => QuestStatus.locked,
+                _ => QuestStatus.inProgress,
+              },
+              lockReason: q['lockReason'] as String?,
+              weekly: weekly,
+            ),
+        ];
+    return QuestBoard(
+      enabled: res['enabled'] as bool? ?? true,
+      daily: parse('daily', weekly: false),
+      weekly: parse('weekly', weekly: true),
+      autoPaid: true,
+    );
+  }
+
+  /// 서버는 이미 지급했다 — 부르지 않는다.
+  @override
+  Future<int> claimQuestReward(Quest q) async => 0;
 
   // ---------- 통계 (4-4) ----------
 

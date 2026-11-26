@@ -242,7 +242,10 @@ class _ChatScreenState extends State<ChatScreen> {
                 child: StudyTimerView(
                   timer: _timer,
                   onSaved: (m) {
-                    if (m > 0) MainShell.maybeOf(context)?.toast('공부 $m분을 기록했어요');
+                    if (m > 0) {
+                      MainShell.maybeOf(context)?.toast('공부 $m분을 기록했어요');
+                      GameScope.read(context).noteTimerUsed(); // 시연 퀘스트 "타이머 한 번 쓰기" (서버는 타이머 기록으로 셈)
+                    }
                   },
                   onGoChat: () => setState(() => _pane = 0),
                   onPreview: (track) {

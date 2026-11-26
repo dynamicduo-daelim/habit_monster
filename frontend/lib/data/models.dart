@@ -227,3 +227,52 @@ int sincerityScore({required Measure measure, required double target, required d
   }
   return (20 * ratio).round();
 }
+
+/// 퀘스트 한 칸 (명세 v9 10장 `GET /quests`의 daily · weekly 한 줄).
+enum QuestStatus { inProgress, done, locked }
+
+class Quest {
+  const Quest({
+    required this.code,
+    required this.title,
+    required this.progress,
+    required this.target,
+    required this.rewardGold,
+    required this.status,
+    this.lockReason,
+    this.weekly = false,
+  });
+  final String code; // DAILY_CHECKIN · WEEKLY_ATTEND …
+  final String title;
+  final int progress;
+  final int target;
+  final int rewardGold;
+  final QuestStatus status;
+
+  /// `NO_TIMER_HABIT` · `NOT_ENOUGH_CATEGORIES` (잠겼을 때만).
+  final String? lockReason;
+  final bool weekly;
+
+  bool get done => status == QuestStatus.done;
+  bool get locked => status == QuestStatus.locked;
+}
+
+/// 선물함 화면에 쓰는 퀘스트 묶음 + 받을 선물.
+class QuestBoard {
+  const QuestBoard({
+    required this.enabled,
+    required this.daily,
+    required this.weekly,
+    required this.autoPaid,
+    this.claimable = const [],
+  });
+  final bool enabled;
+  final List<Quest> daily;
+  final List<Quest> weekly;
+
+  /// 서버가 완료 순간 골드를 바로 준다 (서버 모드, 명세 v9) → [받기] 없이 "자동 지급".
+  final bool autoPaid;
+
+  /// 완료했지만 아직 받지 않은 퀘스트 (시연 모드). [autoPaid]면 늘 비어 있다.
+  final List<Quest> claimable;
+}
