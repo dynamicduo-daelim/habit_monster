@@ -17,7 +17,6 @@ class GameState extends ChangeNotifier {
     required this.balls,
     required this.monsters,
     required this.habits,
-    required this.goals,
     required this.pickedCategories,
     required this.categoryPoints,
     this.encountersLeft = 0,
@@ -35,7 +34,6 @@ class GameState extends ChangeNotifier {
   int dayCount;
   final List<OwnedMonster> monsters;
   final List<Habit> habits;
-  final List<Goal> goals;
   final List<String> pickedCategories;
   final Map<String, int> categoryPoints;
   final Map<String, int> inventory = {'s': 3, 'm': 1, 'l': 0, 'cookie': 2};
@@ -53,6 +51,125 @@ class GameState extends ChangeNotifier {
 
   /// 오늘 체크인을 확정했는지. 확정 뒤에도 기록은 고칠 수 있지만([resubmitCheckin]) 보상은 첫 확정 그대로 (DB v1.5).
   bool checkedInToday = false;
+
+  /// 방금 새 습관 화면에서 등록한 습관 (습관 탭의 NEW 표시용, 화면에만 쓰고 저장하지 않는다 — 기획 2026-11-26).
+  String? lastAddedHabitId;
+
+  // ---------- 퀘스트 · 선물함 (시연 모드, 기획 2026-11-26-선물함) ----------
+  /// 오늘 몬스터에게 말을 걸었는지 · 공부 타이머로 기록했는지 (시연 퀘스트용, 저장하지 않음).
+  bool talkedToday = false;
+  bool timerUsedToday = false;
+
+  /// 이번 주 어제까지 성실도 80% 이상이었던 날 수 (시연 데이터 — 시연은 지난 기록이 없어서, 샘플은 1일).
+  /// 오늘까지 80%를 넘기면 주간 "성실도 80% 이상인 날 2일"을 시연에서도 끝낼 수 있다 (PR #26 리뷰).
+  int pastGoodDaysThisWeek = 0;
+
+  /// 받은 퀘스트 보상 (퀘스트 코드 + 날짜/주 키). 받기 전까지 선물함에 남는다.
+  final Set<String> claimedQuestRewards = {};
+
+  void noteTalked() {
+    if (talkedToday) return;
+    talkedToday = true;
+    notifyListeners();
+  }
+
+  void noteTimerUsed() {
+    if (timerUsedToday) return;
+    timerUsedToday = true;
+    notifyListeners();
+  }
+
+  static String _dayKey(DateTime d) => '${d.year}-${d.month}-${d.day}';
+  static DateTime _monday(DateTime now) => DateTime(now.year, now.month, now.day).subtract(Duration(days: now.weekday - 1));
+  String _rewardKey(Quest q, DateTime now) => '${q.code}@${q.weekly ? _dayKey(_monday(now)) : _dayKey(now)}';
+
+  static Quest _q(String code, String title, int progress, int target, int gold, {bool weekly = false, String? lock}) => Quest(
+        code: code,
+        title: title,
+        progress: progress.clamp(0, target),
+        target: target,
+        rewardGold: gold,
+        status: lock != null ? QuestStatus.locked : (progress >= target ? QuestStatus.done : QuestStatus.inProgress),
+        lockReason: lock,
+        weekly: weekly,
+      );
+
+  /// 시연 일일 퀘스트 4개 (명세 v9: 오늘의 기록 3G · 쓰다듬기 · 타이머 · 말 걸기 각 1G).
+  List<Quest> demoDailyQuests() {
+    final hasTimeHabit = activeHabits.any((h) => measureOf(h).unit == '분');
+    return [
+      _q('DAILY_CHECKIN', '오늘의 기록', checkedInToday ? 1 : 0, 1, 3),
+      _q('DAILY_PET', '몬스터 쓰다듬기', monsters.any((m) => m.pettedToday) ? 1 : 0, 1, 1),
+      _q('DAILY_TIMER', '타이머 한 번 쓰기', timerUsedToday ? 1 : 0, 1, 1, lock: hasTimeHabit ? null : 'NO_TIMER_HABIT'),
+      _q('DAILY_TALK', '몬스터에게 말 걸기', talkedToday ? 1 : 0, 1, 1),
+    ];
+  }
+
+  /// 시연 주간 퀘스트 3개 (각 5G). 출석은 이번 주 월요일 ~ 오늘, 성실도는 [pastGoodDaysThisWeek] + 오늘, 카테고리는 오늘만 센다.
+  List<Quest> demoWeeklyQuests({DateTime? now}) {
+    final t = now ?? DateTime.now();
+    final monday = _monday(t);
+    var attended = 0;
+    for (var d = monday; !d.isAfter(t); d = d.add(const Duration(days: 1))) {
+      if (attendedOn(d, today: t)) attended++;
+    }
+    final goodDay = pastGoodDaysThisWeek + (checkedInToday && todayScore >= (maxDailyScore * 0.8).ceil() ? 1 : 0);
+    final cats = {
+      for (final h in activeHabits)
+        if ((todayRecords[h.id] ?? 0) > 0) h.categoryId,
+    }.length;
+    return [
+      _q('WEEKLY_ATTEND', '주 4일 출석', attended, 4, 5, weekly: true),
+      _q('WEEKLY_GOOD_DAYS', '성실도 80% 이상인 날 2일', goodDay, 2, 5, weekly: true),
+      _q('WEEKLY_CATEGORIES', '카테고리 3곳 체크인', cats, 3, 5,
+          weekly: true, lock: pickedCategories.length < 3 ? 'NOT_ENOUGH_CATEGORIES' : null),
+    ];
+  }
+
+  /// 완료했지만 아직 받지 않은 시연 퀘스트의 선물 (id = 퀘스트코드@날짜/주).
+  List<Gift> demoGifts({DateTime? now}) {
+    final t = now ?? DateTime.now();
+    return [
+      for (final q in [...demoWeeklyQuests(now: t), ...demoDailyQuests()])
+        if (q.done && !claimedQuestRewards.contains(_rewardKey(q, t)))
+          Gift(id: _rewardKey(q, t), title: q.title, gold: q.rewardGold, weekly: q.weekly),
+    ];
+  }
+
+  /// 서버 모드인지 (선물 점을 `GET /me/status`의 `hasGift`로 그린다). `HttpGameRepository`가 켠다.
+  bool serverGifts = false;
+
+  /// 서버의 `hasGift` (v10). 선물함을 열어 목록을 받으면 그 결과로도 고친다.
+  bool serverHasGift = false;
+
+  /// 홈 선물함 아이콘의 점(•) — 받지 않은 선물이 있으면. 개수는 보이지 않는다 (명세 v10 · D-89).
+  bool get hasPendingGift => serverGifts ? serverHasGift : demoGifts().isNotEmpty;
+
+  QuestBoard demoQuestBoard() =>
+      QuestBoard(enabled: true, daily: demoDailyQuests(), weekly: demoWeeklyQuests(), gifts: demoGifts());
+
+  /// 시연 선물 받기: 아직 안 받았으면 골드를 주고 받은 골드를, 아니면 0.
+  int claimDemoGift(Gift g) {
+    if (claimedQuestRewards.contains(g.id)) return 0;
+    claimedQuestRewards.add(g.id);
+    gold += g.gold;
+    notifyListeners();
+    return g.gold;
+  }
+
+  /// `POST /gifts/…/claim` 응답: 받은 뒤 잔액 · 볼 개수 (서버 값).
+  void applyGiftClaim({required int gold, required int balls}) {
+    this.gold = gold;
+    this.balls = balls;
+    notifyListeners();
+  }
+
+  /// `GET /gifts` 뒤: 받지 않은 선물이 남았는지.
+  void applyHasGift(bool v) {
+    if (serverHasGift == v) return;
+    serverHasGift = v;
+    notifyListeners();
+  }
 
   /// 오늘 출석했는지 = 오늘 앱(홈)에 들어왔는지. 습관 체크인과는 별개다 (2026-10-10, 결정 D-15).
   bool attendedToday = false;
@@ -90,7 +207,6 @@ class GameState extends ChangeNotifier {
       balls: 0,
       monsters: [],
       habits: [],
-      goals: [],
       pickedCategories: [],
       categoryPoints: {},
       dayCount: 0,
@@ -123,13 +239,9 @@ class GameState extends ChangeNotifier {
         Habit(id: 'h2', name: '전공 공부', categoryId: 'st', measureIndex: 0, target: 60, periodIndex: 2),
         Habit(id: 'h3', name: '물 2L 마시기', categoryId: 'fd', measureIndex: 0, target: 2, periodIndex: 0),
       ],
-      goals: [
-        Goal(id: 'w1', tier: GoalTier.weekly, title: '주 3회 러닝', detail: '월·수·금 아침, 30분 이상', done: true),
-        Goal(id: 'w2', tier: GoalTier.weekly, title: '전공 2챕터 끝내기', detail: '자료구조 5–6장, 연습문제까지'),
-        Goal(id: 'mo1', tier: GoalTier.monthly, title: '책 2권 완독', detail: '10월 안에 소설 1권 + 에세이 1권'),
-      ],
     );
     s.chatPartnerUid = 'm2';
+    s.pastGoodDaysThisWeek = 1; // 시연: 이번 주에 80% 넘긴 날이 하루 있었다
     s.discoveredSpecies.addAll(s.monsters.map((m) => m.speciesId));
     s.caughtSpecies.addAll(s.monsters.map((m) => m.speciesId));
     return s;
@@ -525,61 +637,11 @@ class GameState extends ChangeNotifier {
     return true;
   }
 
-  // ---------- 목표 ----------
-  /// 유료로 연 주간 목표 슬롯 (기록용, 골드 보상 없음). 결제가 없어 화면에서는 열 수 없다 (D-48 — 누르면 "결제가 필요해요" 창).
-  bool extraWeeklySlot = false;
-  int _goalSeq = 0;
-
-  List<Goal> goalsOf(GoalTier tier) => goals.where((g) => g.tier == tier).toList();
-
-  int capOf(GoalTier tier) => tier == GoalTier.weekly
-      ? Economy.weeklyGoalSlots + (extraWeeklySlot ? 1 : 0)
-      : Economy.monthlyGoalSlots;
-
-  /// 목표 달성 → 보상 골드. 완료한 목표는 되돌릴 수 없다 (DB Q-5). 이미 완료면 false.
-  bool toggleGoal(Goal g) {
-    if (g.done) return false;
-    g.done = true;
-    gold += g.reward;
-    notifyListeners();
-    return true;
-  }
-
-  /// 새 목표. 무료 칸을 다 쓴 뒤의 주간 목표는 유료 슬롯(보상 없음)으로 들어간다.
-  Goal addGoal(GoalTier tier, String title, String detail) {
-    final paid = tier == GoalTier.weekly && goalsOf(tier).length >= Economy.weeklyGoalSlots;
-    final g = Goal(id: 'g${_goalSeq++}', tier: tier, title: title, detail: detail, paidSlot: paid);
-    goals.add(g);
-    notifyListeners();
-    return g;
-  }
-
-  void updateGoal(Goal g, String title, String detail) {
-    g
-      ..title = title
-      ..detail = detail;
-    notifyListeners();
-  }
-
-  /// 진행 중인 목표를 지운다. 완료한 목표는 지울 수 없다 (DB Q-5). 못 지우면 false.
-  bool deleteGoal(Goal g) {
-    if (g.done) return false;
-    goals.remove(g);
-    notifyListeners();
-    return true;
-  }
-
-  void unlockExtraWeeklySlot() {
-    extraWeeklySlot = true;
-    notifyListeners();
-  }
-
-  /// 온보딩 1~3단계 결과를 반영한다 (시안의 `enterApp`).
+  /// 온보딩 1~2단계 결과를 반영한다 (시안의 `enterApp`).
   /// 길을 안 골랐거나 습관이 없으면 기존(샘플) 값을 그대로 둔다.
   void completeOnboarding({
     required List<String> picked,
     required List<Habit> habits,
-    required List<Goal> goals,
     String? starterCategory,
   }) {
     if (picked.isNotEmpty) {
@@ -594,9 +656,6 @@ class GameState extends ChangeNotifier {
         ..clear()
         ..addAll(habits);
     }
-    this.goals
-      ..clear()
-      ..addAll(goals);
 
     // 고르지 않은 길의 몬스터는 데리고 시작하지 않는다.
     monsters.removeWhere((m) => !pickedCategories.contains(Catalog.speciesById(m.speciesId).categoryId));
@@ -683,13 +742,6 @@ class GameState extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// `GET /goals` (기간이 남은 목표).
-  void applyGoals(List<Goal> list) {
-    goals
-      ..clear()
-      ..addAll(list);
-  }
-
   /// `GET /dex` · `GET /dex/categories/{code}`: 본 종(가진 종 포함) · 가진 종 · 안 쓴 해금권. 앱을 다시 켜도 본 종이 남는다 (4-3).
   void applyDex({required Set<String> seen, required Set<String> owned, required int tickets}) {
     discoveredSpecies.addAll(seen);
@@ -706,33 +758,6 @@ class GameState extends ChangeNotifier {
       caughtSpecies.add(starter.speciesId);
     }
     serverTickets = tickets;
-    notifyListeners();
-  }
-
-  /// `POST /goals` 응답.
-  void applyGoalAdded(Goal g) {
-    goals.add(g);
-    notifyListeners();
-  }
-
-  /// `PATCH /goals/{id}` 응답.
-  void applyGoalUpdated(Goal g, {required String title, required String detail}) {
-    g
-      ..title = title
-      ..detail = detail;
-    notifyListeners();
-  }
-
-  /// `DELETE /goals/{id}`.
-  void applyGoalDeleted(Goal g) {
-    goals.remove(g);
-    notifyListeners();
-  }
-
-  /// `POST /goals/{id}/complete` 응답: 완료 표시 + 받은 뒤 잔액(서버 값).
-  void applyGoalCompleted(Goal g, {required int gold}) {
-    g.done = true;
-    this.gold = gold;
     notifyListeners();
   }
 

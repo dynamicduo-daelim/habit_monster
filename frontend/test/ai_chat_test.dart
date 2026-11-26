@@ -291,7 +291,7 @@ void main() {
       expect(t.focusMinutes, 25);
     });
 
-    testWidgets('챗봇 탭 옆 [공부 타이머] 칸에서 시작 · 끝내기', (tester) async {
+    testWidgets('채팅방 머리글의 타이머 아이콘으로 들어가 시작 · 끝내기 (11-26)', (tester) async {
       tester.view.physicalSize = const Size(390, 844);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.reset);
@@ -303,9 +303,11 @@ void main() {
       await tester.tap(find.text('챗봇'));
       await tester.pump();
       await tester.pump();
-      await tester.tap(find.text('공부 타이머'));
+      expect(find.text('공부 타이머'), findsNothing); // [챗봇 | 공부 타이머] 칸은 없앴다
+      await tester.tap(find.bySemanticsLabel('공부 타이머'));
       await tester.pump();
       expect(find.byType(StudyTimerView), findsOneWidget);
+      expect(find.text('공부 타이머'), findsOneWidget); // 타이머 화면 제목
       // 내리지 않아도 시작 버튼까지 한 화면에 (11-02)
       expect(find.descendant(of: find.byType(StudyTimerView), matching: find.byType(ListView)), findsNothing);
       expect(find.text('25:00'), findsOneWidget);

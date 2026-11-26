@@ -109,11 +109,19 @@ class ChatController extends ChangeNotifier {
     if (!_disposed) notifyListeners();
   }
 
+  /// 몬스터가 "입력 중"(점 세 개)을 보여 주는 최소 시간 — 대답이 바로 와도 메신저처럼 잠깐 쓰는 척 (11-26 사용자).
+  /// 테스트는 `test/flutter_test_config.dart`에서 0으로 둔다.
+  static Duration minThinkTime = const Duration(milliseconds: 700);
+
   Future<T> _think<T>(Future<T> f) async {
     busy = true;
     _notify();
+    final watch = Stopwatch()..start();
     try {
-      return await f;
+      final r = await f;
+      final left = minThinkTime - watch.elapsed;
+      if (left > Duration.zero) await Future<void>.delayed(left);
+      return r;
     } finally {
       busy = false;
     }

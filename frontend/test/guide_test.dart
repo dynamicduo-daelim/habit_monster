@@ -47,7 +47,7 @@ void main() {
     expect(find.text('모아루틴에 온 걸 환영해요!'), findsOneWidget);
     expect(find.text('1 / 8'), findsOneWidget);
 
-    for (final title in ['나의 필드', '오늘의 성실도', '챗봇에서 습관 체크', '골드와 성실볼', '상점 · 가방 · 출석 · 습관', '목표와 도감']) {
+    for (final title in ['나의 필드', '오늘의 성실도', '챗봇에서 습관 체크', '골드와 성실볼', '상점 · 가방 · 출석 · 습관', '습관과 도감']) {
       await tapAndWait(tester, find.text('다음 ▶'));
       expect(find.text(title), findsOneWidget);
     }
@@ -65,12 +65,15 @@ void main() {
     expect(find.text('모아루틴에 온 걸 환영해요!'), findsNothing);
   });
 
-  testWidgets('아래 탭 순서: 홈 · 챗봇 · 목표 · 도감 · 통계', (tester) async {
+  testWidgets('아래 탭 순서: 홈 · 챗봇 · 습관 · 도감 · 통계', (tester) async {
     await pumpShell(tester);
-    final xs = [for (final t in ['홈', '챗봇', '목표', '도감', '통계']) tester.getCenter(find.text(t)).dx];
+    // '습관'은 홈 오른쪽 아이콘 이름에도 있다 → 아래 탭(화면 트리에서 마지막)으로 고른다
+    final xs = [for (final t in ['홈', '챗봇', '습관', '도감', '통계']) tester.getCenter(find.text(t).last).dx];
     expect(xs, orderedEquals([...xs]..sort()));
-    await tapAndWait(tester, find.text('목표'));
-    expect(find.textContaining('주간 목표'), findsWidgets); // 가운데 탭이 목표 화면
+    expect(find.text('목표'), findsNothing);
+    await tapAndWait(tester, find.text('습관').last);
+    expect(find.text('오늘의 습관'), findsOneWidget); // 가운데 탭이 습관 리스트
+    expect(find.text('아침 러닝'), findsOneWidget);
   });
 
   testWidgets('튜토리얼 없이 들어오면 바로 홈', (tester) async {
@@ -82,20 +85,19 @@ void main() {
     await pumpShell(tester);
     await tapAndWait(tester, find.bySemanticsLabel('골드 얻는 법'));
     expect(find.text('습관 체크하기'), findsOneWidget);
-    expect(find.text('목표 달성'), findsOneWidget);
+    expect(find.text('목표 달성'), findsNothing); // 목표 기능을 없앴다 (2026-11-25)
     await tapAndWait(tester, find.text('확인'));
     expect(find.text('습관 체크하기'), findsNothing);
   });
 
-  testWidgets('? 버튼: 성실도 · 탐색 · 필드 설명', (tester) async {
+  testWidgets('? 버튼: 성실도 · 필드 설명', (tester) async {
     final s = await pumpShell(tester);
-    // 탐색 기회는 챗봇 체크를 마친 뒤에만 보인다 (? 버튼도 그때)
-    expect(find.bySemanticsLabel('탐색이란? 설명'), findsNothing);
+    // 상단 바의 연속 · 탐색 기회 줄(과 탐색 ?)은 뺐다 (11-26)
     s.confirmCheckin({'h1': 30});
     await tester.pump();
-    expect(find.text('탐색 기회 3번 남음'), findsOneWidget);
+    expect(find.text('탐색 기회 3번 남음'), findsNothing);
+    expect(find.bySemanticsLabel('탐색이란? 설명'), findsNothing);
     for (final (label, head) in [
-      ('탐색이란? 설명', '탐색이 뭐예요?'),
       ('나의 필드 설명', '필드가 뭐예요?'),
     ]) {
       await tapAndWait(tester, find.bySemanticsLabel(label));
@@ -103,9 +105,8 @@ void main() {
       await tapAndWait(tester, find.text('확인'));
       expect(find.text(head), findsNothing);
     }
-    // 성실도 ? 는 시트를 펼친 "오늘의 성실도" 쪽에 있다 (접힌 시트는 글자 없이 막대만, 11-12)
+    // 성실도 ? 는 시트를 펼친 "오늘의 성실도"에 있다 (접힌 시트는 글자 없이 막대만, 11-12 · 펼치면 성실도만, 11-25)
     await tapAndWait(tester, find.byKey(const ValueKey('habit-sheet-summary')));
-    await tapAndWait(tester, find.text('오늘의 성실도').first); // 위쪽 쪽 전환 탭
     await tapAndWait(tester, find.byType(SincerityHelp));
     expect(find.text('성실도가 뭐예요?'), findsOneWidget);
     await tapAndWait(tester, find.text('확인'));
@@ -118,7 +119,6 @@ void main() {
     expect(state.checkedInToday, isFalse);
     expect(find.text('연속 12일'), findsOneWidget);
     expect(find.text('오늘 출석 완료! 습관 체크도 해 볼까요?'), findsOneWidget);
-    expect(find.text('연속 12일째'), findsOneWidget); // 상단 바도 같은 숫자
     await tapAndWait(tester, find.text('오늘 습관 체크하러 가기')); // 닫고 챗봇 탭으로
     expect(find.text('연속 12일'), findsNothing);
 

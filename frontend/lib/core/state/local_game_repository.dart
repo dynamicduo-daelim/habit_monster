@@ -21,10 +21,9 @@ class LocalGameRepository implements GameRepository {
   Future<void> completeOnboarding({
     required List<String> picked,
     required List<Habit> habits,
-    required List<Goal> goals,
     String? starterCategory,
   }) async =>
-      state.completeOnboarding(picked: picked, habits: habits, goals: goals, starterCategory: starterCategory);
+      state.completeOnboarding(picked: picked, habits: habits, starterCategory: starterCategory);
 
   @override
   Future<bool> buy(ShopItem item, {int count = 1}) async => state.buy(item, count: count);
@@ -66,7 +65,10 @@ class LocalGameRepository implements GameRepository {
   }
 
   @override
-  Future<String?> talk(OwnedMonster m) async => null;
+  Future<String?> talk(OwnedMonster m) async {
+    state.noteTalked(); // 시연 퀘스트 "몬스터에게 말 걸기"
+    return null;
+  }
 
   @override
   Future<bool> openCategory(String categoryId) async => state.openCategory(categoryId);
@@ -138,15 +140,19 @@ class LocalGameRepository implements GameRepository {
   /// 시안의 지난 6일 점수(42 · 55 · 30 · 61 · 48 · 52 / 75)를 달성률 %로.
   static const _sampleRates = [56, 73, 40, 81, 64, 69];
 
+  /// 시연 모드 퀘스트: 앱 값으로 계산하고, 완료한 보상은 받기 전까지 선물함에 남는다.
   @override
-  Future<Goal> addGoal(GoalTier tier, String title, String detail) async => state.addGoal(tier, title, detail);
+  Future<QuestBoard> loadQuests() async => state.demoQuestBoard();
 
   @override
-  Future<void> updateGoal(Goal g, String title, String detail) async => state.updateGoal(g, title, detail);
+  Future<int> claimGift(Gift g) async => state.claimDemoGift(g);
 
   @override
-  Future<bool> deleteGoal(Goal g) async => state.deleteGoal(g);
-
-  @override
-  Future<bool> completeGoal(Goal g) async => state.toggleGoal(g);
+  Future<int> claimAllGifts() async {
+    var total = 0;
+    for (final g in state.demoGifts()) {
+      total += state.claimDemoGift(g);
+    }
+    return total;
+  }
 }

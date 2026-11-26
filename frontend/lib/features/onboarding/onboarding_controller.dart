@@ -7,16 +7,13 @@ import '../../core/state/game_repository.dart';
 import '../../data/catalog.dart';
 import '../../data/models.dart';
 
-enum OnboardingStep { categories, habits, goals }
+enum OnboardingStep { categories, habits }
 
-/// 온보딩 1~3단계의 입력 상태와 동작. 시안의 state(picked, starter, draft, habits, goals, goalIn)와
-/// renderVals 안의 toggle / pick / addHabit / addGoalQuick 를 옮겼다.
+/// 온보딩 1~2단계의 입력 상태와 동작. 시안의 state(picked, starter, draft, habits)와
+/// renderVals 안의 toggle / pick / addHabit 를 옮겼다. 3단계(목표)는 목표 기능과 함께 없앴다 (기획 2026-11-25).
 class OnboardingController extends ChangeNotifier {
   OnboardingController({required this.onToast}) {
     draftName.addListener(notifyListeners);
-    for (final c in goalInputs.values) {
-      c.addListener(notifyListeners);
-    }
   }
 
   /// 토스트 띄우기 (화면 쪽에서 처리).
@@ -179,56 +176,11 @@ class OnboardingController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void finishHabits() {
-    if (habits.isEmpty) return;
-    step = OnboardingStep.goals;
-    notifyListeners();
-  }
-
-  // ---------- 3단계: 목표 ----------
-  final Map<GoalTier, List<Goal>> goals = {GoalTier.weekly: [], GoalTier.monthly: []};
-  final Map<GoalTier, TextEditingController> goalInputs = {
-    GoalTier.weekly: TextEditingController(),
-    GoalTier.monthly: TextEditingController(),
-  };
-  bool showShopPreview = false;
-  int _goalSeq = 0;
-
-  static int capOf(GoalTier t) => t == GoalTier.weekly ? Economy.weeklyGoalSlots : Economy.monthlyGoalSlots;
-  int get goalCount => goals.values.fold(0, (a, l) => a + l.length);
-
-  void addGoal(GoalTier tier) {
-    final input = goalInputs[tier]!;
-    final v = input.text.trim();
-    if (v.isEmpty) {
-      onToast('목표를 적어주세요');
-      return;
-    }
-    if (goals[tier]!.length >= capOf(tier)) {
-      onToast(tier == GoalTier.weekly ? '주간 목표는 ${Economy.weeklyGoalSlots}개까지' : '월간 목표는 ${Economy.monthlyGoalSlots}개');
-      return;
-    }
-    goals[tier]!.add(Goal(id: 'og${_goalSeq++}', tier: tier, title: v));
-    input.clear();
-    notifyListeners();
-  }
-
-  void removeGoal(GoalTier tier, Goal g) {
-    goals[tier]!.remove(g);
-    notifyListeners();
-  }
-
-  void toggleShopPreview() {
-    showShopPreview = !showShopPreview;
-    notifyListeners();
-  }
-
-  /// 홈으로 들어간다 (건너뛰기도 같은 동작). 서버를 붙이면 `POST /onboarding` 일괄 제출.
+  /// 홈으로 들어간다 (2단계의 "모험 시작"). 서버 모드면 `POST /onboarding` 일괄 제출.
   Future<void> commit(GameRepository repo) {
     return repo.completeOnboarding(
       picked: picked,
       habits: habits,
-      goals: [...goals[GoalTier.weekly]!, ...goals[GoalTier.monthly]!],
       starterCategory: starter,
     );
   }
@@ -236,9 +188,6 @@ class OnboardingController extends ChangeNotifier {
   @override
   void dispose() {
     draftName.dispose();
-    for (final c in goalInputs.values) {
-      c.dispose();
-    }
     super.dispose();
   }
 }

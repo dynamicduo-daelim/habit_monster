@@ -6,7 +6,7 @@ import '../../core/widgets/pixel_icon.dart';
 import '../../data/pixel_icons.dart';
 import '../../core/theme/app_theme.dart';
 
-/// 온보딩 1~3단계 공통 틀: 점박이 밤하늘 + 스크롤 본문 + 아래 고정 바.
+/// 온보딩 1~2단계 공통 틀: 점박이 밤하늘 + 스크롤 본문 + 아래 고정 바.
 class OnboardingFrame extends StatelessWidget {
   const OnboardingFrame({super.key, required this.children, required this.bottom});
   final List<Widget> children;
@@ -68,17 +68,20 @@ class DotGridPainter extends CustomPainter {
   bool shouldRepaint(covariant DotGridPainter old) => old.color != color;
 }
 
-/// STEP n / 3 진행 막대.
+/// STEP n / [total] 진행 막대.
 class StepHeader extends StatelessWidget {
   const StepHeader({super.key, required this.step, required this.title});
   final int step;
   final String title;
 
+  /// 온보딩 단계 수 (목표 단계를 없애 3 → 2, 2026-11-25).
+  static const int total = 2;
+
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
-        for (var i = 1; i <= 3; i++) ...[
+        for (var i = 1; i <= total; i++) ...[
           Container(
             width: 22,
             height: 8,
@@ -90,7 +93,7 @@ class StepHeader extends StatelessWidget {
           const SizedBox(width: 6),
         ],
         const SizedBox(width: 4),
-        Text('STEP $step / 3 · $title', style: const TextStyle(fontSize: 10, color: AppColors.purpleSoft)),
+        Text('STEP $step / $total · $title', style: const TextStyle(fontSize: 10, color: AppColors.purpleSoft)),
       ],
     );
   }

@@ -88,7 +88,7 @@ class QuestRepository {
 			.param(userQuestId).query(Completed.class).optional();
 	}
 
-	// ---------- 월간 배지 (v1.14, D-91) ----------
+	// ---------- 월간 배지 (v1.14, D-96) ----------
 	/** 이번 달 한 줄 ({@code quest.user_month}). */
 	record MonthRow(long id, LocalDate monthStart, int completedCount, boolean badgeEarned) {
 	}

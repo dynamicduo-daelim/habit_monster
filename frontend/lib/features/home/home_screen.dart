@@ -23,6 +23,7 @@ import 'bag_overlay.dart';
 import 'habit_manage_screen.dart';
 import 'habit_sheet.dart';
 import 'home_parts.dart';
+import '../gift/gift_box_screen.dart';
 import 'monster_overlay.dart';
 import 'purchase_popups.dart';
 import 'shop_overlay.dart';
@@ -506,6 +507,16 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   const SizedBox(height: 6),
                   _IconSpot(
+                    label: '선물함',
+                    semantic: s.hasPendingGift ? '선물함, 받을 선물 있음' : '선물함',
+                    icon: PixelIcons.fieldGift,
+                    labelColor: AppColors.text,
+                    bob: iconUp ? -_iconBob : 0,
+                    badge: s.hasPendingGift, // 점만 — 개수는 할 일처럼 보이지 않게 (명세 v10 · D-89)
+                    onTap: () => GiftBoxScreen.open(context),
+                  ),
+                  const SizedBox(height: 6),
+                  _IconSpot(
                     label: '출석',
                     semantic: '출석부',
                     icon: PixelIcons.fieldCalendar,
@@ -523,9 +534,14 @@ class _HomeScreenState extends State<HomeScreen> {
                     icon: PixelIcons.fieldQuest,
                     labelColor: AppColors.text,
                     bob: iconUp ? 0 : -_iconBob,
-                    onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute<void>(builder: (_) => const HabitManageScreen()),
-                    ),
+                    onTap: () async {
+                      // 자리가 남았으면 바로 새 습관 화면 (기획 2026-11-26-습관-빠른-추가). 등록하면 습관 탭에서 확인
+                      final shell = MainShell.of(context);
+                      final msg = await HabitManageScreen.open(context);
+                      if (msg == null) return;
+                      shell.goTab(MainShell.habitsTab);
+                      shell.toast(msg);
+                    },
                   ),
                 ],
               ),
@@ -566,7 +582,6 @@ class _HomeScreenState extends State<HomeScreen> {
               child: HabitSheet(
                 key: widget.sheetKey,
                 maxHeight: box.maxHeight,
-                onGoChat: () => MainShell.of(context).goTab(MainShell.chatTab),
               ),
             ),
             if (_overlay == HomeOverlayKind.shop)

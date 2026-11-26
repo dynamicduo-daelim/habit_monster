@@ -30,7 +30,7 @@ import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
 /**
- * 퀘스트 4단계 — 월간 배지 (API 명세 v11 10장, 결정 D-91). 그달 완료 수를 카운터로 세고, 목표에 닿으면 배지 + 성실볼 선물.
+ * 퀘스트 4단계 — 월간 배지 (API 명세 v11 10장, 결정 D-96). 그달 완료 수를 카운터로 세고, 목표에 닿으면 배지 + 성실볼 선물.
  * 완료는 원숭이 쓰다듬기 · 말 걸기 · 체크인 첫 제출(일일 퀘스트 1개씩)로 만든다. 목표는 설정값을 바꿔 작게 한다
  * (실제 값 20은 DB verify S-37이 확인).
  *

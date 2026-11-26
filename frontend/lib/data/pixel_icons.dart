@@ -134,6 +134,17 @@ class PixelIcons {
     PixelLayer('M10 9h1v2h2v1h-2v2h-1v-2H8v-1h2z', Color(0xFFFFFAF0)),
   ];
 
+  /// 필드 오른쪽 위 선물함 아이콘 (빨간 상자 + 금색 리본, 기획 2026-11-26-선물함).
+  static const List<PixelLayer> fieldGift = [
+    PixelLayer('M2 8h12v7H2z', Color(0xFFE2574C)),
+    PixelLayer('M2 14h12v1H2z', Color(0xFFA8362C)),
+    PixelLayer('M1 5h14v3H1z', Color(0xFFC94136)),
+    PixelLayer('M1 5h14v1H1z', Color(0xFFF07A6A)),
+    PixelLayer('M7 5h2v10H7z', Color(0xFFF0B23C)),
+    PixelLayer('M3 2h3v1h1v2H5V4H3z M10 2h3v2h-2v1H9V3h1z', Color(0xFFF0B23C)),
+    PixelLayer('M7 3h2v2H7z', Color(0xFFB85A00)),
+  ];
+
   /// 골드 칩 안의 + (골드 얻는 법).
   static const String plus = 'M6 2h4v4h4v4h-4v4H6v-4H2V6h4z';
 

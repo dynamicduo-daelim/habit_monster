@@ -5,24 +5,23 @@ import 'package:flutter/material.dart';
 import '../../core/constants/economy.dart';
 import '../../core/state/game_state.dart';
 import '../../core/theme/app_colors.dart';
-import '../../core/utils/format.dart';
 import '../../data/catalog.dart';
-import '../../data/models.dart';
-import '../../core/widgets/category_icon.dart';
 import '../../core/widgets/help_button.dart';
+import '../../core/widgets/category_icon.dart';
+import '../../data/models.dart';
 import 'home_parts.dart';
 import '../../core/theme/app_theme.dart';
 
-/// 홈 아래 슬라이드 시트. 접히면 손잡이 + 오늘의 성실도 막대만 (글자 없이, 11-12), 펼치면 [습관 리스트 | 오늘의 성실도] 두 쪽.
+/// 홈 아래 슬라이드 시트. 접히면 손잡이 + 오늘의 성실도 막대만 (글자 없이, 11-12), 펼치면 오늘의 성실도.
+/// 습관 리스트는 하단 가운데 습관 탭으로 옮겼다 (기획 2026-11-25-습관-탭-목표-제거).
 class HabitSheet extends StatefulWidget {
-  const HabitSheet({super.key, required this.maxHeight, required this.onGoChat});
+  const HabitSheet({super.key, required this.maxHeight});
 
   /// 홈 본문 높이 (펼친 높이가 넘지 않게).
   final double maxHeight;
-  final VoidCallback onGoChat;
 
-  static const double closedHeight = 44; // 테두리 4 + 손잡이 24 + 막대 8 + 아래 여백 8
-  static const double openHeight = 470;
+  static const double closedHeight = 70; // 테두리 4 + 손잡이 24 + 총점 막대 8 + 6 + 습관별 작은 막대 줄 18 + 아래 여백 10 (11-26)
+  static const double openHeight = 310; // 성실도 카드 + 반영 습관 3줄 + 안내 (습관 리스트를 탭으로 옮겨 470 → 310)
 
   @override
   State<HabitSheet> createState() => _HabitSheetState();
@@ -30,7 +29,6 @@ class HabitSheet extends StatefulWidget {
 
 class _HabitSheetState extends State<HabitSheet> {
   bool _open = false;
-  int _page = 0;
 
   void _toggle() => setState(() => _open = !_open);
 
@@ -80,70 +78,12 @@ class _HabitSheetState extends State<HabitSheet> {
                 if (!_open)
                   _Summary(s: s, pct: pct, onTap: _toggle)
                 else
-                  Expanded(child: _pages(s, pct)),
+                  Expanded(child: _ScorePage(s: s, pct: pct)),
               ],
             ),
           ),
         ),
       ),
-    );
-  }
-
-  Widget _pages(GameState s, double pct) {
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14),
-          child: Row(
-            children: [
-              for (final (i, label) in const [(0, '습관 리스트'), (1, '오늘의 성실도')]) ...[
-                if (i > 0) const SizedBox(width: 6),
-                Expanded(
-                  child: GestureDetector(
-                    onTap: () => setState(() => _page = i),
-                    child: Container(
-                      height: 40,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: _page == i ? AppColors.introFloor : AppColors.nightDeep,
-                        border: Border.all(color: _page == i ? AppColors.purple : AppColors.nightLine, width: 3),
-                      ),
-                      child: Text(label,
-                          style: TextStyle(
-                              fontSize: 11.5, color: _page == i ? AppColors.text : AppColors.textMuted)),
-                    ),
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
-        const SizedBox(height: 10),
-        Expanded(
-          child: LayoutBuilder(builder: (context, box) {
-            final w = box.maxWidth;
-            return ClipRect(
-              child: Stack(
-                children: [
-                  AnimatedPositioned(
-                    duration: const Duration(milliseconds: 300),
-                    left: _page == 0 ? 0 : -w,
-                    top: 0,
-                    bottom: 0,
-                    width: w * 2,
-                    child: Row(
-                      children: [
-                        SizedBox(width: w, child: _HabitList(s: s, onGoChat: widget.onGoChat)),
-                        SizedBox(width: w, child: _ScorePage(s: s, pct: pct)),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            );
-          }),
-        ),
-      ],
     );
   }
 }
@@ -201,110 +141,30 @@ class _Summary extends StatelessWidget {
     return Semantics(
       button: true,
       label: '오늘의 성실도 ${s.todayScore}/${GameState.maxDailyScore}, '
-          '습관 ${s.checkedCount}/${s.activeHabits.length} 체크. 눌러서 습관 리스트 보기',
+          '습관 ${s.checkedCount}/${s.activeHabits.length} 체크. 눌러서 성실도 자세히 보기',
       excludeSemantics: true,
       child: GestureDetector(
         key: const ValueKey('habit-sheet-summary'),
         behavior: HitTestBehavior.opaque,
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(14, 0, 14, 8),
-          child: _ProgressBar(pct: pct, color: AppColors.gold, height: 8),
-        ),
-      ),
-    );
-  }
-}
-
-class _HabitList extends StatelessWidget {
-  const _HabitList({required this.s, required this.onGoChat});
-  final GameState s;
-  final VoidCallback onGoChat;
-
-  @override
-  Widget build(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
-      children: [
-        for (var i = 0; i < s.habits.length; i++) ...[
-          _HabitRow(s: s, habit: s.habits[i], counted: !s.checkedInToday || s.isCounted(s.habits[i])),
-          const SizedBox(height: 8),
-        ],
-        // 챗봇 체크를 마치면 버튼을 없앤다 (사용자 요청 10-29)
-        if (!s.checkedInToday) ...[
-        const SizedBox(height: 4),
-        Semantics(
-          button: true,
-          child: GestureDetector(
-            onTap: onGoChat,
-            child: Container(
-              constraints: const BoxConstraints(minHeight: 44),
-              margin: const EdgeInsets.only(right: 4, bottom: 4),
-              padding: const EdgeInsets.all(12),
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: AppColors.gold,
-                border: Border.all(color: AppColors.goldLight, width: 3),
-                boxShadow: const [BoxShadow(color: AppColors.ink, offset: Offset(4, 4))],
+          padding: const EdgeInsets.fromLTRB(14, 0, 14, 10),
+          child: Column(
+            children: [
+              _ProgressBar(pct: pct, color: AppColors.gold, height: 8),
+              const SizedBox(height: 6),
+              // 습관마다 작은 막대 (분야 아이콘 + 받은 점수 / 25) — 접힌 채로도 무엇을 했는지 (11-26)
+              Row(
+                children: [
+                  for (var i = 0; i < s.activeHabits.length; i++) ...[
+                    if (i > 0) const SizedBox(width: 8),
+                    Expanded(child: _MiniHabitBar(s: s, habit: s.activeHabits[i])),
+                  ],
+                ],
               ),
-              child: const Text('챗봇에게 오늘 습관 체크받기',
-                  style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: AppColors.night)),
-            ),
+            ],
           ),
         ),
-        ],
-      ],
-    );
-  }
-}
-
-class _HabitRow extends StatelessWidget {
-  const _HabitRow({required this.s, required this.habit, required this.counted});
-  final GameState s;
-  final Habit habit;
-  final bool counted;
-
-  @override
-  Widget build(BuildContext context) {
-    final m = s.measureOf(habit);
-    final v = s.todayRecords[habit.id];
-    // 값은 최신 기록, +점수는 보상에 쓰인 첫 확정 점수 (다시 체크해도 보상은 그대로)
-    final score = s.rewardedScoreOf(habit) ?? 0;
-    final meta = '${m.label}${m.isOX ? ' · O/X' : ' · 목표 ${formatNum(habit.target)}${m.unit}'}'
-        ' · ${Catalog.periods[habit.periodIndex].$1} ${Catalog.periodMult(habit.periodIndex)}';
-    final String state;
-    if (v != null && !counted) {
-      state = '반영 안 됨 (상위 ${Economy.dailyHabitCap}개 밖)';
-    } else if (v == null) {
-      state = '미체크';
-    } else {
-      final value = m.isOX ? (v > 0 ? '완료' : '못 함') : '${formatNum(v)}${m.unit}';
-      state = '$value · +$score';
-    }
-    final stateColor = v == null ? AppColors.lavender : (score > 0 ? AppColors.gold : AppColors.orange);
-    return Container(
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: AppColors.nightPanel,
-        border: Border.all(color: AppColors.nightLine, width: 3),
-      ),
-      child: Row(
-        children: [
-          CategoryIcon(habit.categoryId, size: 26),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(habit.name, style: const TextStyle(fontSize: 12, color: AppColors.text)),
-                const SizedBox(height: 4),
-                Text(meta, style: const TextStyle(fontSize: 9.5, color: AppColors.textMuted)),
-              ],
-            ),
-          ),
-          const SizedBox(width: 10),
-          Text(state, textAlign: TextAlign.right, style: TextStyle(fontSize: 10.5, color: stateColor)),
-        ],
       ),
     );
   }
@@ -392,6 +252,32 @@ class _ScorePage extends StatelessWidget {
               '성실도 1 = ${Economy.goldPerSincerity}G · 점수가 높은 습관 ${Economy.dailyHabitCap}개만 반영, 하루 ${GameState.maxDailyScore}G까지',
               style: TextStyle(fontSize: 10, height: 1.8, color: AppColors.textMuted),
             ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// 접힌 시트의 습관 하나: 분야 아이콘 + 얇은 막대 (체크 전이면 빈 막대).
+class _MiniHabitBar extends StatelessWidget {
+  const _MiniHabitBar({required this.s, required this.habit});
+  final GameState s;
+  final Habit habit;
+
+  @override
+  Widget build(BuildContext context) {
+    final score = s.rewardedScoreOf(habit) ?? 0;
+    return Row(
+      children: [
+        CategoryIcon(habit.categoryId, size: 16, outline: 0),
+        const SizedBox(width: 4),
+        Expanded(
+          child: _ProgressBar(
+            pct: score / Economy.maxSincerityPerHabit,
+            color: Catalog.category(habit.categoryId).color,
+            height: 6,
+            border: 1.5,
           ),
         ),
       ],

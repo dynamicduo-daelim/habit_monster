@@ -38,7 +38,7 @@ import org.springframework.transaction.annotation.Transactional;
  * <li>목표에 닿는 순간 <b>선물함에 선물 한 줄</b> (명세 v10, D-89 — 출처 {@code QUEST_DAILY} · {@code QUEST_WEEKLY}, 출처 번호 =
  * {@code user_quest.id}). 골드는 사용자가 받을 때 지갑에 들어간다 (v8 ~ v9: 완료 즉시 지갑)</li>
  * <li><b>항상 지갑을 먼저 잠근다</b> — 사용자 잠금 순서 {@code … → wallet → quest} (D-87). 선물은 그 뒤 새 행만 넣는다</li>
- * <li>월간 배지 (v11, D-91): 완료할 때마다 그달 수 +1 ({@code quest.user_month}, 처음엔 그달 기존 완료 수로 시작) →
+ * <li>월간 배지 (v11, D-96): 완료할 때마다 그달 수 +1 ({@code quest.user_month}, 처음엔 그달 기존 완료 수로 시작) →
  * 목표에 닿으면 배지 한 번 + 성실볼 선물 ({@code QUEST_MONTHLY})</li>
  * </ul>
  */
@@ -138,7 +138,7 @@ public class QuestService {
 		return new Monthly(month, m.completedCount(), config.questMonthlyTarget(), earned);
 	}
 
-	/** 퀘스트 하나를 완료했을 때: 그달 수 +1 → 목표에 닿으면 배지 (D-91). 지갑을 잠근 뒤 부른다. */
+	/** 퀘스트 하나를 완료했을 때: 그달 수 +1 → 목표에 닿으면 배지 (D-96). 지갑을 잠근 뒤 부른다. */
 	private void countMonthly(long userId, long completedQuestId) {
 		LocalDate month = dates.monthStart();
 		MonthRow m = quests.countCompletion(userId, month, dates.startOf(month), dates.startOf(month.plusMonths(1)),
@@ -215,7 +215,7 @@ public class QuestService {
 
 	/**
 	 * 목표에 닿았으면 조건부로 완료하고(한 번만 성공) 그 행의 보상을 선물함으로 보낸다 (D-89).
-	 * 완료했으면 그달 완료 수도 센다 (월간 배지, D-91).
+	 * 완료했으면 그달 완료 수도 센다 (월간 배지, D-96).
 	 */
 	private void completeIfReached(long userId, Advanced a, String kind) {
 		if (a.progress() < a.target()) {

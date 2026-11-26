@@ -10,7 +10,7 @@
 -- v1.11 2026-11-25: 일일 퀘스트 4개 (quest.quest_def) · quest_enabled (API 명세 v8)
 -- v1.12 2026-11-25: 주간 퀘스트 3개 · quest_weekly_rate_threshold (API 명세 v9)
 -- v1.13 2026-11-26: 바뀐 것 없음 — 선물 출처 코드(gift.gift_source)는 원장 사유처럼 schema.sql에 있다 (API 명세 v10, D-89)
--- v1.14 2026-11-26: 월간 배지 quest_monthly_target 20 · quest_monthly_ball_reward 1 (API 명세 v11, D-91)
+-- v1.14 2026-11-26: 월간 배지 quest_monthly_target 20 · quest_monthly_ball_reward 1 (API 명세 v11, D-96)
 -- =====================================================================
 
 -- 카테고리 (HTML CATS)

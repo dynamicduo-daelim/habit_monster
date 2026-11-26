@@ -320,9 +320,12 @@ class Catalog {
     ShopItem(id: 'l', name: '상급 경험치 물약', short: '상급', price: 400, exp: 500, asset: AppAssets.potionLarge),
   ];
 
-  /// 간식 쿠키 — EXP 없이 몬스터마다 하루 첫 쿠키에 호감도 (D-79). 상점 · 가격은 성수연 담당 (가격은 아직 [가정] 0).
+  /// 간식 쿠키 — EXP 없이 몬스터마다 하루 첫 쿠키에 호감도 (D-79). 상점에서 판다 — 가격은 [Economy.cookiePrice] (임시 10G, 11-26).
   static const ShopItem cookie = ShopItem(
-      id: 'cookie', name: '쿠키', short: '쿠키', price: 0, exp: 0, affection: Economy.feedAffectionGain, asset: AppAssets.cookie);
+      id: 'cookie', name: '쿠키', short: '쿠키', price: Economy.cookiePrice, exp: 0, affection: Economy.feedAffectionGain, asset: AppAssets.cookie);
+
+  /// 상점 진열 순서: 물약 3종 → 간식 → 성실볼.
+  static const List<ShopItem> shopItems = [...items, cookie, seongsilBall];
 
   /// 교감 창 · 가방에서 몬스터에게 줄 수 있는 것: 물약 3종 + 쿠키.
   static const List<ShopItem> feedItems = [...items, cookie];

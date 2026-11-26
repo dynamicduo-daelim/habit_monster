@@ -24,7 +24,7 @@ import tools.jackson.databind.json.JsonMapper;
  * Gemini API ({@code generateContent}) 호출. 키 · 모델은 환경변수 {@code GEMINI_API_KEY} · {@code GEMINI_MODEL}
  * (로컬은 {@code backend/.env} — 커밋하지 않는다). 앱에는 키를 두지 않는다 (앱 파일을 풀면 꺼낼 수 있어서, D-57).
  *
- * <p>응답이 늦으면 기다리지 않는다: 제한 시간({@code app.llm.timeout-ms}, 12초 — D-66 · D-92)을 넘기거나 실패하면 빈 값 → 대본형으로.
+ * <p>응답이 늦으면 기다리지 않는다: 제한 시간({@code app.llm.timeout-ms}, 12초 — D-66 · D-97)을 넘기거나 실패하면 빈 값 → 대본형으로.
  * 503 · 500(요청 몰림)은 남은 시간이 3초 이상이면 0.5초 쉬고 한 번만 다시 한다 (11-26, 앱의 요청 제한 15초 안).
  */
 @Component

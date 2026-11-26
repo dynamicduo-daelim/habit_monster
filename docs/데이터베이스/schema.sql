@@ -41,7 +41,7 @@
 --   * 퀘스트 보상은 지갑에 바로 넣지 않고 선물로 → 원장 QUEST_*의 ref_id = gift.gift.id (전: quest.user_quest.id)
 --   * 잠금 순서 맨 앞에 gift(받기만). 퀘스트 경로는 gift에 새 행만 넣는다 (원칙 3-1)
 --   * 가방 대사(verify S-12) = 구매 + 받은 선물의 아이템 − 소모
--- v1.14 2026-11-26 (API 명세 v11 — 월간 배지, 결정 D-91, 제안서 docs/제안/2026-11-26-퀘스트-월간배지.md)
+-- v1.14 2026-11-26 (API 명세 v11 — 월간 배지, 결정 D-96, 제안서 docs/제안/2026-11-26-퀘스트-월간배지.md)
 --   * quest.user_month 새로: 사용자 · 월 1줄 — 그달 퀘스트 완료 수(카운터) · 배지 받은 시각(한 번만, 트리거)
 --   * 선물 출처 QUEST_MONTHLY (성실볼만 — 골드 없어 원장 사유는 없음)
 -- 설계 문서: 04_논리물리모델.md (v1.7 반영 전)
@@ -957,7 +957,7 @@ CREATE TABLE quest.user_quest (
   CONSTRAINT ck_user_quest_progress CHECK (progress <= target)
 );
 
--- 월간 배지 (v1.14, D-91): 사용자 · 월 1줄. 퀘스트를 완료할 때마다 completed_count + 1 (카운터).
+-- 월간 배지 (v1.14, D-96): 사용자 · 월 1줄. 퀘스트를 완료할 때마다 completed_count + 1 (카운터).
 --  * 줄은 그달 첫 완료(또는 첫 조회) 때 만들고, 그때 시작값 = 그달 이미 완료한 user_quest 수 (이 기능 전 완료분 포함)
 --  * completed_count가 quest_monthly_target에 닿으면 badge_earned_at을 조건부로 한 번 채우고 성실볼 선물 (gift, QUEST_MONTHLY)
 --  * 완료한 날의 달로 센다 (지난달에 시작한 주간 퀘스트를 이번 달에 끝내면 이번 달). 선물을 받았는지와 무관
