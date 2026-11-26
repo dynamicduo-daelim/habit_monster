@@ -437,12 +437,7 @@ class _ChatScreenState extends State<ChatScreen> {
       if (c.busy)
         Padding(
           padding: const EdgeInsets.only(top: 12),
-          child: _Bubble(
-            message: const ChatMessage.bot('…'),
-            avatar: avatar,
-            name: name,
-            showProfile: msgs.isEmpty || !msgs.last.fromBot,
-          ),
+          child: _TypingBubble(avatar: avatar, showProfile: msgs.isEmpty || !msgs.last.fromBot),
         ),
     ];
     // reverse: 최신 메시지가 항상 아래에 붙어 있다 (메시지 높이가 달라도 스크롤 위치를 계산할 필요 없음).
@@ -944,6 +939,73 @@ class _DarkButton extends StatelessWidget {
           ),
           child: Text(label, style: const TextStyle(fontSize: 12.5, color: AppColors.chatSoftText)),
         ),
+      ),
+    );
+  }
+}
+
+/// 몬스터가 답을 쓰는 중: 흰 말풍선 안에서 점 세 개가 차례로 통통 튄다 (메신저 "입력 중", 11-26).
+class _TypingBubble extends StatefulWidget {
+  const _TypingBubble({required this.avatar, required this.showProfile});
+  final String avatar;
+  final bool showProfile;
+
+  @override
+  State<_TypingBubble> createState() => _TypingBubbleState();
+}
+
+class _TypingBubbleState extends State<_TypingBubble> with SingleTickerProviderStateMixin {
+  late final AnimationController _a = AnimationController(vsync: this, duration: const Duration(milliseconds: 900))..repeat();
+
+  @override
+  void dispose() {
+    _a.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: '입력 중',
+      excludeSemantics: true,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (widget.showProfile) _Avatar(asset: widget.avatar, size: _Bubble._avatarSize) else const SizedBox(width: _Bubble._avatarSize),
+          const SizedBox(width: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: AppColors.chatBotBubble,
+              borderRadius: BorderRadius.only(
+                topLeft: Radius.circular(widget.showProfile ? 4 : 14),
+                topRight: const Radius.circular(14),
+                bottomLeft: const Radius.circular(14),
+                bottomRight: const Radius.circular(14),
+              ),
+            ),
+            child: AnimatedBuilder(
+              animation: _a,
+              builder: (context, _) => Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (var i = 0; i < 3; i++) ...[
+                    if (i > 0) const SizedBox(width: 5),
+                    Transform.translate(
+                      // 점마다 0.2씩 늦게: 사인 곡선의 위쪽 반만 써서 "톡" 튀어 오른다
+                      offset: Offset(0, -4 * math.max(0, math.sin(2 * math.pi * (_a.value - i * 0.2)))),
+                      child: Container(
+                        width: 7,
+                        height: 7,
+                        decoration: const BoxDecoration(color: AppColors.chatInkSoft, shape: BoxShape.circle),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
