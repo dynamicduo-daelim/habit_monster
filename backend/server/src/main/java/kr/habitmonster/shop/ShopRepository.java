@@ -39,6 +39,10 @@ class ShopRepository {
 			.param(userId).query(InventoryRow.class).list();
 	}
 
+	Optional<String> itemName(String code) {
+		return db.sql("select name from shop.shop_item where code = ?").param(code).query(String.class).optional();
+	}
+
 	int quantity(long userId, String itemCode) {
 		return db.sql("select quantity from shop.inventory where user_id = ? and item_code = ?")
 			.params(userId, itemCode).query(Integer.class).optional().orElse(0);

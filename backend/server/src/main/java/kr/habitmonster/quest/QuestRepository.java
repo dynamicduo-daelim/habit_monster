@@ -69,15 +69,20 @@ class QuestRepository {
 			.params(value, userId, periodStart, questCode).query(Advanced.class).optional();
 	}
 
+	/** 완료한 퀘스트의 보상(만들 때 고정한 값)과 제목 — 선물 한 줄이 된다. */
+	record Completed(int rewardGold, String title) {
+	}
+
 	/**
-	 * 목표에 닿은 행을 완료로 바꾼다 — 조건부 UPDATE라 한 번만 성공한다. 바꿨으면 그 행의 보상(만들 때 고정한 값),
+	 * 목표에 닿은 행을 완료로 바꾼다 — 조건부 UPDATE라 한 번만 성공한다. 바꿨으면 그 행의 보상 · 제목,
 	 * 이미 완료였으면 비어 있다.
 	 */
-	Optional<Integer> complete(long userQuestId) {
+	Optional<Completed> complete(long userQuestId) {
 		return db.sql("""
-			update quest.user_quest set status = 'DONE', completed_at = now()
-			 where id = ? and status = 'IN_PROGRESS' and progress >= target
-			returning reward_gold""")
-			.param(userQuestId).query(Integer.class).optional();
+			update quest.user_quest q set status = 'DONE', completed_at = now()
+			  from quest.quest_def d
+			 where d.code = q.quest_code and q.id = ? and q.status = 'IN_PROGRESS' and q.progress >= q.target
+			returning q.reward_gold, d.title""")
+			.param(userQuestId).query(Completed.class).optional();
 	}
 }

@@ -45,10 +45,11 @@ class ArchitectureTest {
 		Map.entry("identity", "identity"), Map.entry("auth", "identity"), // auth = 회원 모듈의 서비스 · 컨트롤러
 		Map.entry("habit", "habit"), Map.entry("goal", "goal"), Map.entry("wallet", "wallet"), Map.entry("shop", "shop"),
 		Map.entry("monster", "monster"), Map.entry("config", "config"), Map.entry("idempotency", "api"),
-		Map.entry("ai", "ai"), Map.entry("quest", "quest")); // v1.11
+		Map.entry("ai", "ai"), Map.entry("quest", "quest"), // v1.11
+		Map.entry("gift", "gift")); // v1.13
 
 	static final Pattern TABLE_REF =
-		Pattern.compile("\\b(identity|habit|goal|wallet|shop|monster|config|ai|api|quest)\\.([a-z_]+)\\b");
+		Pattern.compile("\\b(identity|habit|goal|wallet|shop|monster|config|ai|api|quest|gift)\\.([a-z_]+)\\b");
 
 	static final JavaClasses CLASSES = new ClassFileImporter()
 		.withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
@@ -56,7 +57,7 @@ class ArchitectureTest {
 
 	@Test
 	void 저장소는_자기_모듈_안에서만_쓴다() {
-		for (String module : List.of("habit", "goal", "wallet", "shop", "monster", "idempotency", "ai", "quest")) {
+		for (String module : List.of("habit", "goal", "wallet", "shop", "monster", "idempotency", "ai", "quest", "gift")) {
 			classes().that().resideInAPackage(ROOT + "." + module + "..").and().haveSimpleNameEndingWith("Repository")
 				.should().onlyHaveDependentClassesThat().resideInAPackage(ROOT + "." + module + "..")
 				.allowEmptyShould(true)

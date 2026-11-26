@@ -14,6 +14,8 @@
 -- v1.10: 끌기(DRAG) 하루 1회 · 설정 키 affection_drag_gain
 -- v1.11: 퀘스트 (user_quest 기간당 1행 · 진행도 ≤ 목표 · 완료-시각 일치 · 마스터 FK · QUEST_DAILY 적립 · quest 권한) · quest_enabled
 -- v1.12: 주간 퀘스트 시드 3개 · quest_weekly_rate_threshold · QUEST_WEEKLY 적립
+-- v1.13: 선물함 (gift — 출처당 1줄 · 빈 선물 · 내용 수정 · 받음 되돌리기 금지 · 받기 = 원장(ref = 선물 id) · 볼 선물 → 가방 대사 · 권한).
+--        퀘스트 골드는 선물을 거쳐 적립되므로 v1.11 · v1.12 검사의 "완료 + 원장 적립"을 "완료"만으로 바꾸고 적립은 gift 검사로 옮김
 -- =====================================================================
 CREATE TEMP TABLE _result (id text, ok boolean, note text);
 
@@ -56,7 +58,9 @@ INSERT INTO _cross_fk_expected VALUES
  -- v1.9
  ('ai.daily_call_count','identity.users'),
  -- v1.11
- ('quest.user_quest','identity.users');
+ ('quest.user_quest','identity.users'),
+ -- v1.13
+ ('gift.gift','identity.users'), ('gift.gift','shop.shop_item');
 -- schema_later.sql을 적용한 DB라면 그 블록의 FK도 허용 목록에 포함
 INSERT INTO _cross_fk_expected
 SELECT * FROM (VALUES
@@ -71,7 +75,7 @@ JOIN pg_class t ON t.oid = c.conrelid JOIN pg_namespace tn ON tn.oid = t.relname
 JOIN pg_class r ON r.oid = c.confrelid JOIN pg_namespace rn ON rn.oid = r.relnamespace
 WHERE c.contype = 'f' AND t.relnamespace <> r.relnamespace;
 INSERT INTO _result
-SELECT 'S-1 스키마 간 FK = 허용 목록과 일치 (MVP 21쌍, 나중 블록 포함 26쌍 — v1.11)',
+SELECT 'S-1 스키마 간 FK = 허용 목록과 일치 (MVP 23쌍, 나중 블록 포함 28쌍 — v1.13)',
        NOT EXISTS (SELECT * FROM _cross_fk_actual EXCEPT SELECT * FROM _cross_fk_expected)
        AND NOT EXISTS (SELECT * FROM _cross_fk_expected EXCEPT SELECT * FROM _cross_fk_actual),
        (SELECT count(*) FROM _cross_fk_actual) || '쌍';
@@ -92,7 +96,7 @@ FROM (
   JOIN pg_class cl ON cl.oid = c.conrelid
   JOIN pg_namespace n ON n.oid = cl.relnamespace
   JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = ANY (c.conkey)
-  WHERE n.nspname IN ('identity','habit','goal','wallet','shop','monster','config','ai','api','payment')
+  WHERE n.nspname IN ('identity','habit','goal','wallet','shop','monster','config','ai','api','payment','quest','gift')
     AND ((c.contype = 'c' AND pg_get_constraintdef(c.oid) LIKE '%= ANY (ARRAY[%')
       OR (c.contype = 'f' AND a.atttypid IN ('text'::regtype, 'varchar'::regtype)))
     AND a.atttypid <> 'text'::regtype
@@ -621,12 +625,17 @@ INSERT INTO _result
 SELECT 'S-6 잔액 = 원장 합계 (BR-32, 구매 차감 포함)', w.balance = coalesce(sum(l.amount),0), w.balance || ' / ' || coalesce(sum(l.amount),0)
 FROM wallet.wallet w LEFT JOIN wallet.wallet_ledger l ON l.user_id = w.user_id
 WHERE w.user_id = 1 GROUP BY w.balance;
--- S-12 가방 대사: 수량 = 구매 합 − 소모 합 (보상 흐름 대신 대사 쿼리로 확인)
-INSERT INTO _result
-SELECT 'S-12 가방 수량 = 구매 − 소모', count(*) = 0, count(*) || '건 불일치'
+-- S-12 가방 대사: 수량 = 구매 합 + 받은 선물의 아이템 합(v1.13) − 소모 합 (보상 흐름 대신 대사 쿼리로 확인)
+--      선물 검사 뒤(gift 블록)에 같은 쿼리를 S-12b로 한 번 더 돌린다
+CREATE TEMP VIEW _inventory_mismatch AS
+SELECT i.user_id, i.item_code
 FROM shop.inventory i
 WHERE i.quantity <> coalesce((SELECT sum(quantity) FROM shop.purchase p WHERE p.user_id = i.user_id AND p.item_code = i.item_code),0)
+                  + coalesce((SELECT sum(item_quantity) FROM gift.gift g
+                              WHERE g.user_id = i.user_id AND g.item_code = i.item_code AND g.claimed_at IS NOT NULL),0)
                   - coalesce((SELECT sum(quantity) FROM shop.item_consumption c WHERE c.user_id = i.user_id AND c.item_code = i.item_code),0);
+INSERT INTO _result
+SELECT 'S-12 가방 수량 = 구매 + 받은 선물 − 소모', count(*) = 0, count(*) || '건 불일치' FROM _inventory_mismatch;
 -- S-26 (v1.7) 가진 종 등장 골드 = 원장 DUPLICATE 기록
 INSERT INTO _result
 SELECT 'S-26 가진 종 등장 골드 = 원장 DUPLICATE', count(*) = 0, count(*) || '건 불일치'
@@ -777,16 +786,8 @@ SELECT pg_temp.expect_fail('v1.11 진행도는 목표를 넘을 수 없음',
   $$UPDATE quest.user_quest SET progress = 2 WHERE user_id = 1 AND quest_code = 'DAILY_PET'$$);
 SELECT pg_temp.expect_fail('v1.11 DONE이면 완료 시각 필수',
   $$UPDATE quest.user_quest SET status = 'DONE', progress = 1 WHERE user_id = 1 AND quest_code = 'DAILY_PET'$$);
-SELECT pg_temp.expect_ok  ('v1.11 완료 + QUEST_DAILY 적립 (ref_id = user_quest.id)',
-  $$UPDATE quest.user_quest SET status = 'DONE', progress = 1, completed_at = now() WHERE user_id = 1 AND quest_code = 'DAILY_PET';
-    UPDATE wallet.wallet SET balance = balance + 1 WHERE user_id = 1;
-    INSERT INTO wallet.wallet_ledger (user_id, amount, balance_after, reason_code, ref_id)
-    SELECT 1, 1, w.balance, 'QUEST_DAILY', q.id::text FROM wallet.wallet w, quest.user_quest q
-    WHERE w.user_id = 1 AND q.user_id = 1 AND q.quest_code = 'DAILY_PET'$$);
-SELECT pg_temp.expect_fail('v1.11 같은 퀘스트 골드 두 번 불가 (원장 UNIQUE)',
-  $$INSERT INTO wallet.wallet_ledger (user_id, amount, balance_after, reason_code, ref_id)
-    SELECT 1, 1, w.balance + 1, 'QUEST_DAILY', q.id::text FROM wallet.wallet w, quest.user_quest q
-    WHERE w.user_id = 1 AND q.user_id = 1 AND q.quest_code = 'DAILY_PET'$$);
+SELECT pg_temp.expect_ok  ('v1.11 완료 (골드는 v1.13부터 선물함 — gift 검사)',
+  $$UPDATE quest.user_quest SET status = 'DONE', progress = 1, completed_at = now() WHERE user_id = 1 AND quest_code = 'DAILY_PET'$$);
 INSERT INTO _result
 SELECT 'S-30 설정값 · 시드 v1.11 (quest_enabled true · 일일 퀘스트 4개, 보상 3/1/1/1)',
        (SELECT value FROM config.balance_config WHERE key = 'quest_enabled') = 'true'::jsonb
@@ -794,18 +795,75 @@ SELECT 'S-30 설정값 · 시드 v1.11 (quest_enabled true · 일일 퀘스트 4
        = 'DAILY_CHECKIN:3,DAILY_PET:1,DAILY_TIMER:1,DAILY_TALK:1', '';
 
 -- ---------- v1.12 주간 퀘스트 ----------
-SELECT pg_temp.expect_ok  ('v1.12 주간 퀘스트 행 (기간 = 그 주 월요일) + QUEST_WEEKLY 적립',
+SELECT pg_temp.expect_ok  ('v1.12 주간 퀘스트 행 (기간 = 그 주 월요일) · 완료',
   $$INSERT INTO quest.user_quest (user_id, period_start, quest_code, target, reward_gold, progress, status, completed_at)
-    VALUES (1,'2026-10-05','WEEKLY_ATTEND',4,5,4,'DONE',now());
-    UPDATE wallet.wallet SET balance = balance + 5 WHERE user_id = 1;
-    INSERT INTO wallet.wallet_ledger (user_id, amount, balance_after, reason_code, ref_id)
-    SELECT 1, 5, w.balance, 'QUEST_WEEKLY', q.id::text FROM wallet.wallet w, quest.user_quest q
-    WHERE w.user_id = 1 AND q.user_id = 1 AND q.quest_code = 'WEEKLY_ATTEND'$$);
+    VALUES (1,'2026-10-05','WEEKLY_ATTEND',4,5,4,'DONE',now())$$);
 INSERT INTO _result
 SELECT 'S-32 설정값 · 시드 v1.12 (주간 퀘스트 3개 4/2/3일 · 각 5G · 기준 80%)',
        (SELECT value FROM config.balance_config WHERE key = 'quest_weekly_rate_threshold') = '80'::jsonb
    AND (SELECT string_agg(code || ':' || target_count || ':' || reward_gold, ',' ORDER BY sort_order) FROM quest.quest_def WHERE kind = 'WEEKLY' AND is_active)
        = 'WEEKLY_ATTEND:4:5,WEEKLY_GOOD_DAYS:2:5,WEEKLY_CATEGORIES:3:5', '';
+
+-- ---------- v1.13 선물함 ----------
+SELECT pg_temp.expect_ok  ('v1.13 퀘스트 완료 → 선물 (일일 1G · 주간 5G, 출처 번호 = user_quest.id)',
+  $$INSERT INTO gift.gift (user_id, source_code, source_ref, title, gold)
+    SELECT 1, 'QUEST_DAILY', q.id::text, '몬스터 쓰다듬기', 1 FROM quest.user_quest q WHERE q.user_id = 1 AND q.quest_code = 'DAILY_PET';
+    INSERT INTO gift.gift (user_id, source_code, source_ref, title, gold)
+    SELECT 1, 'QUEST_WEEKLY', q.id::text, '주 4일 출석', 5 FROM quest.user_quest q WHERE q.user_id = 1 AND q.quest_code = 'WEEKLY_ATTEND'$$);
+SELECT pg_temp.expect_fail('v1.13 같은 출처에서 선물 두 번 불가',
+  $$INSERT INTO gift.gift (user_id, source_code, source_ref, title, gold)
+    SELECT 1, 'QUEST_DAILY', q.id::text, '몬스터 쓰다듬기', 1 FROM quest.user_quest q WHERE q.user_id = 1 AND q.quest_code = 'DAILY_PET'$$);
+SELECT pg_temp.expect_fail('v1.13 없는 출처 코드 불가',
+  $$INSERT INTO gift.gift (user_id, source_code, source_ref, title, gold) VALUES (1,'NOPE','x1','?',1)$$);
+SELECT pg_temp.expect_fail('v1.13 빈 선물(골드 0 · 아이템 없음) 불가',
+  $$INSERT INTO gift.gift (user_id, source_code, source_ref, title, gold) VALUES (1,'QUEST_DAILY','x2','?',0)$$);
+SELECT pg_temp.expect_fail('v1.13 음수 골드 불가',
+  $$INSERT INTO gift.gift (user_id, source_code, source_ref, title, gold, item_code, item_quantity) VALUES (1,'QUEST_DAILY','x3','?',-1,'BALL',1)$$);
+SELECT pg_temp.expect_fail('v1.13 아이템 코드만 있고 개수 없음 불가',
+  $$INSERT INTO gift.gift (user_id, source_code, source_ref, title, item_code) VALUES (1,'QUEST_DAILY','x4','?','BALL')$$);
+SELECT pg_temp.expect_fail('v1.13 없는 아이템 코드 불가',
+  $$INSERT INTO gift.gift (user_id, source_code, source_ref, title, item_code, item_quantity) VALUES (1,'QUEST_DAILY','x5','?','NOPE',1)$$);
+SELECT pg_temp.expect_ok  ('v1.13 받기 = 받은 시각 + 지갑 + 원장 (사유 = 출처, ref_id = 선물 id)',
+  $$UPDATE gift.gift SET claimed_at = now() WHERE user_id = 1 AND source_code = 'QUEST_DAILY' AND claimed_at IS NULL;
+    UPDATE wallet.wallet SET balance = balance + 1 WHERE user_id = 1;
+    INSERT INTO wallet.wallet_ledger (user_id, amount, balance_after, reason_code, ref_id)
+    SELECT 1, g.gold, w.balance, g.source_code, g.id::text FROM wallet.wallet w, gift.gift g
+    WHERE w.user_id = 1 AND g.user_id = 1 AND g.source_code = 'QUEST_DAILY'$$);
+SELECT pg_temp.expect_fail('v1.13 같은 선물 골드 두 번 불가 (원장 UNIQUE)',
+  $$INSERT INTO wallet.wallet_ledger (user_id, amount, balance_after, reason_code, ref_id)
+    SELECT 1, g.gold, w.balance + g.gold, g.source_code, g.id::text FROM wallet.wallet w, gift.gift g
+    WHERE w.user_id = 1 AND g.user_id = 1 AND g.source_code = 'QUEST_DAILY'$$);
+SELECT pg_temp.expect_fail('v1.13 받은 선물을 안 받음으로 되돌리기 불가 (트리거)',
+  $$UPDATE gift.gift SET claimed_at = NULL WHERE user_id = 1 AND source_code = 'QUEST_DAILY'$$);
+SELECT pg_temp.expect_fail('v1.13 받은 시각 다시 쓰기 불가 (트리거)',
+  $$UPDATE gift.gift SET claimed_at = now() + interval '1 day' WHERE user_id = 1 AND source_code = 'QUEST_DAILY'$$);
+SELECT pg_temp.expect_fail('v1.13 만든 뒤 금액 변경 불가 (트리거)',
+  $$UPDATE gift.gift SET gold = 100 WHERE user_id = 1 AND source_code = 'QUEST_WEEKLY'$$);
+SELECT pg_temp.expect_fail('v1.13 만든 뒤 아이템 추가 불가 (트리거)',
+  $$UPDATE gift.gift SET item_code = 'BALL', item_quantity = 1 WHERE user_id = 1 AND source_code = 'QUEST_WEEKLY'$$);
+-- 아이템 선물은 물약으로 시험한다: 위 포획 검사가 산 적 없는 볼 2개를 쓴 기록을 남겨(가방 행 없음) BALL로는 대사가 맞지 않는다
+SELECT pg_temp.expect_ok  ('v1.13 아이템 선물 받기 → 가방 +1 (원장 없음 — 골드 0)',
+  $$INSERT INTO gift.gift (user_id, source_code, source_ref, title, item_code, item_quantity) VALUES (1,'QUEST_WEEKLY','verify-item','물약 시험','POTION_S',1);
+    UPDATE gift.gift SET claimed_at = now() WHERE user_id = 1 AND source_ref = 'verify-item';
+    INSERT INTO shop.inventory (user_id, item_code, quantity) VALUES (1,'POTION_S',1)
+    ON CONFLICT (user_id, item_code) DO UPDATE SET quantity = shop.inventory.quantity + 1$$);
+INSERT INTO _result
+SELECT 'S-12b 가방 수량 = 구매 + 받은 선물 − 소모 (아이템 선물 뒤)', count(*) = 0, count(*) || '건 불일치' FROM _inventory_mismatch;
+INSERT INTO _result
+SELECT 'S-33 골드가 있는 선물의 출처는 원장 사유(CREDIT)에 있다', count(*) = 0, coalesce(string_agg(DISTINCT g.source_code, ','), '')
+FROM gift.gift g
+WHERE g.gold > 0 AND NOT EXISTS (SELECT 1 FROM wallet.ledger_reason r WHERE r.code = g.source_code AND r.direction = 'CREDIT');
+INSERT INTO _result
+SELECT 'S-34 원장 QUEST_* = 받은 선물 (ref = 선물 id · 같은 금액, 짝 없는 줄 없음)',
+       NOT EXISTS (SELECT 1 FROM gift.gift g WHERE g.claimed_at IS NOT NULL AND g.gold > 0
+                   AND NOT EXISTS (SELECT 1 FROM wallet.wallet_ledger l
+                                   WHERE l.reason_code = g.source_code AND l.ref_id = g.id::text AND l.amount = g.gold))
+   AND NOT EXISTS (SELECT 1 FROM wallet.wallet_ledger l WHERE l.reason_code LIKE 'QUEST\_%'
+                   AND NOT EXISTS (SELECT 1 FROM gift.gift g
+                                   WHERE g.source_code = l.reason_code AND g.id::text = l.ref_id AND g.claimed_at IS NOT NULL)), '';
+INSERT INTO _result
+SELECT 'S-36 선물 출처 시드 v1.13 (QUEST_DAILY · QUEST_WEEKLY)',
+       (SELECT string_agg(code, ',' ORDER BY code) FROM gift.gift_source) = 'QUEST_DAILY,QUEST_WEEKLY', '';
 
 -- ---------- api: 중복 요청 방지 키 (v1.7) ----------
 SELECT pg_temp.expect_ok  ('v1.7 키 등록 (처리 중)',
@@ -866,6 +924,12 @@ SELECT 'S-31 app_core는 quest 읽기·쓰기 가능, app_ai는 못 봄 (v1.11)'
    AND has_table_privilege('app_core','quest.user_quest','UPDATE')
    AND has_table_privilege('app_core','quest.quest_def','SELECT')
    AND NOT has_schema_privilege('app_ai','quest','USAGE'), '';
+INSERT INTO _result
+SELECT 'S-35 app_core는 gift 읽기·쓰기 가능, app_ai는 못 봄 (v1.13)',
+       has_table_privilege('app_core','gift.gift','INSERT')
+   AND has_table_privilege('app_core','gift.gift','UPDATE')
+   AND has_table_privilege('app_core','gift.gift_source','SELECT')
+   AND NOT has_schema_privilege('app_ai','gift','USAGE'), '';
 INSERT INTO _result
 SELECT 'S-27 app_core는 중복 요청 키 읽기·쓰기·삭제 가능 (v1.7)',
        has_table_privilege('app_core','api.idempotency_record','INSERT')

@@ -99,10 +99,17 @@ class QuestApiTest extends PostgresTest {
 				name);
 	}
 
-	/** 퀘스트로 받은 골드 원장 (사유 QUEST_DAILY) — 금액 목록. */
+	/** 퀘스트 보상으로 생긴 선물 (출처 QUEST_DAILY) — 금액 목록. v10부터 완료하면 지갑이 아니라 선물함으로 간다 (D-89). */
 	List<Integer> questGold() {
-		return jdbc.queryForList("select amount from wallet.wallet_ledger where user_id = ? and reason_code = 'QUEST_DAILY'",
+		return jdbc.queryForList("select gold from gift.gift where user_id = ? and source_code = 'QUEST_DAILY'",
 				Integer.class, userIdOf(E));
+	}
+
+	/** 퀘스트 골드가 지갑에 바로 들어간 원장 줄 수 — 선물을 받기 전엔 항상 0. */
+	int questLedger() {
+		return jdbc.queryForObject(
+				"select count(*) from wallet.wallet_ledger where user_id = ? and reason_code like 'QUEST%'", Integer.class,
+				userIdOf(E));
 	}
 
 	int rows() {
@@ -149,16 +156,18 @@ class QuestApiTest extends PostgresTest {
 
 	// ---------- 진행 · 지급 ----------
 	@Test
-	void 체크인_첫_제출이면_오늘의_기록_완료_3G_다시_체크는_무관() throws Exception {
+	void 체크인_첫_제출이면_오늘의_기록_완료_3G_선물_다시_체크는_무관() throws Exception {
 		String access = onboardedUser(E);
 		String res = checkin(access, post("/checkins/today")).andExpect(status().isCreated())
 			.andReturn().getResponse().getContentAsString();
 		long wallet = jdbc.queryForObject("select balance from wallet.wallet where user_id = ?", Long.class, userIdOf(E));
-		assertThat(((Number) JsonPath.read(res, "$.gold")).longValue()).isEqualTo(wallet); // 응답 잔액에 퀘스트 3G까지
-		assertThat(((Number) JsonPath.read(res, "$.goldEarned")).longValue()).isEqualTo(wallet - 3); // 체크인 보상엔 없음
+		assertThat(((Number) JsonPath.read(res, "$.gold")).longValue()).isEqualTo(wallet);
+		// v10: 퀘스트 3G는 선물함으로 가서 잔액 = 체크인 보상뿐 (v8 ~ v9에선 3 더 많았다)
+		assertThat(((Number) JsonPath.read(res, "$.goldEarned")).longValue()).isEqualTo(wallet);
 		quests(access).andExpect(jsonPath("$.daily[0].status").value("DONE"))
 			.andExpect(jsonPath("$.daily[0].progress").value(1));
 		assertThat(questGold()).containsExactly(3);
+		assertThat(questLedger()).isZero();
 
 		checkin(access, put("/checkins/today")).andExpect(status().isOk());
 		assertThat(questGold()).containsExactly(3); // 다시 체크는 퀘스트와 무관

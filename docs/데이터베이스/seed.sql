@@ -9,6 +9,7 @@
 -- v1.10 2026-11-25: 필드 끌기 호감도 affection_drag_gain (API 명세 v7, D-86)
 -- v1.11 2026-11-25: 일일 퀘스트 4개 (quest.quest_def) · quest_enabled (API 명세 v8)
 -- v1.12 2026-11-25: 주간 퀘스트 3개 · quest_weekly_rate_threshold (API 명세 v9)
+-- v1.13 2026-11-26: 바뀐 것 없음 — 선물 출처 코드(gift.gift_source)는 원장 사유처럼 schema.sql에 있다 (API 명세 v10, D-89)
 -- =====================================================================
 
 -- 카테고리 (HTML CATS)
