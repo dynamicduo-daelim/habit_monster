@@ -7,6 +7,8 @@ import '../../core/state/game_state.dart';
 import '../../core/theme/app_colors.dart';
 import '../../data/catalog.dart';
 import '../../core/widgets/help_button.dart';
+import '../../core/widgets/category_icon.dart';
+import '../../data/models.dart';
 import 'home_parts.dart';
 import '../../core/theme/app_theme.dart';
 
@@ -18,7 +20,7 @@ class HabitSheet extends StatefulWidget {
   /// 홈 본문 높이 (펼친 높이가 넘지 않게).
   final double maxHeight;
 
-  static const double closedHeight = 44; // 테두리 4 + 손잡이 24 + 막대 8 + 아래 여백 8
+  static const double closedHeight = 70; // 테두리 4 + 손잡이 24 + 총점 막대 8 + 6 + 습관별 작은 막대 줄 18 + 아래 여백 10 (11-26)
   static const double openHeight = 310; // 성실도 카드 + 반영 습관 3줄 + 안내 (습관 리스트를 탭으로 옮겨 470 → 310)
 
   @override
@@ -146,8 +148,22 @@ class _Summary extends StatelessWidget {
         behavior: HitTestBehavior.opaque,
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(14, 0, 14, 8),
-          child: _ProgressBar(pct: pct, color: AppColors.gold, height: 8),
+          padding: const EdgeInsets.fromLTRB(14, 0, 14, 10),
+          child: Column(
+            children: [
+              _ProgressBar(pct: pct, color: AppColors.gold, height: 8),
+              const SizedBox(height: 6),
+              // 습관마다 작은 막대 (분야 아이콘 + 받은 점수 / 25) — 접힌 채로도 무엇을 했는지 (11-26)
+              Row(
+                children: [
+                  for (var i = 0; i < s.activeHabits.length; i++) ...[
+                    if (i > 0) const SizedBox(width: 8),
+                    Expanded(child: _MiniHabitBar(s: s, habit: s.activeHabits[i])),
+                  ],
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -236,6 +252,32 @@ class _ScorePage extends StatelessWidget {
               '성실도 1 = ${Economy.goldPerSincerity}G · 점수가 높은 습관 ${Economy.dailyHabitCap}개만 반영, 하루 ${GameState.maxDailyScore}G까지',
               style: TextStyle(fontSize: 10, height: 1.8, color: AppColors.textMuted),
             ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// 접힌 시트의 습관 하나: 분야 아이콘 + 얇은 막대 (체크 전이면 빈 막대).
+class _MiniHabitBar extends StatelessWidget {
+  const _MiniHabitBar({required this.s, required this.habit});
+  final GameState s;
+  final Habit habit;
+
+  @override
+  Widget build(BuildContext context) {
+    final score = s.rewardedScoreOf(habit) ?? 0;
+    return Row(
+      children: [
+        CategoryIcon(habit.categoryId, size: 16, outline: 0),
+        const SizedBox(width: 4),
+        Expanded(
+          child: _ProgressBar(
+            pct: score / Economy.maxSincerityPerHabit,
+            color: Catalog.category(habit.categoryId).color,
+            height: 6,
+            border: 1.5,
           ),
         ),
       ],

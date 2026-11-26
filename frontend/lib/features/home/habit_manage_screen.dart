@@ -86,7 +86,9 @@ class _HabitManageScreenState extends State<HabitManageScreen> {
   }
 
   void _pickCategory(String id) {
+    final typed = _preset == null ? _c.draftName.text : ''; // 직접 적던 이름은 분야를 바꿔도 남긴다
     _resetDraft();
+    _c.draftName.text = typed;
     _c.pickDraftCategory(id);
   }
 
@@ -97,10 +99,12 @@ class _HabitManageScreenState extends State<HabitManageScreen> {
     _openSheet();
   }
 
-  void _pickCustom() {
+  /// 맨 위 칸에 직접 적고 [만들기] (또는 자판의 완료) → 확인 창 (11-26 — 직접 적기를 더 쉽게).
+  void _pickTyped() {
+    if (_c.draftName.text.trim().isEmpty) return;
+    FocusManager.instance.primaryFocus?.unfocus();
     _preset = null;
-    _custom = true;
-    _c.draftName.clear();
+    _custom = false;
     _c.pickMeasure(0);
     _openSheet();
   }
@@ -118,6 +122,7 @@ class _HabitManageScreenState extends State<HabitManageScreen> {
       await _submit();
     } else if (mounted) {
       setState(() {
+        if (_preset != null) _c.draftName.clear(); // 추천을 골랐다 닫으면 위 칸에 추천 이름이 남지 않게
         _preset = null;
         _custom = false;
       });
@@ -217,7 +222,7 @@ class _HabitManageScreenState extends State<HabitManageScreen> {
                           custom: _custom,
                           onCategory: _pickCategory,
                           onPreset: _pickPreset,
-                          onCustom: _pickCustom,
+                          onCustom: _pickTyped,
                         )
                       : _list(s),
                 ),
@@ -485,9 +490,84 @@ class _AddForm extends StatelessWidget {
   Widget build(BuildContext context) {
     final cat = c.draftCat;
     final presets = cat == null ? const <(String, int, double)>[] : (Catalog.habitPresets[cat.id] ?? const []);
+    final typed = c.draftName.text.trim().isNotEmpty && preset == null;
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
       children: [
+        // 1. 직접 적기: 맨 위에 바로 입력 (11-26 — 추천을 고르지 않아도 한 번에)
+        Container(
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+          decoration: BoxDecoration(
+            color: AppColors.nightPanel,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: typed ? AppColors.gold : AppColors.purple, width: 3),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text('어떤 습관을 시작할까요?',
+                  style: TextStyle(fontFamily: AppTheme.pixelFont, fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.text)),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  if (cat != null) ...[CategoryIcon(cat.id, size: 26), const SizedBox(width: 8)],
+                  Expanded(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      decoration: BoxDecoration(
+                        color: AppColors.nightDeep,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: AppColors.nightLine2, width: 2),
+                      ),
+                      child: Semantics(
+                        label: '습관 이름 직접 적기',
+                        child: TextField(
+                          controller: c.draftName,
+                          cursorColor: AppColors.gold,
+                          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.text),
+                          decoration: const InputDecoration(
+                            border: InputBorder.none,
+                            isDense: true,
+                            contentPadding: EdgeInsets.symmetric(vertical: 12),
+                            hintText: '예: 저녁 산책, 영어 단어 외우기',
+                            hintStyle: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w400, color: AppColors.textMuted),
+                          ),
+                          textInputAction: TextInputAction.done,
+                          onSubmitted: (_) => onCustom(),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Semantics(
+                    button: true,
+                    enabled: typed,
+                    label: '만들기',
+                    excludeSemantics: true,
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: typed ? onCustom : null,
+                      child: Container(
+                        height: 46,
+                        alignment: Alignment.center,
+                        padding: const EdgeInsets.symmetric(horizontal: 14),
+                        decoration: BoxDecoration(
+                          color: typed ? AppColors.gold : AppColors.nightLine2,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text('만들기',
+                            style: TextStyle(
+                                fontSize: 14, fontWeight: FontWeight.w700, color: typed ? AppColors.night : AppColors.textMuted)),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 18),
+        // 2. 분야 (직접 적은 습관도 이 분야로)
         _label('분야'),
         Wrap(
           spacing: 8,
@@ -510,48 +590,28 @@ class _AddForm extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 18),
-        _label('추천 — 누르면 바로 등록 창이 떠요'),
+        // 3. 추천 — 아래로 (고르기만 하면 확인 창)
+        _label('이런 건 어때요? 추천 — 누르면 바로 등록 창'),
         if (cat != null)
           for (var i = 0; i < presets.length; i++) ...[
             _Choice(
-              selected: !custom && preset == i,
+              selected: preset == i,
               expand: true,
               onTap: () => onPreset(i, presets[i]),
               child: Row(
                 children: [
-                  Expanded(child: _ChoiceText(presets[i].$1, selected: !custom && preset == i, size: 14.5)),
+                  Expanded(child: _ChoiceText(presets[i].$1, selected: preset == i, size: 14.5)),
                   Text(
                     cat.measures[presets[i].$2].isOX
                         ? '했다 / 못 했다'
                         : '하루 ${formatNum(presets[i].$3)}${cat.measures[presets[i].$2].unit}',
-                    style: TextStyle(fontSize: 12, color: !custom && preset == i ? AppColors.brownText : AppColors.textMuted),
+                    style: TextStyle(fontSize: 12, color: preset == i ? AppColors.brownText : AppColors.textMuted),
                   ),
                 ],
               ),
             ),
             const SizedBox(height: 8),
           ],
-        Semantics(
-          button: true,
-          selected: custom,
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: onCustom,
-            child: CustomPaint(
-              foregroundPainter: custom
-                  ? null
-                  : const DashedBorderPainter(color: AppColors.nightLine2, width: 3, dash: 6, gap: 3),
-              child: Container(
-                constraints: const BoxConstraints(minHeight: 48),
-                alignment: Alignment.center,
-                decoration: custom ? BoxDecoration(border: Border.all(color: AppColors.gold, width: 3)) : null,
-                child: Text('+ 직접 적기',
-                    style: TextStyle(
-                        fontSize: 14, fontWeight: FontWeight.w700, color: custom ? AppColors.gold : AppColors.textMuted)),
-              ),
-            ),
-          ),
-        ),
       ],
     );
   }

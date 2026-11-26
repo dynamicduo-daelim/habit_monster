@@ -3,6 +3,7 @@ import 'dart:math';
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../core/constants/app_assets.dart';
 import '../../core/constants/economy.dart';
@@ -91,6 +92,11 @@ class _MonsterOverlayState extends State<MonsterOverlay> {
   double _jump = 0;
   bool _squish = false;
   double _rubProg = 0;
+
+  /// 쓰다듬기를 끝낸 순간 무대 가운데에 크게 뜨는 "쓰다듬기 완료!" 도장 (11-26 — 완료한 느낌이 약하다는 피드백).
+  /// 값이 바뀔 때마다 [_stampSeq]가 올라 도장 애니메이션을 처음부터 다시 그린다.
+  String? _stamp;
+  int _stampSeq = 0;
   double _rubAccum = 0;
   Offset? _last;
   Offset _hand = const Offset(205, 120);
@@ -326,6 +332,15 @@ class _MonsterOverlayState extends State<MonsterOverlay> {
     });
     _showEmote('heart');
     _hop(2);
+    HapticFeedback.mediumImpact(); // 손에 "톡" — 완료한 느낌
+    setState(() {
+      _stamp = gain > 0 ? '♥ +$gain' : '♥ 최대';
+      _stampSeq++;
+    });
+    final seq = _stampSeq;
+    _later(1700, () {
+      if (_stampSeq == seq) setState(() => _stamp = null);
+    });
     _later(40, () => setState(() {
           for (final p in _pops) {
             p.up = true;
@@ -765,6 +780,24 @@ class _MonsterOverlayState extends State<MonsterOverlay> {
                     ),
                   ),
                 ),
+              if (_stamp != null)
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  top: feet.dy - monSize - 64,
+                  child: IgnorePointer(
+                    child: Center(
+                      child: TweenAnimationBuilder<double>(
+                        key: ValueKey(_stampSeq),
+                        tween: Tween(begin: 1.8, end: 1),
+                        duration: const Duration(milliseconds: 420),
+                        curve: Curves.elasticOut,
+                        builder: (context, k, child) => Transform.scale(scale: k, child: child),
+                        child: Transform.rotate(angle: -0.08, child: _PetStamp(gain: _stamp!)),
+                      ),
+                    ),
+                  ),
+                ),
               for (final f in _floats)
                 AnimatedPositioned(
                   duration: const Duration(seconds: 1),
@@ -1099,6 +1132,24 @@ class _MonsterOverlayState extends State<MonsterOverlay> {
   }
 
   Widget _petPanel() {
+    if (m.pettedToday) {
+      // 오늘 끝냄: 초록 완료 띠로 확실하게 (11-26)
+      return _panel(
+        '쓰다듬기',
+        '내일 또 쓰다듬어 주세요',
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          decoration: BoxDecoration(color: AppColors.green, border: Border.all(color: AppColors.ink, width: 2)),
+          child: const Row(
+            children: [
+              PixelIcon(layers: [PixelLayer(PixelIcons.checkStroke, AppColors.ink)], size: 16, strokeWidth: 3.5),
+              SizedBox(width: 8),
+              Text('오늘 쓰다듬기 완료!', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink)),
+            ],
+          ),
+        ),
+      );
+    }
     return _panel(
       '쓰다듬기',
       m.pettedToday ? '오늘 완료 · 내일 또!' : '하루 1번 · 호감도 +${Economy.petAffectionGain}',
@@ -1141,7 +1192,8 @@ class _MonsterOverlayState extends State<MonsterOverlay> {
               width: 58,
               padding: const EdgeInsets.symmetric(vertical: 5),
               decoration: BoxDecoration(
-                color: on ? AppColors.gold : AppColors.night.withValues(alpha: 0.85),
+                // 오늘 끝낸 행동은 초록으로 칠해 한눈에 (11-26)
+                color: on ? AppColors.gold : (done ? AppColors.green : AppColors.night.withValues(alpha: 0.85)),
                 border: Border.all(color: AppColors.ink, width: 2),
               ),
               child: Column(
@@ -1150,11 +1202,11 @@ class _MonsterOverlayState extends State<MonsterOverlay> {
                   const SizedBox(height: 2),
                   Text(label,
                       style: TextStyle(
-                          fontSize: 11, fontWeight: FontWeight.w700, color: on ? AppColors.brownText : AppColors.text)),
+                          fontSize: 11, fontWeight: FontWeight.w700, color: on ? AppColors.brownText : (done ? AppColors.ink : AppColors.text))),
                 ],
               ),
             ),
-            if (done) Positioned(right: -6, top: -6, child: _doneMark()),
+            if (done) Positioned(right: -9, top: -9, child: _doneMark()),
           ],
         ),
       ),
@@ -1163,11 +1215,15 @@ class _MonsterOverlayState extends State<MonsterOverlay> {
 
   Widget _doneMark() => IgnorePointer(
         child: Container(
-          width: 18,
-          height: 18,
+          width: 26,
+          height: 26,
           alignment: Alignment.center,
-          decoration: BoxDecoration(color: AppColors.green, border: Border.all(color: AppColors.ink, width: 2)),
-          child: const PixelIcon(layers: [PixelLayer(PixelIcons.checkStroke, AppColors.ink)], size: 9, strokeWidth: 3.5),
+          decoration: BoxDecoration(
+            color: AppColors.gold,
+            shape: BoxShape.circle,
+            border: Border.all(color: AppColors.ink, width: 2.5),
+          ),
+          child: const PixelIcon(layers: [PixelLayer(PixelIcons.checkStroke, AppColors.ink)], size: 13, strokeWidth: 4),
         ),
       );
 
@@ -1218,7 +1274,7 @@ class _MonsterOverlayState extends State<MonsterOverlay> {
                       ],
                     ),
                   ),
-                  if (done) Positioned(right: -6, top: -6, child: _doneMark()),
+                  if (done) Positioned(right: -9, top: -9, child: _doneMark()),
                 ],
               );
             }),
@@ -1290,4 +1346,32 @@ class _AimPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_AimPainter old) => old.from != from || old.to != to;
+}
+
+/// 쓰다듬기를 끝낸 순간 무대에 찍히는 도장: "쓰다듬기 완료!" + 오른 호감도.
+class _PetStamp extends StatelessWidget {
+  const _PetStamp({required this.gain});
+  final String gain;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppColors.cream,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.tierHigh, width: 4),
+        boxShadow: const [BoxShadow(color: AppColors.ink, offset: Offset(4, 4))],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text('쓰다듬기 완료!',
+              style: TextStyle(fontFamily: AppTheme.pixelFont, fontSize: 22, fontWeight: FontWeight.w700, color: AppColors.brownText)),
+          const SizedBox(height: 2),
+          Text(gain, style: const TextStyle(fontFamily: AppTheme.pixelFont, fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.tierHigh)),
+        ],
+      ),
+    );
+  }
 }

@@ -80,7 +80,7 @@ void main() {
     await tapAndSettle(tester, find.bySemanticsLabel('습관 관리'));
     expect(find.text('새 습관'), findsOneWidget);
     expect(find.text('내 습관 3/5 ›'), findsOneWidget);
-    expect(find.text('+ 직접 적기'), findsOneWidget);
+    expect(find.text('어떤 습관을 시작할까요?'), findsOneWidget); // 맨 위 직접 적기 칸 (11-26)
 
     // 추천을 누르면 확인 창이 올라오고, 목표 · 기간만 보고 바로 등록 (재는 방법은 "자세히" 안, 11-26)
     await tapAndSettle(tester, find.text('스쿼트'));
@@ -104,12 +104,12 @@ void main() {
     await tester.pump(const Duration(seconds: 7));
   });
 
-  testWidgets('직접 적기: 이름을 적으면 등록 버튼이 열린다', (tester) async {
+  testWidgets('직접 적기: 맨 위 칸에 적고 [만들기] → 확인 창에서 등록 (11-26)', (tester) async {
     final s = await pumpHome(tester);
     await tapAndSettle(tester, find.bySemanticsLabel('습관 관리'));
-    await tapAndSettle(tester, find.text('+ 직접 적기'));
     await tester.enterText(find.byType(TextField), '저녁 산책');
     await tester.pump();
+    await tapAndSettle(tester, find.text('만들기'));
     await tapAndSettle(tester, find.text('저녁 산책 등록하기'));
     expect(s.habits.last.name, '저녁 산책');
     expect(s.habits.last.periodIndex, 1); // 기본 30일

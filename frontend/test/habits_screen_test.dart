@@ -44,6 +44,6 @@ void main() {
     await tester.tap(find.text('새 습관'));
     await tester.pumpAndSettle();
     expect(find.byType(HabitManageScreen), findsOneWidget);
-    expect(find.text('+ 직접 적기'), findsOneWidget);
+    expect(find.text('어떤 습관을 시작할까요?'), findsOneWidget);
   });
 }
