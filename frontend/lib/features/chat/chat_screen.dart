@@ -456,51 +456,65 @@ class _ChatScreenState extends State<ChatScreen> {
         content = _GoldButton(label: '오늘 습관 체크 시작', onTap: c.start);
       case ChatStep.yesNo:
       case ChatStep.amount:
-        // 채팅방처럼 말로만 답한다 (빠른 답장 버튼 · 확인 카드 없앰, 11-12).
-        content = _textRow(c);
+        // 체크인 대화에 집중: 추천 답장 칩 + 입력칸만 (11-26 — 칩을 누르면 바로 보낸다)
+        content = Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [_replyChips(c), const SizedBox(height: 8), _textRow(c)],
+        );
       case ChatStep.done:
       case ChatStep.explore:
         final noEnc = s.encountersLeft <= 0;
-        // 체크인을 마친 뒤에도 몬스터와 이야기할 수 있게 입력칸을 둔다 (기획 2026-11-15 — 임시 화면, 프론트 담당이 다듬음)
+        // 체크인을 마친 뒤: 탐색하기 하나만 크게, 다시 체크는 작은 글자로 (11-26 — 버튼 정리)
         content = Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Row(
-              children: [
-                // 확정한 기록 고치기 (보상은 첫 확정 그대로)
-                if (s.checkedInToday) ...[
-                  Expanded(flex: 2, child: _DarkButton(label: '다시 체크', onTap: c.recheck)),
-                  const SizedBox(width: 9),
-                ],
-                Expanded(
-                  flex: 3,
-                  child: Semantics(
-                    button: true,
-                    enabled: !noEnc,
-                    child: GestureDetector(
-                      onTap: noEnc ? null : c.explore,
-                      child: Container(
-                        constraints: const BoxConstraints(minHeight: 46),
-                        alignment: Alignment.center,
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: noEnc ? AppColors.nightRaised : AppColors.purpleDeep,
-                          border: Border.all(color: noEnc ? AppColors.nightLine2 : AppColors.purple, width: 3),
-                          boxShadow: const [BoxShadow(color: AppColors.ink, offset: Offset(4, 4))],
-                        ),
-                        child: Text('탐색하기 (${s.encountersLeft}회 남음)',
-                            style: TextStyle(
-                              fontSize: 12.5,
-                              fontWeight: FontWeight.w700,
-                              color: noEnc ? AppColors.lavender : AppColors.text,
-                            )),
-                      ),
+            Semantics(
+              button: true,
+              enabled: !noEnc,
+              child: GestureDetector(
+                onTap: noEnc ? null : c.explore,
+                child: Container(
+                  constraints: const BoxConstraints(minHeight: 46),
+                  alignment: Alignment.center,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: noEnc ? AppColors.chatInputBg : AppColors.chatMeBubble,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(noEnc ? '오늘 탐색을 다 했어요' : '탐색하기 (${s.encountersLeft}회 남음)',
+                      style: TextStyle(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w700,
+                        color: noEnc ? AppColors.chatHint : AppColors.chatInk,
+                      )),
+                ),
+              ),
+            ),
+            if (s.checkedInToday)
+              Align(
+                alignment: Alignment.centerRight,
+                child: Semantics(
+                  button: true,
+                  label: '다시 체크',
+                  excludeSemantics: true,
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: c.recheck,
+                    child: const Padding(
+                      padding: EdgeInsets.fromLTRB(12, 8, 4, 4),
+                      child: Text('기록 고치기 (다시 체크)',
+                          style: TextStyle(
+                              fontSize: 11.5,
+                              color: AppColors.chatInkSoft,
+                              decoration: TextDecoration.underline,
+                              decorationColor: AppColors.chatInkSoft)),
                     ),
                   ),
                 ),
-              ],
-            ),
-            const SizedBox(height: 9),
+              ),
+            const SizedBox(height: 6),
+            _replyChips(c),
+            const SizedBox(height: 8),
             _textRow(c),
           ],
         );
@@ -512,6 +526,55 @@ class _ChatScreenState extends State<ChatScreen> {
         border: Border(top: BorderSide(color: AppColors.chatDockLine, width: 1.5)),
       ),
       child: AbsorbPointer(absorbing: c.busy, child: content),
+    );
+  }
+
+  /// 입력칸 위 추천 답장 칩 (11-26): 누르면 그 말을 바로 보낸다.
+  /// 했어? → 했어 · 못 했어 / 얼마나? → 목표만큼 · 절반 · 못 했어 / 체크 끝 → 몬스터에게 건넬 말.
+  Widget _replyChips(ChatController c) {
+    final m = c.currentMeasure;
+    final h = c.currentHabit;
+    String n(double v) => formatNum(v);
+    final List<String> replies = switch (c.step) {
+      ChatStep.yesNo => const ['했어!', '못 했어'],
+      ChatStep.amount when m != null && h != null && !m.isOX => [
+          '${n(h.target)}${m.unit} 했어',
+          '${n((h.target / 2 * 10).roundToDouble() / 10)}${m.unit} 했어',
+          '목표보다 더 했어',
+          '못 했어',
+        ],
+      ChatStep.amount => const ['했어!', '못 했어'],
+      _ => const ['오늘 어땠어?', '칭찬해 줘!', '내일도 같이 하자'],
+    };
+    return SizedBox(
+      height: 34,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        children: [
+          for (final r in replies) ...[
+            Semantics(
+              button: true,
+              label: '$r 보내기',
+              excludeSemantics: true,
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: c.busy ? null : () => c.sendText(r == '목표보다 더 했어' && h != null && m != null ? '${n(h.target * 1.5)}${m.unit} 했어' : r),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: AppColors.chatBotBubble,
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(color: AppColors.chatDockLine, width: 1.5),
+                  ),
+                  child: Text(r, style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: AppColors.chatInk)),
+                ),
+              ),
+            ),
+            const SizedBox(width: 6),
+          ],
+        ],
+      ),
     );
   }
 
@@ -917,32 +980,6 @@ class _GoldButton extends StatelessWidget {
 }
 
 /// 어두운 보조 버튼 ("못 했어").
-class _DarkButton extends StatelessWidget {
-  const _DarkButton({required this.label, required this.onTap});
-  final String label;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      button: true,
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          width: double.infinity,
-          constraints: const BoxConstraints(minHeight: 46),
-          alignment: Alignment.center,
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: AppColors.nightRaised,
-            border: Border.all(color: AppColors.nightLine2, width: 3),
-          ),
-          child: Text(label, style: const TextStyle(fontSize: 12.5, color: AppColors.chatSoftText)),
-        ),
-      ),
-    );
-  }
-}
 
 /// 몬스터가 답을 쓰는 중: 흰 말풍선 안에서 점 세 개가 차례로 통통 튄다 (메신저 "입력 중", 11-26).
 class _TypingBubble extends StatefulWidget {

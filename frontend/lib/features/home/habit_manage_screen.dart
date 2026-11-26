@@ -11,6 +11,8 @@ import '../../core/widgets/pixel_widgets.dart';
 import '../../core/widgets/popup_card.dart';
 import '../../data/catalog.dart';
 import '../../data/models.dart';
+import '../../data/pixel_icons.dart';
+import '../../core/widgets/pixel_icon.dart';
 import '../onboarding/onboarding_controller.dart';
 import '../shell/game_action.dart';
 import 'home_parts.dart';
@@ -588,51 +590,46 @@ class _AddForm extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 18),
-        // 2. 분야 (직접 적은 습관도 이 분야로)
+        // 2. 분야: 얇은 탭 한 줄 (11-26 — 박스가 많아 한눈에 안 들어온다는 피드백)
         _label('분야'),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            for (final id in c.picked)
-              _Choice(
-                selected: c.draftCategory == id,
-                semanticLabel: Catalog.category(id).name,
-                onTap: () => onCategory(id),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    CategoryIcon(id, size: 20, outline: 0),
-                    const SizedBox(width: 7),
-                    _ChoiceText(Catalog.category(id).short, selected: c.draftCategory == id),
-                  ],
-                ),
-              ),
-          ],
+        SizedBox(
+          height: 38,
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            children: [
+              for (final id in c.picked) ...[
+                _CategoryTab(id: id, selected: c.draftCategory == id, onTap: () => onCategory(id)),
+                const SizedBox(width: 6),
+              ],
+            ],
+          ),
         ),
         const SizedBox(height: 18),
-        // 3. 추천 — 아래로 (고르기만 하면 확인 창)
-        _label('이런 건 어때요? 추천 — 누르면 바로 등록 창'),
+        // 3. 추천: 줄로 나뉜 목록 하나 (누르면 바로 등록 창, 이미 있는 습관은 "등록됨")
+        _label('추천 — 누르면 바로 등록 창'),
         if (cat != null)
-          for (var i = 0; i < presets.length; i++) ...[
-            _Choice(
-              selected: preset == i,
-              expand: true,
-              onTap: () => onPreset(i, presets[i]),
-              child: Row(
-                children: [
-                  Expanded(child: _ChoiceText(presets[i].$1, selected: preset == i, size: 14.5)),
-                  Text(
-                    cat.measures[presets[i].$2].isOX
+          Container(
+            decoration: BoxDecoration(
+              color: AppColors.nightPanel,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: AppColors.nightLine, width: 2),
+            ),
+            child: Column(
+              children: [
+                for (var i = 0; i < presets.length; i++) ...[
+                  if (i > 0) const Divider(height: 1, thickness: 1, color: AppColors.nightLine),
+                  _PresetRow(
+                    name: presets[i].$1,
+                    meta: cat.measures[presets[i].$2].isOX
                         ? '했다 / 못 했다'
                         : '하루 ${formatNum(presets[i].$3)}${cat.measures[presets[i].$2].unit}',
-                    style: TextStyle(fontSize: 12, color: preset == i ? AppColors.brownText : AppColors.textMuted),
+                    exists: GameScope.of(context).hasHabitNamed(presets[i].$1),
+                    onTap: () => onPreset(i, presets[i]),
                   ),
                 ],
-              ),
+              ],
             ),
-            const SizedBox(height: 8),
-          ],
+          ),
       ],
     );
   }
@@ -913,23 +910,6 @@ class _Choice extends StatelessWidget {
   }
 }
 
-class _ChoiceText extends StatelessWidget {
-  const _ChoiceText(this.text, {required this.selected, this.size = 13.5});
-  final String text;
-  final bool selected;
-  final double size;
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(text,
-        style: TextStyle(
-          fontSize: size,
-          fontWeight: FontWeight.w700,
-          color: selected ? AppColors.night : AppColors.text,
-        ));
-  }
-}
-
 /// 하루 목표 − / + 버튼.
 class _StepButton extends StatelessWidget {
   const _StepButton({required this.label, required this.semanticLabel, required this.onTap});
@@ -1023,6 +1003,96 @@ class _RemoveConfirm extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 분야 탭 (알약 모양, 높이 38): 고르면 금색.
+class _CategoryTab extends StatelessWidget {
+  const _CategoryTab({required this.id, required this.selected, required this.onTap});
+  final String id;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: Catalog.category(id).name,
+      excludeSemantics: true,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            color: selected ? AppColors.gold : AppColors.nightPanel,
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: selected ? AppColors.goldLight : AppColors.nightLine2, width: 2),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CategoryIcon(id, size: 16, outline: 0),
+              const SizedBox(width: 6),
+              Text(Catalog.category(id).short,
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: selected ? AppColors.night : AppColors.text)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 추천 한 줄: 이름 · 하루 목표 · 오른쪽 + (이미 있으면 "등록됨"으로 흐리게).
+class _PresetRow extends StatelessWidget {
+  const _PresetRow({required this.name, required this.meta, required this.exists, required this.onTap});
+  final String name;
+  final String meta;
+  final bool exists;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      enabled: !exists,
+      label: exists ? '$name, 이미 등록됨' : '$name, $meta',
+      excludeSemantics: true,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: Opacity(
+          opacity: exists ? 0.5 : 1,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+            child: Row(
+              children: [
+                Expanded(child: Text(name, style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w700, color: AppColors.text))),
+                Text(exists ? '등록됨' : meta, style: const TextStyle(fontSize: 12, color: AppColors.textMuted)),
+                const SizedBox(width: 10),
+                Container(
+                  width: 26,
+                  height: 26,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: exists ? AppColors.nightLine2 : AppColors.gold,
+                    shape: BoxShape.circle,
+                  ),
+                  child: PixelIcon(
+                      layers: [
+                        PixelLayer(exists ? PixelIcons.checkStroke : PixelIcons.plus, exists ? AppColors.textMuted : AppColors.night)
+                      ],
+                      size: 12,
+                      strokeWidth: exists ? 3.5 : null),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
