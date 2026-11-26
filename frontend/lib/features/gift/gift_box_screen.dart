@@ -12,8 +12,8 @@ import '../../data/pixel_icons.dart';
 import '../shell/game_action.dart';
 
 /// 선물함: 위에 받을 선물(퀘스트 보상 · [받기] · [모두 받기]), 아래에 오늘의 퀘스트 · 이번 주 퀘스트.
-/// 시연 모드는 받기를 눌러야 골드가 들어오고, 서버 모드는 서버가 완료 순간 지급해 "자동 지급"으로 보인다
-/// (기획 2026-11-26-선물함 · 명세 v9 10장).
+/// 퀘스트를 깨면 보상이 선물로 쌓이고, [받기]를 눌러야 골드가 들어온다 — 서버(명세 v10 11장)와 시연 모드가 같다
+/// (기획 2026-11-26-선물함).
 class GiftBoxScreen extends StatefulWidget {
   const GiftBoxScreen({super.key});
 
@@ -61,16 +61,14 @@ class _GiftBoxScreenState extends State<GiftBoxScreen> {
     });
   }
 
-  Future<void> _claim(List<Quest> qs) async {
+  /// 하나 받기 · 모두 받기. 실패(예: 이미 받은 선물)는 문구를 띄우고, 어느 쪽이든 목록을 다시 불러온다.
+  Future<void> _claim(Gift? one) async {
     if (_busy) return;
     setState(() => _busy = true);
-    var total = 0;
-    for (final q in qs) {
-      total += await runGameAction(context, (r) => r.claimQuestReward(q), onError: _toast) ?? 0;
-      if (!mounted) return;
-    }
+    final got = await runGameAction(context, (r) => one == null ? r.claimAllGifts() : r.claimGift(one), onError: _toast);
+    if (!mounted) return;
     setState(() => _busy = false);
-    if (total > 0) _toast('+${total}G 받았어요!');
+    if ((got ?? 0) > 0) _toast('+${got}G 받았어요!');
     await _load();
   }
 
@@ -98,9 +96,9 @@ class _GiftBoxScreenState extends State<GiftBoxScreen> {
                                   children: [
                                     _GiftSection(board: b, busy: _busy, onClaim: _claim),
                                     const SizedBox(height: 22),
-                                    _QuestSection(title: '오늘의 퀘스트', sub: '매일 0시에 새로', quests: b.daily, board: b),
+                                    _QuestSection(title: '오늘의 퀘스트', sub: '매일 0시에 새로', quests: b.daily),
                                     const SizedBox(height: 22),
-                                    _QuestSection(title: '이번 주 퀘스트', sub: '매주 월요일에 새로', quests: b.weekly, board: b),
+                                    _QuestSection(title: '이번 주 퀘스트', sub: '매주 월요일에 새로', quests: b.weekly),
                                   ],
                                 ),
                 ),
@@ -179,12 +177,12 @@ class _GiftSection extends StatelessWidget {
   const _GiftSection({required this.board, required this.busy, required this.onClaim});
   final QuestBoard board;
   final bool busy;
-  final void Function(List<Quest> qs) onClaim;
+  final void Function(Gift? one) onClaim;
 
   @override
   Widget build(BuildContext context) {
-    final gifts = board.claimable;
-    final total = gifts.fold(0, (a, q) => a + q.rewardGold);
+    final gifts = board.gifts;
+    final total = gifts.fold(0, (a, g) => a + g.gold);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -201,7 +199,7 @@ class _GiftSection extends StatelessWidget {
                 excludeSemantics: true,
                 child: GestureDetector(
                   behavior: HitTestBehavior.opaque,
-                  onTap: busy ? null : () => onClaim(gifts),
+                  onTap: busy ? null : () => onClaim(null),
                   child: Container(
                     height: 40,
                     alignment: Alignment.center,
@@ -219,13 +217,11 @@ class _GiftSection extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 10),
-        if (board.autoPaid)
-          const _Note(text: '지금은 퀘스트를 깨면 골드가 바로 들어와요. 아래 퀘스트에서 받은 보상을 볼 수 있어요.')
-        else if (gifts.isEmpty)
+        if (gifts.isEmpty)
           const _Note(text: '받을 선물이 없어요 · 퀘스트를 깨면 여기 쌓여요')
         else
-          for (final q in gifts) ...[
-            _GiftCard(quest: q, busy: busy, onClaim: () => onClaim([q])),
+          for (final g in gifts) ...[
+            _GiftCard(gift: g, busy: busy, onClaim: () => onClaim(g)),
             const SizedBox(height: 8),
           ],
       ],
@@ -252,8 +248,8 @@ class _Note extends StatelessWidget {
 }
 
 class _GiftCard extends StatelessWidget {
-  const _GiftCard({required this.quest, required this.busy, required this.onClaim});
-  final Quest quest;
+  const _GiftCard({required this.gift, required this.busy, required this.onClaim});
+  final Gift gift;
   final bool busy;
   final VoidCallback onClaim;
 
@@ -274,16 +270,16 @@ class _GiftCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(quest.title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.text)),
+                Text(gift.title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.text)),
                 const SizedBox(height: 2),
-                Text('${quest.weekly ? '이번 주' : '오늘의'} 퀘스트 보상',
+                Text('${gift.weekly ? '이번 주' : '오늘의'} 퀘스트 보상${gift.itemName != null && gift.quantity > 0 ? ' · ${gift.itemName} ${gift.quantity}개' : ''}',
                     style: const TextStyle(fontSize: 11, color: AppColors.textMuted)),
               ],
             ),
           ),
           Semantics(
             button: true,
-            label: '${quest.title} 보상 받기',
+            label: '${gift.title} 보상 받기',
             excludeSemantics: true,
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
@@ -298,7 +294,7 @@ class _GiftCard extends StatelessWidget {
                   border: Border.all(color: AppColors.goldLight, width: 2),
                   boxShadow: const [BoxShadow(color: AppColors.goldShadow, offset: Offset(0, 3))],
                 ),
-                child: Text('${quest.rewardGold}G 받기',
+                child: Text(gift.gold > 0 ? '${gift.gold}G 받기' : '받기',
                     style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.night)),
               ),
             ),
@@ -311,12 +307,10 @@ class _GiftCard extends StatelessWidget {
 
 /// 퀘스트 목록: 제목 · 진행 막대 · 보상 · 상태.
 class _QuestSection extends StatelessWidget {
-  const _QuestSection({required this.title, required this.sub, required this.quests, required this.board});
+  const _QuestSection({required this.title, required this.sub, required this.quests});
   final String title;
   final String sub;
   final List<Quest> quests;
-  final QuestBoard board;
-
   @override
   Widget build(BuildContext context) {
     final s = GameScope.of(context);
@@ -334,7 +328,7 @@ class _QuestSection extends StatelessWidget {
         ),
         const SizedBox(height: 10),
         for (final q in quests) ...[
-          _QuestRow(quest: q, claimed: q.done && !board.claimable.any((c) => c.code == q.code), autoPaid: board.autoPaid, s: s),
+          _QuestRow(quest: q, s: s),
           const SizedBox(height: 8),
         ],
       ],
@@ -343,10 +337,8 @@ class _QuestSection extends StatelessWidget {
 }
 
 class _QuestRow extends StatelessWidget {
-  const _QuestRow({required this.quest, required this.claimed, required this.autoPaid, required this.s});
+  const _QuestRow({required this.quest, required this.s});
   final Quest quest;
-  final bool claimed;
-  final bool autoPaid;
   final GameState s;
 
   String? get _lockText => switch (quest.lockReason) {
@@ -365,8 +357,8 @@ class _QuestRow extends StatelessWidget {
       state = '잠김';
       stateColor = AppColors.textMuted;
     } else if (q.done) {
-      state = autoPaid ? '받음 · 자동 지급' : (claimed ? '받음' : '선물함에 있어요');
-      stateColor = autoPaid || claimed ? AppColors.green : AppColors.gold;
+      state = '완료 · 보상은 선물로';
+      stateColor = AppColors.green;
     } else {
       state = '${q.progress} / ${q.target}';
       stateColor = AppColors.purpleSoft;

@@ -257,22 +257,35 @@ class Quest {
   bool get locked => status == QuestStatus.locked;
 }
 
-/// 선물함 화면에 쓰는 퀘스트 묶음 + 받을 선물.
-class QuestBoard {
-  const QuestBoard({
-    required this.enabled,
-    required this.daily,
-    required this.weekly,
-    required this.autoPaid,
-    this.claimable = const [],
+/// 선물함의 선물 한 줄 (명세 v10 11장 `GET /gifts`). 받으면 목록에서 사라진다.
+class Gift {
+  const Gift({
+    required this.id,
+    required this.title,
+    required this.gold,
+    this.weekly = false,
+    this.itemName,
+    this.quantity = 0,
   });
+
+  /// 서버 선물 id (시연은 "퀘스트코드@날짜").
+  final String id;
+  final String title;
+  final int gold;
+
+  /// 출처가 주간 퀘스트인지 (`QUEST_WEEKLY`) — 카드의 "이번 주 · 오늘의" 표시용.
+  final bool weekly;
+
+  /// 아이템 선물이면 이름 · 개수 (예: 성실볼 1개).
+  final String? itemName;
+  final int quantity;
+}
+
+/// 선물함 화면에 쓰는 퀘스트 묶음 + 받지 않은 선물.
+class QuestBoard {
+  const QuestBoard({required this.enabled, required this.daily, required this.weekly, this.gifts = const []});
   final bool enabled;
   final List<Quest> daily;
   final List<Quest> weekly;
-
-  /// 서버가 완료 순간 골드를 바로 준다 (서버 모드, 명세 v9) → [받기] 없이 "자동 지급".
-  final bool autoPaid;
-
-  /// 완료했지만 아직 받지 않은 퀘스트 (시연 모드). [autoPaid]면 늘 비어 있다.
-  final List<Quest> claimable;
+  final List<Gift> gifts;
 }

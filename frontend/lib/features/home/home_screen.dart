@@ -508,11 +508,11 @@ class _HomeScreenState extends State<HomeScreen> {
                   const SizedBox(height: 6),
                   _IconSpot(
                     label: '선물함',
-                    semantic: s.pendingGiftCount > 0 ? '선물함, 받을 선물 ${s.pendingGiftCount}개' : '선물함',
+                    semantic: s.hasPendingGift ? '선물함, 받을 선물 있음' : '선물함',
                     icon: PixelIcons.fieldGift,
                     labelColor: AppColors.text,
                     bob: iconUp ? -_iconBob : 0,
-                    count: s.pendingGiftCount,
+                    badge: s.hasPendingGift, // 점만 — 개수는 할 일처럼 보이지 않게 (명세 v10 · D-89)
                     onTap: () => GiftBoxScreen.open(context),
                   ),
                   const SizedBox(height: 6),
@@ -830,7 +830,6 @@ class _IconSpot extends StatelessWidget {
     required this.bob,
     required this.onTap,
     this.badge = false,
-    this.count = 0,
   });
   final String label;
   final String semantic;
@@ -839,9 +838,6 @@ class _IconSpot extends StatelessWidget {
   final double bob;
   final VoidCallback onTap;
   final bool badge;
-
-  /// 빨간 숫자 배지 (선물함의 받을 선물 수). 0이면 안 보인다.
-  final int count;
 
   @override
   Widget build(BuildContext context) {
@@ -863,24 +859,6 @@ class _IconSpot extends StatelessWidget {
                   clipBehavior: Clip.none,
                   children: [
                     PixelIcon(layers: icon, size: 48, outline: 3),
-                    if (count > 0)
-                      Positioned(
-                        right: -6,
-                        top: -6,
-                        child: Container(
-                          constraints: const BoxConstraints(minWidth: 20),
-                          height: 20,
-                          alignment: Alignment.center,
-                          padding: const EdgeInsets.symmetric(horizontal: 5),
-                          decoration: BoxDecoration(
-                            color: AppColors.notifyDot,
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(color: AppColors.ink, width: 2),
-                          ),
-                          child: Text('$count',
-                              style: const TextStyle(fontSize: 11, height: 1, fontWeight: FontWeight.w700, color: AppColors.white)),
-                        ),
-                      ),
                     if (badge)
                       Positioned(
                         right: -4,

@@ -89,11 +89,14 @@ abstract class GameRepository {
   Future<StatsData> loadStats();
 
   // ---------- 퀘스트 · 선물함 (/quests, 명세 v9 10장 · 기획 2026-11-26-선물함) ----------
-  /// 오늘 · 이번 주 퀘스트와 받을 선물. 선물함을 열 때마다 부른다.
+  /// 오늘 · 이번 주 퀘스트와 받지 않은 선물. 선물함을 열 때마다 부른다.
   Future<QuestBoard> loadQuests();
 
-  /// 선물 받기 → 받은 골드. 서버 모드는 수령 API가 없어 부르지 않는다 (자동 지급).
-  Future<int> claimQuestReward(Quest q);
+  /// 선물 받기 → 받은 골드 (서버: `POST /gifts/{id}/claim`, 이미 받았으면 `GIFT_ALREADY_CLAIMED`).
+  Future<int> claimGift(Gift g);
+
+  /// 모두 받기 → 받은 골드 합계 (서버: `POST /gifts/claim-all`, 없으면 0).
+  Future<int> claimAllGifts();
 
   // ---------- 챗봇 대화 해석 (AI, 결정 D-57) ----------
   /// 사용자가 쓴 말을 AI로 해석한다 (서버: `POST /checkins/today/interpret`). 확정하지 않는다.

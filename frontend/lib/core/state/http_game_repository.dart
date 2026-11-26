@@ -54,7 +54,7 @@ class HttpGameRepository implements GameRepository {
   /// 몬스터 목록엔 호감도 · 경험치가 없어서 마리마다 상세(`GET /monsters/{id}`)를 같이 부른다 (명세 그대로).
   @override
   Future<void> load() async {
-    state.questsAutoPaid = true; // 서버는 퀘스트 보상을 완료 순간 지급 (명세 v9)
+    state.serverGifts = true; // 선물함 점은 서버의 hasGift로 (명세 v10)
     final r = await Future.wait([
       api.get('/me/status'),
       api.get('/me/today'),
@@ -90,6 +90,7 @@ class HttpGameRepository implements GameRepository {
         exploreRemaining: status['exploreRemaining'] as int,
         dayCount: status['dayCount'] as int,
       )
+      ..serverHasGift = status['hasGift'] as bool? ?? false
       ..applyCategories([
         for (final c in (r[2] as List).cast<Map<String, dynamic>>())
           if (c['opened'] == true) c['code'] as String,
@@ -535,13 +536,13 @@ class HttpGameRepository implements GameRepository {
     return res['line'] as String?;
   }
 
-  // ---------- 퀘스트 · 선물함 (명세 v9 10장) ----------
+  // ---------- 퀘스트 · 선물함 (명세 v10 10 · 11장) ----------
 
-  /// 오늘 · 이번 주 퀘스트 (`GET /quests`). 서버는 완료 순간 골드를 지급하므로 [QuestBoard.autoPaid] (받기 없음).
-  /// 서버에 수령 API가 생기면 `claimable`을 채운다 — 제안 `docs/제안/2026-11-26-퀘스트-보상-선물함.md`.
+  /// 오늘 · 이번 주 퀘스트 (`GET /quests`) + 받지 않은 선물 (`GET /gifts`). 선물함을 열 때마다.
   @override
   Future<QuestBoard> loadQuests() async {
-    final res = await api.get('/quests') as Map<String, dynamic>;
+    final r = await Future.wait([api.get('/quests'), api.get('/gifts')]);
+    final res = r[0] as Map<String, dynamic>;
     List<Quest> parse(String key, {required bool weekly}) => [
           for (final q in ((res[key] as List?) ?? const []).cast<Map<String, dynamic>>())
             Quest(
@@ -559,17 +560,51 @@ class HttpGameRepository implements GameRepository {
               weekly: weekly,
             ),
         ];
+    final gifts = [
+      for (final g in (((r[1] as Map<String, dynamic>)['gifts'] as List?) ?? const []).cast<Map<String, dynamic>>())
+        Gift(
+          id: '${g['id']}',
+          title: g['title'] as String,
+          gold: g['gold'] as int? ?? 0,
+          weekly: g['source'] == 'QUEST_WEEKLY',
+          itemName: g['itemName'] as String?,
+          quantity: g['quantity'] as int? ?? 0,
+        ),
+    ];
+    state.applyHasGift(gifts.isNotEmpty);
     return QuestBoard(
       enabled: res['enabled'] as bool? ?? true,
       daily: parse('daily', weekly: false),
       weekly: parse('weekly', weekly: true),
-      autoPaid: true,
+      gifts: gifts,
     );
   }
 
-  /// 서버는 이미 지급했다 — 부르지 않는다.
+  /// 선물 받기 (`POST /gifts/{id}/claim`, 중복 방지 키). 409 `GIFT_ALREADY_CLAIMED`는 "이미 받은 선물이에요"로 올리고,
+  /// 화면이 목록을 다시 불러온다.
   @override
-  Future<int> claimQuestReward(Quest q) async => 0;
+  Future<int> claimGift(Gift g) async {
+    try {
+      final res = await api.send('POST', '/gifts/${g.id}/claim', idempotent: true) as Map<String, dynamic>;
+      return _applyClaim(res);
+    } on ApiException catch (e) {
+      if (e.code == 'GIFT_ALREADY_CLAIMED') throw ApiException(e.code, '이미 받은 선물이에요', status: e.status);
+      rethrow;
+    }
+  }
+
+  /// 모두 받기 (`POST /gifts/claim-all`, 중복 방지 키). 받을 게 없으면 200 `claimedCount: 0`.
+  @override
+  Future<int> claimAllGifts() async {
+    final res = await api.send('POST', '/gifts/claim-all', idempotent: true) as Map<String, dynamic>;
+    state.applyHasGift(false);
+    return _applyClaim(res);
+  }
+
+  int _applyClaim(Map<String, dynamic> res) {
+    state.applyGiftClaim(gold: res['gold'] as int, balls: res['ballCount'] as int);
+    return res['goldReceived'] as int? ?? 0;
+  }
 
   // ---------- 통계 (4-4) ----------
 

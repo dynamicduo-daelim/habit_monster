@@ -60,6 +60,10 @@ class GameState extends ChangeNotifier {
   bool talkedToday = false;
   bool timerUsedToday = false;
 
+  /// 이번 주 어제까지 성실도 80% 이상이었던 날 수 (시연 데이터 — 시연은 지난 기록이 없어서, 샘플은 1일).
+  /// 오늘까지 80%를 넘기면 주간 "성실도 80% 이상인 날 2일"을 시연에서도 끝낼 수 있다 (PR #26 리뷰).
+  int pastGoodDaysThisWeek = 0;
+
   /// 받은 퀘스트 보상 (퀘스트 코드 + 날짜/주 키). 받기 전까지 선물함에 남는다.
   final Set<String> claimedQuestRewards = {};
 
@@ -101,7 +105,7 @@ class GameState extends ChangeNotifier {
     ];
   }
 
-  /// 시연 주간 퀘스트 3개 (각 5G). 출석은 이번 주 월요일 ~ 오늘, 성실도 · 카테고리는 시연이라 오늘만 센다.
+  /// 시연 주간 퀘스트 3개 (각 5G). 출석은 이번 주 월요일 ~ 오늘, 성실도는 [pastGoodDaysThisWeek] + 오늘, 카테고리는 오늘만 센다.
   List<Quest> demoWeeklyQuests({DateTime? now}) {
     final t = now ?? DateTime.now();
     final monday = _monday(t);
@@ -109,7 +113,7 @@ class GameState extends ChangeNotifier {
     for (var d = monday; !d.isAfter(t); d = d.add(const Duration(days: 1))) {
       if (attendedOn(d, today: t)) attended++;
     }
-    final goodDay = checkedInToday && todayScore >= (maxDailyScore * 0.8).ceil() ? 1 : 0;
+    final goodDay = pastGoodDaysThisWeek + (checkedInToday && todayScore >= (maxDailyScore * 0.8).ceil() ? 1 : 0);
     final cats = {
       for (final h in activeHabits)
         if ((todayRecords[h.id] ?? 0) > 0) h.categoryId,
@@ -122,38 +126,49 @@ class GameState extends ChangeNotifier {
     ];
   }
 
-  /// 완료했지만 아직 받지 않은 시연 퀘스트 (선물함 배지 · 목록).
-  List<Quest> demoClaimable({DateTime? now}) {
+  /// 완료했지만 아직 받지 않은 시연 퀘스트의 선물 (id = 퀘스트코드@날짜/주).
+  List<Gift> demoGifts({DateTime? now}) {
     final t = now ?? DateTime.now();
     return [
-      for (final q in [...demoDailyQuests(), ...demoWeeklyQuests(now: t)])
-        if (q.done && !claimedQuestRewards.contains(_rewardKey(q, t))) q,
+      for (final q in [...demoWeeklyQuests(now: t), ...demoDailyQuests()])
+        if (q.done && !claimedQuestRewards.contains(_rewardKey(q, t)))
+          Gift(id: _rewardKey(q, t), title: q.title, gold: q.rewardGold, weekly: q.weekly),
     ];
   }
 
-  /// 선물함 배지 숫자. 서버 모드(자동 지급)에서는 0.
-  int get pendingGiftCount => questsAutoPaid ? 0 : demoClaimable().length;
+  /// 서버 모드인지 (선물 점을 `GET /me/status`의 `hasGift`로 그린다). `HttpGameRepository`가 켠다.
+  bool serverGifts = false;
 
-  /// 서버 모드에서 퀘스트 보상이 자동 지급되는지 (`HttpGameRepository`가 켠다).
-  bool questsAutoPaid = false;
+  /// 서버의 `hasGift` (v10). 선물함을 열어 목록을 받으면 그 결과로도 고친다.
+  bool serverHasGift = false;
 
-  QuestBoard demoQuestBoard() => QuestBoard(
-        enabled: true,
-        daily: demoDailyQuests(),
-        weekly: demoWeeklyQuests(),
-        autoPaid: false,
-        claimable: demoClaimable(),
-      );
+  /// 홈 선물함 아이콘의 점(•) — 받지 않은 선물이 있으면. 개수는 보이지 않는다 (명세 v10 · D-89).
+  bool get hasPendingGift => serverGifts ? serverHasGift : demoGifts().isNotEmpty;
 
-  /// 선물 받기: 완료했고 아직 안 받았으면 골드를 주고 받은 골드를, 아니면 0.
-  int claimQuestReward(Quest q, {DateTime? now}) {
-    final t = now ?? DateTime.now();
-    final key = _rewardKey(q, t);
-    if (!q.done || claimedQuestRewards.contains(key)) return 0;
-    claimedQuestRewards.add(key);
-    gold += q.rewardGold;
+  QuestBoard demoQuestBoard() =>
+      QuestBoard(enabled: true, daily: demoDailyQuests(), weekly: demoWeeklyQuests(), gifts: demoGifts());
+
+  /// 시연 선물 받기: 아직 안 받았으면 골드를 주고 받은 골드를, 아니면 0.
+  int claimDemoGift(Gift g) {
+    if (claimedQuestRewards.contains(g.id)) return 0;
+    claimedQuestRewards.add(g.id);
+    gold += g.gold;
     notifyListeners();
-    return q.rewardGold;
+    return g.gold;
+  }
+
+  /// `POST /gifts/…/claim` 응답: 받은 뒤 잔액 · 볼 개수 (서버 값).
+  void applyGiftClaim({required int gold, required int balls}) {
+    this.gold = gold;
+    this.balls = balls;
+    notifyListeners();
+  }
+
+  /// `GET /gifts` 뒤: 받지 않은 선물이 남았는지.
+  void applyHasGift(bool v) {
+    if (serverHasGift == v) return;
+    serverHasGift = v;
+    notifyListeners();
   }
 
   /// 오늘 출석했는지 = 오늘 앱(홈)에 들어왔는지. 습관 체크인과는 별개다 (2026-10-10, 결정 D-15).
@@ -226,6 +241,7 @@ class GameState extends ChangeNotifier {
       ],
     );
     s.chatPartnerUid = 'm2';
+    s.pastGoodDaysThisWeek = 1; // 시연: 이번 주에 80% 넘긴 날이 하루 있었다
     s.discoveredSpecies.addAll(s.monsters.map((m) => m.speciesId));
     s.caughtSpecies.addAll(s.monsters.map((m) => m.speciesId));
     return s;

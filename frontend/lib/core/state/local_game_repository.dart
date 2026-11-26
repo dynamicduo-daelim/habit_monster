@@ -145,5 +145,14 @@ class LocalGameRepository implements GameRepository {
   Future<QuestBoard> loadQuests() async => state.demoQuestBoard();
 
   @override
-  Future<int> claimQuestReward(Quest q) async => state.claimQuestReward(q);
+  Future<int> claimGift(Gift g) async => state.claimDemoGift(g);
+
+  @override
+  Future<int> claimAllGifts() async {
+    var total = 0;
+    for (final g in state.demoGifts()) {
+      total += state.claimDemoGift(g);
+    }
+    return total;
+  }
 }
