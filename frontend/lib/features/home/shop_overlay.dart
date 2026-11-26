@@ -63,7 +63,7 @@ class ShopOverlay extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           _Keeper(line: line ?? _greeting, bobUp: bobUp),
-                          for (final it in [...Catalog.items, Catalog.seongsilBall]) ...[
+                          for (final it in Catalog.shopItems) ...[
                             const SizedBox(height: 10),
                             _ItemRow(
                               item: it,
@@ -74,7 +74,7 @@ class ShopOverlay extends StatelessWidget {
                           ],
                           const SizedBox(height: 10),
                           const Text(
-                            '물약은 몬스터 교감 창의 간식에서 써요 · ${Economy.expPerLevel} EXP마다 레벨업',
+                            '물약 · 쿠키는 몬스터 교감 창의 간식에서 써요 · ${Economy.expPerLevel} EXP마다 레벨업',
                             style: TextStyle(fontSize: 11, height: 1.7, color: AppColors.footnoteBrown),
                           ),
                         ],
@@ -247,8 +247,12 @@ class _ItemRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final isBall = item.id == Catalog.seongsilBall.id;
     // 하급보다 골드당 경험치가 몇 % 많은지 (하급은 기준이라 안 적는다)
-    final bonus = isBall ? 0 : ((item.goldEfficiency / Catalog.items.first.goldEfficiency - 1) * 100).round();
-    final desc = isBall ? '탐색에서 만난 몬스터를 잡아요' : '+${item.exp} EXP${bonus > 0 ? ' · $bonus% 이득' : ''}';
+    final bonus = isBall || item.isSnack ? 0 : ((item.goldEfficiency / Catalog.items.first.goldEfficiency - 1) * 100).round();
+    final desc = isBall
+        ? '탐색에서 만난 몬스터를 잡아요'
+        : item.isSnack
+            ? '몬스터마다 하루 첫 간식 ♥+${item.affection}'
+            : '+${item.exp} EXP${bonus > 0 ? ' · $bonus% 이득' : ''}';
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
       decoration: BoxDecoration(

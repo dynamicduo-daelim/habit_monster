@@ -192,34 +192,6 @@ class Habit {
   int periodIndex; // 0: 7일 ×1.2, 1: 30일 ×1.5, 2: 100일 ×2.0 (DB period_code D7/D30/D100)
 }
 
-enum GoalTier { weekly, monthly }
-
-class Goal {
-  Goal({
-    required this.id,
-    required this.tier,
-    required this.title,
-    this.detail = '',
-    this.done = false,
-    this.paidSlot = false,
-    this.due,
-  });
-  final String id;
-  final GoalTier tier;
-  String title;
-  String detail;
-  bool done;
-  bool paidSlot; // 유료 슬롯은 기록용 (골드 없음)
-
-  /// 기간 마지막 날 — 이날까지 완료할 수 있다 (서버 모드만. 기간은 등록한 날부터 주간 7일 · 월간 30일, D-48).
-  final DateTime? due;
-
-  int get reward {
-    if (paidSlot) return 0;
-    return tier == GoalTier.weekly ? Economy.weeklyGoalGold : Economy.monthlyGoalGold;
-  }
-}
-
 /// 카테고리 레벨 곡선: 레벨 N → N+1 에 10×N 성실도. 최대 [Economy.categoryMaxLevel].
 class CategoryLevel {
   const CategoryLevel(this.level, this.current, this.needed);
@@ -254,4 +226,66 @@ int sincerityScore({required Measure measure, required double target, required d
     return (20 + ((ratio - 1) * 10).round()).clamp(0, Economy.maxSincerityPerHabit);
   }
   return (20 * ratio).round();
+}
+
+/// 퀘스트 한 칸 (명세 v9 10장 `GET /quests`의 daily · weekly 한 줄).
+enum QuestStatus { inProgress, done, locked }
+
+class Quest {
+  const Quest({
+    required this.code,
+    required this.title,
+    required this.progress,
+    required this.target,
+    required this.rewardGold,
+    required this.status,
+    this.lockReason,
+    this.weekly = false,
+  });
+  final String code; // DAILY_CHECKIN · WEEKLY_ATTEND …
+  final String title;
+  final int progress;
+  final int target;
+  final int rewardGold;
+  final QuestStatus status;
+
+  /// `NO_TIMER_HABIT` · `NOT_ENOUGH_CATEGORIES` (잠겼을 때만).
+  final String? lockReason;
+  final bool weekly;
+
+  bool get done => status == QuestStatus.done;
+  bool get locked => status == QuestStatus.locked;
+}
+
+/// 선물함의 선물 한 줄 (명세 v10 11장 `GET /gifts`). 받으면 목록에서 사라진다.
+class Gift {
+  const Gift({
+    required this.id,
+    required this.title,
+    required this.gold,
+    this.weekly = false,
+    this.itemName,
+    this.quantity = 0,
+  });
+
+  /// 서버 선물 id (시연은 "퀘스트코드@날짜").
+  final String id;
+  final String title;
+  final int gold;
+
+  /// 출처가 주간 퀘스트인지 (`QUEST_WEEKLY`) — 카드의 "이번 주 · 오늘의" 표시용.
+  final bool weekly;
+
+  /// 아이템 선물이면 이름 · 개수 (예: 성실볼 1개).
+  final String? itemName;
+  final int quantity;
+}
+
+/// 선물함 화면에 쓰는 퀘스트 묶음 + 받지 않은 선물.
+class QuestBoard {
+  const QuestBoard({required this.enabled, required this.daily, required this.weekly, this.gifts = const []});
+  final bool enabled;
+  final List<Quest> daily;
+  final List<Quest> weekly;
+  final List<Gift> gifts;
 }

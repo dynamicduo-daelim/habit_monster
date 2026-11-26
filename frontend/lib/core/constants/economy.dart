@@ -13,8 +13,6 @@ class Economy {
   static const int maxSincerityPerHabit = 25; // 습관 1개당 최대 성실도
   static const int targetHitScore = 20; // 목표를 딱 채운 점수 = 달성률 100% (DB score_target_hit, 통계 4-4)
   static const int categoryLevelUpGold = 20;
-  static const int weeklyGoalGold = 40;
-  static const int monthlyGoalGold = 150;
   static const int duplicateMonsterGold = 15;
 
   // 지출 / 탐색
@@ -42,6 +40,8 @@ class Economy {
   static const int affectionHighTier = 70; // 단짝 하한
   static const int affectionPerHeart = 20; // 하트 5칸, 반 칸 = 10
   static const int petAffectionGain = 1; // 하루 1회
+  /// 상점 간식(쿠키) 가격. **[가정] 10G — 임시값** (11-26 30G → 10G), 정해지면 이 숫자만 바꾸면 된다 (상점 · 구매 창이 모두 이 값을 쓴다, 2026-11-26).
+  static const int cookiePrice = 10;
   static const int feedAffectionGain = 2; // 간식 아이템, 몬스터마다 하루 첫 간식만 (D-79 — 아이템 · API 연결 전)
   static const int playAffectionGain = 2; // 하루 1회
   static const int dragAffectionGain = 1; // 홈 필드에서 끌어 옮기기, 몬스터마다 하루 1회
@@ -53,8 +53,4 @@ class Economy {
   static const List<int> categorySlotSteps = [5, 10, 15];
   static int categorySlots(int discovered) =>
       baseCategorySlots + categorySlotSteps.where((n) => discovered >= n).length;
-
-  // 목표 슬롯
-  static const int weeklyGoalSlots = 3;
-  static const int monthlyGoalSlots = 1;
 }

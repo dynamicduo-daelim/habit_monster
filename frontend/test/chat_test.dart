@@ -253,7 +253,7 @@ void main() {
     expect(s.todayRecords['h2'], 0);
     expect(find.text('식습관/건강 Lv.3 달성! +20G'), findsOneWidget); // 물 25점으로 21 → 46점
     expect(s.gold, 1240 + 45 + 20);
-    expect(find.text('연속 12일째'), findsOneWidget);
+    expect(find.text('연속 12일째'), findsNothing); // 상단 바의 연속 · 탐색 줄은 뺐다 (11-26)
     expect(find.text('다시 체크'), findsOneWidget); // 기록은 고칠 수 있다 (보상은 그대로)
 
     await tester.tap(find.text('탐색하기 (3회 남음)'));
