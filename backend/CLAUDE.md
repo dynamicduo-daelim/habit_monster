@@ -1,7 +1,7 @@
 # 루틴몬 서버 · DB — Claude 작업 안내
 
 루트 `CLAUDE.md`(원칙 · 기록 · 변경 통제)를 따르고, 서버(`backend/`)를 고칠 때는 이것도 지킨다.
-계약의 기준: **API 명세 v9** `docs/api/습관몬스터_API명세_v9.md` · **DB 설계** `docs/데이터베이스/` (스키마 v1.12 + 시드 v1.12). v9 · v1.12는 주간 퀘스트 (D-88), v8 · v1.11은 퀘스트 기반 + 일일 퀘스트 (D-87), v7 · v1.10은 필드 끌기 DRAG (D-86), v6 · v1.9는 AI 챗봇 · 습관 타이머 · 점수 상한 · 경험치 계수 (D-62 · D-63)
+계약의 기준: **API 명세 v10** `docs/api/습관몬스터_API명세_v10.md` · **DB 설계** `docs/데이터베이스/` (스키마 v1.13 + 시드 v1.13). v10 · v1.13은 선물함 (D-89), v9 · v1.12는 주간 퀘스트 (D-88), v8 · v1.11은 퀘스트 기반 + 일일 퀘스트 (D-87), v7 · v1.10은 필드 끌기 DRAG (D-86), v6 · v1.9는 AI 챗봇 · 습관 타이머 · 점수 상한 · 경험치 계수 (D-62 · D-63)
 둘 다 **사용자(윤서)가 직접 썼다** — DB · 명세 파일은 Claude가 고치지 않고, 바꿔야 하면 사용자에게 제안한다.
 명세와 다르게 구현하기로 한 것은 `docs/진행현황-및-계획.md` 1장 (A1 ~ D6) · `docs/결정-기록.md` D-23 ~ D-46. 남은 단계 지시서는 `docs/handoff/` (서버 담당 PC에만 있음 — 원격 저장소에서 뺌, 10-23). 남은 일 전체는 `docs/할-일.md`.
 
@@ -19,8 +19,8 @@
 요청 검사 순서: ① 토큰 → ② `UserGateFilter` → ③ `IdempotencyFilter` → 컨트롤러 ④ 소유권(남의 것은 **404**, C3) → ⑤ 업무 날짜 → ⑥ 값 형식 → ⑦ 규칙.
 
 ## DB 설계 원칙 (`schema.sql` 머리말 요약 — 꼭 원문도 읽기)
-- **모듈 = 스키마** (`identity` · `habit` · `goal` · `wallet` · `shop` · `monster` · `config` · `ai` · `api` · `quest`). 서버 패키지도 같은 이름으로 나누고, **각 모듈의 저장소는 자기 스키마 테이블만** 다룬다. 다른 모듈 데이터는 그 모듈 서비스를 부른다. 한 요청 = 트랜잭션 하나.
-- 사용자 잠금 순서 고정: `habit_user → goal_user → monster_user → inventory → wallet → quest` (`FOR NO KEY UPDATE`). 퀘스트는 항상 지갑을 먼저 잠근다 (D-87).
+- **모듈 = 스키마** (`identity` · `habit` · `goal` · `wallet` · `shop` · `monster` · `config` · `ai` · `api` · `quest` · `gift`). 서버 패키지도 같은 이름으로 나누고, **각 모듈의 저장소는 자기 스키마 테이블만** 다룬다. 다른 모듈 데이터는 그 모듈 서비스를 부른다. 한 요청 = 트랜잭션 하나.
+- 사용자 잠금 순서 고정: `gift(받기만) → habit_user → goal_user → monster_user → inventory → wallet → quest` (`FOR NO KEY UPDATE`). 퀘스트는 항상 지갑을 먼저 잠근다 (D-87). 선물 받기는 선물 행을 맨 먼저(id 순) 잡고, 퀘스트 경로는 quest 다음에 gift에 **새 행만** 넣는다 (D-89).
 - 골드 · 볼 · 물약 차감은 조건부 UPDATE(`… WHERE balance >= ?`), `CHECK(>= 0)` 위반은 422. 골드는 잔액 + 원장(`UNIQUE(reason_code, ref_id)`), 금액 0이면 원장에 안 씀.
 - **수치는 `config.balance_config`에서** (하드코딩 금지). 행은 지우지 않는다(상태값). 보상 기준값 · 완료 목표 · 끝난 탐색은 트리거가 수정을 막는다.
 - JPA는 테이블을 만들지 않는다 (`ddl-auto=none`) — 엔티티 컬럼은 `schema.sql`과 정확히 같게.
@@ -33,5 +33,7 @@
 - 실행 (간단히): Docker DB를 띄운 뒤 `.\gradlew.bat bootRun --args='--spring.profiles.active=local'` — `local` 프로필 = 5435 DB + **8081 포트** + 로컬 JWT 키 + 카카오 · 구글 공개 값 (D-41)
 - 실행 (환경변수로): `$env:DB_URL='jdbc:postgresql://localhost:5435/habit_monster'; $env:DB_USER='habit'; $env:DB_PASSWORD='habit'; $env:JWT_SECRET='local-dev-secret-change-me-0123456789abcdef'; .\gradlew.bat bootRun --args='--server.port=8081'` (8080은 다른 서버가 떠 있을 수 있음)
 - 랜덤은 `monster/Dice` 하나로만 (테스트는 `@MockitoBean Dice`로 고정, D-45)
+- **새 테스트 클래스는 이미 있는 `@MockitoBean` · `@MockitoSpyBean` 조합을 재사용한다.** 조합마다 Spring 컨텍스트(DB 연결 10개)가 하나씩 더 떠서, 9번째 조합에서 테스트 PostgreSQL 연결 한도(100)를 넘었다 — `too many clients already`로 엉뚱한 클래스가 컨텍스트를 못 띄움 (11-26)
+- DB 파일(`docs/데이터베이스/*.sql`)만 바꿨으면 `.\gradlew.bat test --rerun` — Gradle은 SQL을 입력으로 보지 않아 `UP-TO-DATE`로 건너뛴다 (11-26)
 - 실제 DB 테스트의 정리는 `PostgresTest`가 `truncate identity.users cascade` 한 줄로 한다 (외래키를 따라 사용자 데이터만 비움, 마스터 · 설정은 남음)
 - 새 API를 만들면 `backend/README.md`의 API 표를 갱신한다

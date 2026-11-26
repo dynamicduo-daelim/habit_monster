@@ -95,6 +95,21 @@ public class ShopService {
 		return new Consumed(shop.insertConsumption(userId, itemCode, consumerKey), remaining);
 	}
 
+	/**
+	 * 선물로 받은 아이템을 가방에 넣는다 (선물함 받기, 명세 v10). 받은 기록은 {@code gift.gift}(받은 시각)에 있어서 여기엔 따로 남기지
+	 * 않는다 — 가방 대사는 구매 + 받은 선물 − 소모 (verify S-12). 더한 뒤 개수.
+	 */
+	@Transactional
+	public int receive(long userId, String itemCode, int quantity) {
+		return shop.addToInventory(userId, itemCode, quantity);
+	}
+
+	/** 아이템 이름 (판매를 멈춘 아이템 포함). 없는 코드면 비어 있다. */
+	@Transactional(readOnly = true)
+	public Optional<String> itemName(String itemCode) {
+		return shop.itemName(itemCode);
+	}
+
 	/** 경험치 물약이면 그 경험치, 아니면(성실볼 · 없는 코드) 비어 있다. */
 	@Transactional(readOnly = true)
 	public Optional<Integer> potionExp(String itemCode) {

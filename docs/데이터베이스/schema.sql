@@ -35,6 +35,12 @@
 --   * 원장 사유 QUEST_DAILY (ref_id = user_quest.id). 사용자 잠금 순서 끝에 quest (wallet 다음, D-87)
 -- v1.12 2026-11-25 (API 명세 v9 — 주간 퀘스트, 결정 D-88, 제안서 docs/제안/2026-11-25-퀘스트-주간.md)
 --   * 원장 사유 QUEST_WEEKLY 하나만. 테이블 변경 없음 (주간 퀘스트는 시드, 판정은 출석 · 체크인 기록에서 계산)
+-- v1.13 2026-11-26 (API 명세 v10 — 선물함, 결정 D-89, 제안서 docs/제안/2026-11-26-선물함.md)
+--   * gift 스키마 새로: gift.gift_source(출처 코드) · gift.gift(선물 1줄 — 골드 · 아이템, 받으면 claimed_at)
+--     만든 뒤 내용 수정 · 받음 되돌리기는 트리거가 막는다
+--   * 퀘스트 보상은 지갑에 바로 넣지 않고 선물로 → 원장 QUEST_*의 ref_id = gift.gift.id (전: quest.user_quest.id)
+--   * 잠금 순서 맨 앞에 gift(받기만). 퀘스트 경로는 gift에 새 행만 넣는다 (원칙 3-1)
+--   * 가방 대사(verify S-12) = 구매 + 받은 선물의 아이템 − 소모
 -- 설계 문서: 04_논리물리모델.md (v1.7 반영 전)
 -- MVP 밖 구성요소(결제, 수치 변경 이력, AI 기억·호출 로그)는 schema_later.sql (이 파일 다음에 적용)
 --
@@ -52,8 +58,10 @@
 --     각 테이블의 idempotency_key·consumer_key는 DB 쪽 마지막 방어선으로 유지한다.
 --     서비스를 실제로 분리하게 되면 그때 아웃박스로 전환한다 (04 문서 7장).
 --  3-1) 사용자 단위 잠금 행은 SELECT … FOR NO KEY UPDATE로 잡고, 순서를 고정한다 (교착 방지):
---       habit.habit_user → goal.goal_user → monster.monster_user → shop.inventory → wallet.wallet → quest(user_quest 행)
+--       gift(받기만) → habit.habit_user → goal.goal_user → monster.monster_user → shop.inventory → wallet.wallet → quest(user_quest 행)
 --       (v1.11, D-87: 퀘스트는 항상 지갑 행을 먼저 잠근 뒤 user_quest를 다룬다 — 체크인은 골드 지급으로 지갑을 잠근 뒤 퀘스트가 진행되므로)
+--       (v1.13, D-89: 있는 선물 행을 잠그는 것은 받기뿐이고 맨 먼저 잡는다(id 순서). 퀘스트 경로는 quest 다음에 gift에 새 행만 INSERT —
+--        남이 쥔 행을 기다리지 않으므로, 가방 · 지갑을 쥔 채 선물 행을 기다리는 요청이 없어 교착 고리가 생기지 않는다)
 --       (FOR NO KEY UPDATE는 다른 트랜잭션의 FK 삽입이 잡는 KEY SHARE 잠금과 충돌하지 않음)
 --       골드·볼·물약 차감은 조건부 UPDATE(… WHERE balance >= ?) 또는 위 잠금으로 처리하고,
 --       CHECK(… >= 0) 위반은 애플리케이션이 422로 바꾼다.
@@ -71,7 +79,7 @@
 --     api.idempotency_record(만료 정리 + 탈퇴 시). 탈퇴 시 users.email·habit.name·goal.title은 NULL로 비운다.
 --  8) 문자열 enum (v1.3). 모든 enum·코드 컬럼은 TEXT (길이 제한 없음 → 값이 길어져도 타입 변경 불필요).
 --     8-1) 열린 집합 — 콘텐츠·운영으로 값이 늘어나는 것: 코드 테이블 + FK. 값 추가 = INSERT 한 줄.
---          identity.auth_provider, wallet.ledger_reason, shop.item_effect, monster.acquisition_source
+--          identity.auth_provider, wallet.ledger_reason, shop.item_effect, monster.acquisition_source, gift.gift_source(v1.13)
 --     8-2) 닫힌 집합 — 상태 기계·구조 규칙이라 값이 바뀌면 코드 로직도 바뀌는 것: CHECK (… IN …).
 --          제약 이름은 PostgreSQL 기본 규칙 <테이블>_<컬럼>_check 로 예측 가능.
 --          값 추가 마이그레이션은 한 문장 (04 문서 1장):
@@ -88,6 +96,7 @@ CREATE SCHEMA IF NOT EXISTS config;
 CREATE SCHEMA IF NOT EXISTS ai;
 CREATE SCHEMA IF NOT EXISTS api;     -- v1.7: 요청 처리 공통 (중복 요청 방지 키)
 CREATE SCHEMA IF NOT EXISTS quest;   -- v1.11: 퀘스트
+CREATE SCHEMA IF NOT EXISTS gift;    -- v1.13: 선물함
 -- payment 스키마는 schema_later.sql (v1.2)
 -- outbox_event / processed_event 제거 (v1.2: 단일 트랜잭션)
 
@@ -482,7 +491,7 @@ CREATE TABLE wallet.wallet (
 -- 새 보상 추가 = INSERT ('EVENT_REWARD','CREDIT') 한 줄. 양방향 사유(ADJUST)는 두 행.
 -- ref_id: CHECKIN → daily_checkin.id / LEVELUP → daily_checkin.id:카테고리 코드 /
 --         PERIOD_BONUS → habit_period.id / GOAL_* → goal.id / DUPLICATE → explore_log.id / SHOP_PURCHASE → purchase.id
---         QUEST_* → quest.user_quest.id (v1.11)
+--         QUEST_* → gift.gift.id (v1.13 — 퀘스트 보상은 선물함을 거쳐 받을 때 적립. v1.11 ~ v1.12는 quest.user_quest.id)
 CREATE TABLE wallet.ledger_reason (
   code         TEXT          NOT NULL,
   direction    TEXT          NOT NULL CHECK (direction IN ('CREDIT','DEBIT')),
@@ -499,8 +508,8 @@ INSERT INTO wallet.ledger_reason (code, direction, description) VALUES
  ('SHOP_PURCHASE','DEBIT','상점 구매'),
  ('ADJUST','CREDIT','운영 보정 (지급·환불)'),
  ('ADJUST','DEBIT','운영 보정 (회수)'),
- ('QUEST_DAILY','CREDIT','일일 퀘스트 완료'),    -- v1.11, ref_id = quest.user_quest.id
- ('QUEST_WEEKLY','CREDIT','주간 퀘스트 완료');   -- v1.12, ref_id = quest.user_quest.id
+ ('QUEST_DAILY','CREDIT','일일 퀘스트 완료'),    -- v1.11, ref_id = gift.gift.id (v1.13)
+ ('QUEST_WEEKLY','CREDIT','주간 퀘스트 완료');   -- v1.12, ref_id = gift.gift.id (v1.13)
 
 CREATE TABLE wallet.wallet_ledger (
   id             BIGINT       GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -577,7 +586,7 @@ CREATE TABLE shop.item_consumption (
   consumer_key  TEXT         NOT NULL UNIQUE,   -- 'FEED:<uuid>' / 'CAPTURE:<uuid>'. 소모 멱등 키를 보관하는 유일한 곳 (v1.3)
   consumed_at   TIMESTAMPTZ  NOT NULL DEFAULT now()
 );
--- 가방 수량 대사: inventory.quantity = 구매 수량 합 − 소모 수량 합 (verify S-12)
+-- 가방 수량 대사: inventory.quantity = 구매 수량 합 + 받은 선물의 아이템 합(gift.gift, v1.13) − 소모 수량 합 (verify S-12)
 CREATE INDEX ix_consumption_user_item ON shop.item_consumption (user_id, item_code);
 
 -- =====================================================================
@@ -946,8 +955,58 @@ CREATE TABLE quest.user_quest (
 );
 
 -- =====================================================================
+-- gift (v1.13) — 쓰기 · 읽기: 선물함 모듈 (결정 D-89)
+--  * 퀘스트 계열 보상(일일 · 주간 · 이후 월간 · 업적 · 깜짝)은 지갑 · 가방에 바로 넣지 않고 여기에 1줄 → 사용자가 받을 때 지급
+--    (체크인 · 레벨업 · 기간 보너스 · 목표 · 탐색 중복은 지금처럼 즉시 — 선물함을 거치지 않음)
+--  * 받기 = claimed_at을 채우고, 같은 트랜잭션에서 가방(shop 모듈) + 지갑(wallet 모듈, 원장 사유 = source_code, ref_id = gift.id)
+--  * 유효기간 없음. 행을 지우지 않는다 (원칙 7)
+-- =====================================================================
+-- 선물 출처 (열린 집합, 원칙 8-1). 골드가 있는 선물의 출처는 wallet.ledger_reason(CREDIT)에도 있어야 한다 (verify S-33)
+CREATE TABLE gift.gift_source (
+  code         TEXT          PRIMARY KEY,
+  description  VARCHAR(100)  NOT NULL
+);
+INSERT INTO gift.gift_source (code, description) VALUES
+ ('QUEST_DAILY','일일 퀘스트 완료'),
+ ('QUEST_WEEKLY','주간 퀘스트 완료');
+
+CREATE TABLE gift.gift (
+  id             BIGINT       GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  user_id        BIGINT       NOT NULL REFERENCES identity.users(id),
+  source_code    TEXT         NOT NULL REFERENCES gift.gift_source(code),
+  source_ref     VARCHAR(64)  NOT NULL,                -- QUEST_* → quest.user_quest.id
+  title          VARCHAR(40)  NOT NULL,                -- 만들 때 고정 (퀘스트 제목 등)
+  gold           INT          NOT NULL DEFAULT 0 CHECK (gold >= 0),
+  item_code      TEXT         NULL REFERENCES shop.shop_item(code),
+  item_quantity  SMALLINT     NULL CHECK (item_quantity > 0),
+  created_at     TIMESTAMPTZ  NOT NULL DEFAULT now(),
+  claimed_at     TIMESTAMPTZ  NULL,                    -- NULL = 아직 안 받음
+  CONSTRAINT uq_gift_source   UNIQUE (source_code, source_ref),                -- 같은 출처에서 선물은 하나
+  CONSTRAINT ck_gift_item     CHECK ((item_code IS NULL) = (item_quantity IS NULL)),
+  CONSTRAINT ck_gift_nonempty CHECK (gold > 0 OR item_code IS NOT NULL)        -- 빈 선물 금지
+);
+CREATE INDEX ix_gift_unclaimed ON gift.gift (user_id, id DESC) WHERE claimed_at IS NULL;   -- 목록 · hasGift
+
+-- 만든 뒤 내용은 못 바꾸고, claimed_at은 NULL → 값 한 번만 (되돌리기 · 다시 쓰기 금지). 보상 기준값을 트리거로 막는 것과 같은 원칙
+CREATE FUNCTION gift.forbid_gift_change() RETURNS trigger AS $$
+BEGIN
+  IF NEW.user_id IS DISTINCT FROM OLD.user_id OR NEW.source_code IS DISTINCT FROM OLD.source_code
+     OR NEW.source_ref IS DISTINCT FROM OLD.source_ref OR NEW.title IS DISTINCT FROM OLD.title
+     OR NEW.gold IS DISTINCT FROM OLD.gold OR NEW.item_code IS DISTINCT FROM OLD.item_code
+     OR NEW.item_quantity IS DISTINCT FROM OLD.item_quantity OR NEW.created_at IS DISTINCT FROM OLD.created_at THEN
+    RAISE EXCEPTION 'gift % content cannot change', OLD.id USING ERRCODE = 'check_violation';
+  END IF;
+  IF OLD.claimed_at IS NOT NULL AND NEW.claimed_at IS DISTINCT FROM OLD.claimed_at THEN
+    RAISE EXCEPTION 'gift % already claimed', OLD.id USING ERRCODE = 'check_violation';
+  END IF;
+  RETURN NEW;
+END $$ LANGUAGE plpgsql;
+CREATE TRIGGER tg_gift_fixed BEFORE UPDATE ON gift.gift
+  FOR EACH ROW EXECUTE FUNCTION gift.forbid_gift_change();
+
+-- =====================================================================
 -- 권한 (v1.2): 역할 2개
---  * app_core — 경제·회원 도메인 전체 (identity, habit, goal, wallet, shop, monster, quest) + api + config 읽기
+--  * app_core — 경제·회원 도메인 전체 (identity, habit, goal, wallet, shop, monster, quest, gift) + api + config 읽기
 --               모듈 경계는 DB 역할이 아니라 코드 규칙(아키텍처 테스트)으로 지킨다.
 --  * app_ai   — ai 스키마 + config 읽기만. 경제 데이터 격리는 DB가 강제한다 (S-9).
 --  config 쓰기는 마이그레이션 실행 역할(소유자)만.
@@ -962,7 +1021,7 @@ BEGIN
     CREATE ROLE app_ai NOLOGIN;
   END IF;
 
-  FOREACH s IN ARRAY ARRAY['identity','habit','goal','wallet','shop','monster','api','quest'] LOOP   -- v1.11 quest
+  FOREACH s IN ARRAY ARRAY['identity','habit','goal','wallet','shop','monster','api','quest','gift'] LOOP   -- v1.11 quest · v1.13 gift
     EXECUTE format('GRANT USAGE ON SCHEMA %I TO app_core', s);
     EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA %I TO app_core', s);
     EXECUTE format('GRANT USAGE ON ALL SEQUENCES IN SCHEMA %I TO app_core', s);

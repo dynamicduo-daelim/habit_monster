@@ -54,6 +54,8 @@ public enum ErrorCode {
 	TIMER_ALREADY_RUNNING(HttpStatus.CONFLICT, "이미 재고 있는 타이머가 있어요"),
 	/** 끝난 타이머에 일시정지 · 이어서 · 끝내기. 응답에 {@code endReason}. */
 	TIMER_NOT_RUNNING(HttpStatus.CONFLICT, "이미 끝난 타이머예요"),
+	/** 이미 받은 선물을 새 요청으로 다시 받기 (명세 v10 11장). 같은 중복 방지 키의 재전송은 첫 200이 나간다. */
+	GIFT_ALREADY_CLAIMED(HttpStatus.CONFLICT, "이미 받은 선물이에요"),
 	// 422
 	IDEMPOTENCY_KEY_REUSED(HttpStatus.UNPROCESSABLE_CONTENT, "요청을 확인해 주세요"),
 	NOT_ENOUGH_GOLD(HttpStatus.UNPROCESSABLE_CONTENT, "골드가 모자라요"),

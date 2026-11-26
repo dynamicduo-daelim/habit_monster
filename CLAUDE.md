@@ -11,7 +11,7 @@
 | 규칙 · 수치를 건드릴 때 | `docs/결정-기록.md` (이미 정한 것) · `docs/economy-v1.md` (수치 근거) |
 | 앱 코드를 고칠 때 | `frontend/CLAUDE.md` (프론트 규칙 — 색 · 폰트 · 수치 · 디자인 기준) |
 | 서버 · DB를 고칠 때 | **`backend/CLAUDE.md`** (서버 규칙 · 이미 있는 기반 · DB 원칙) · `backend/README.md` · `backend/server/README.md` · `backend/db/README.md` |
-| API · DB 계약을 볼 때 | `docs/api/습관몬스터_API명세_v9.md` · `docs/데이터베이스/` (스키마 v1.12 + 시드 v1.12 — v6 ~ v9 · v1.9 ~ v1.12 개정분은 윤서 요청으로 Claude가 씀, D-62 · D-86 · D-87 · D-88) — **둘 다 사용자(윤서)가 썼다. Claude가 고치지 않고, 바꿔야 하면 제안한다** |
+| API · DB 계약을 볼 때 | `docs/api/습관몬스터_API명세_v10.md` · `docs/데이터베이스/` (스키마 v1.13 + 시드 v1.13 — v6 ~ v10 · v1.9 ~ v1.13 개정분은 윤서 요청으로 Claude가 씀, D-62 · D-86 · D-87 · D-88 · D-89) — **둘 다 사용자(윤서)가 썼다. Claude가 고치지 않고, 바꿔야 하면 제안한다** |
 | 남은 단계를 이어서 할 때 | `docs/handoff/README.md` → `00-공통.md` + 그 단계 파일 (3-0 ~ 6) (서버 담당 PC에만 있음 — 원격 저장소에서 뺌, 10-23). 남은 일 전체는 `docs/할-일.md`, 프론트가 따라갈 일은 `frontend/서버연동-메모.md` |
 
 문서 전체 지도는 `docs/README.md`.
@@ -80,4 +80,5 @@
 - python 정규식에서 `\b`는 한글을 글자로 본다 (`D-19로`의 19 뒤가 경계가 아님) → 숫자 경계는 `(?!\d)`.
 - Git Bash에서 `docker exec … /tmp/x` 같은 경로가 Windows 경로로 바뀐다 → `MSYS_NO_PATHCONV=1`.
 - Docker Desktop은 `C:\Desktop\…`을 빈 폴더로 본다 (공유 범위 밖). D: 드라이브나 `C:\Users` 아래만 연결된다.
+- **운영 DB(Supabase)에는 사용자의 테스트 계정과 실제로 플레이한 데이터가 있다.** 로컬 Docker DB만 세고 "배포 전이라 데이터 없음"으로 짐작하지 않는다. 마이그레이션을 쓰기 전에 Supabase에서 돌릴 확인 쿼리를 사용자에게 주고 결과를 받는다 (11-26: `migrate-v1.13.sql`이 로컬 0건만 보고 쓰여 Supabase에서 "옛 방식 퀘스트 골드 원장 줄 4건"으로 멈춤 → 옛 줄을 선물로 옮기도록 고침, `backend/db/README.md` v1.13).
 - 포트 5432 · 5433 · 5434는 다른 프로젝트 DB가 쓴다 (5434 = treeplan) → 이 프로젝트 DB는 **5435** (10-19에 옮김). 8080은 treeplan 서버가 써서 이 프로젝트 서버는 **8081** (`local` 프로필 기본값). 남의 프로세스는 끄지 않는다.

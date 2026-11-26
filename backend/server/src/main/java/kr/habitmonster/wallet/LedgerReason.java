@@ -9,8 +9,8 @@ package kr.habitmonster.wallet;
  */
 public enum LedgerReason {
 	CHECKIN, LEVELUP, PERIOD_BONUS, GOAL_WEEKLY, GOAL_MONTHLY, DUPLICATE, SHOP_PURCHASE, ADJUST,
-	/** 일일 퀘스트 완료 (v1.11) — {@code ref_id} = {@code quest.user_quest.id} */
+	/** 일일 퀘스트 완료 (v1.11) — 선물을 받을 때 적립, {@code ref_id} = {@code gift.gift.id} (v1.13 — 전: user_quest.id) */
 	QUEST_DAILY,
-	/** 주간 퀘스트 완료 (v1.12) — {@code ref_id} = {@code quest.user_quest.id} */
+	/** 주간 퀘스트 완료 (v1.12) — 선물을 받을 때 적립, {@code ref_id} = {@code gift.gift.id} (v1.13) */
 	QUEST_WEEKLY
 }

@@ -8,12 +8,13 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 
 import kr.habitmonster.common.BusinessDates;
 import kr.habitmonster.config.BalanceConfig;
+import kr.habitmonster.gift.GiftService;
+import kr.habitmonster.gift.GiftSource;
 import kr.habitmonster.habit.HabitService;
 import kr.habitmonster.habit.HabitService.PeriodRecord;
 import kr.habitmonster.habit.TimerService;
 import kr.habitmonster.quest.QuestRepository.Advanced;
 import kr.habitmonster.quest.QuestRepository.QuestRow;
-import kr.habitmonster.wallet.LedgerReason;
 import kr.habitmonster.wallet.WalletService;
 
 import org.springframework.stereotype.Service;
@@ -28,8 +29,9 @@ import org.springframework.transaction.annotation.Transactional;
  * 퀘스트를 중간에 켜도 그 주 앞부분이 반영되게)</li>
  * <li>기간마다 첫 조회 또는 첫 이벤트 때 행을 만든다 — 스케줄러 없음 (D-64)</li>
  * <li>잠금은 저장하지 않고 그때그때 계산한다 — 하루 중간에 조건을 갖추면 바로 풀린다</li>
- * <li>목표에 닿는 순간 골드를 자동 지급 (지갑 모듈, 원장 {@code QUEST_DAILY} · {@code QUEST_WEEKLY}, ref = {@code user_quest.id})</li>
- * <li><b>항상 지갑을 먼저 잠근다</b> — 사용자 잠금 순서 {@code … → wallet → quest} (D-87)</li>
+ * <li>목표에 닿는 순간 <b>선물함에 선물 한 줄</b> (명세 v10, D-89 — 출처 {@code QUEST_DAILY} · {@code QUEST_WEEKLY}, 출처 번호 =
+ * {@code user_quest.id}). 골드는 사용자가 받을 때 지갑에 들어간다 (v8 ~ v9: 완료 즉시 지갑)</li>
+ * <li><b>항상 지갑을 먼저 잠근다</b> — 사용자 잠금 순서 {@code … → wallet → quest} (D-87). 선물은 그 뒤 새 행만 넣는다</li>
  * </ul>
  */
 @Service
@@ -47,8 +49,8 @@ public class QuestService {
 	static final String NO_TIMER_HABIT = "NO_TIMER_HABIT";
 	static final String NOT_ENOUGH_CATEGORIES = "NOT_ENOUGH_CATEGORIES";
 
-	private static final Map<String, LedgerReason> REASON = Map.of(DAILY, LedgerReason.QUEST_DAILY, WEEKLY,
-			LedgerReason.QUEST_WEEKLY);
+	private static final Map<String, GiftSource> SOURCE = Map.of(DAILY, GiftSource.QUEST_DAILY, WEEKLY,
+			GiftSource.QUEST_WEEKLY);
 
 	/** 퀘스트 한 칸. {@code lockReason}은 {@code LOCKED}일 때만 내보낸다. */
 	public record QuestView(String code, String title, int progress, int target, int rewardGold, String status,
@@ -62,15 +64,17 @@ public class QuestService {
 
 	private final QuestRepository quests;
 	private final WalletService wallet;
+	private final GiftService gifts;
 	private final TimerService timers;
 	private final HabitService habits;
 	private final BalanceConfig config;
 	private final BusinessDates dates;
 
-	QuestService(QuestRepository quests, WalletService wallet, TimerService timers, HabitService habits,
-			BalanceConfig config, BusinessDates dates) {
+	QuestService(QuestRepository quests, WalletService wallet, GiftService gifts, TimerService timers,
+			HabitService habits, BalanceConfig config, BusinessDates dates) {
 		this.quests = quests;
 		this.wallet = wallet;
+		this.gifts = gifts;
 		this.timers = timers;
 		this.habits = habits;
 		this.config = config;
@@ -139,12 +143,13 @@ public class QuestService {
 		}
 	}
 
-	/** 목표에 닿았으면 조건부로 완료하고(한 번만 성공) 그 행의 보상을 지급한다. */
+	/** 목표에 닿았으면 조건부로 완료하고(한 번만 성공) 그 행의 보상을 선물함으로 보낸다 (D-89). */
 	private void completeIfReached(long userId, Advanced a, String kind) {
 		if (a.progress() < a.target()) {
 			return;
 		}
-		quests.complete(a.id()).ifPresent(gold -> wallet.credit(userId, gold, REASON.get(kind), String.valueOf(a.id())));
+		quests.complete(a.id()).ifPresent(
+				c -> gifts.send(userId, SOURCE.get(kind), String.valueOf(a.id()), c.title(), c.rewardGold(), null, 0));
 	}
 
 	private List<QuestView> views(long userId, LocalDate period, String kind) {
