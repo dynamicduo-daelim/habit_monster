@@ -48,6 +48,11 @@ public class BusinessDates {
 		return today().withDayOfMonth(1);
 	}
 
+	/** 그 업무 날짜가 시작하는 시각 (경계 시각, 서비스 시간대). 예: 그달 1일 00시(Asia/Seoul) — 기록을 기간으로 셀 때. */
+	public Instant startOf(LocalDate date) {
+		return date.atTime(boundaryHour, 0).atZone(zone).toInstant();
+	}
+
 	/**
 	 * 앱이 화면을 연 날짜({@code businessDate})가 서버의 오늘과 같은지. 다르면 409 {@code BUSINESS_DATE_CHANGED} —
 	 * 23:59에 연 화면으로 00:01에 제출하면 어제 화면의 값이 오늘 기록으로 들어가는 것을 막는다.

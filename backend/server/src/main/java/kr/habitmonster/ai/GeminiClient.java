@@ -24,7 +24,8 @@ import tools.jackson.databind.json.JsonMapper;
  * Gemini API ({@code generateContent}) 호출. 키 · 모델은 환경변수 {@code GEMINI_API_KEY} · {@code GEMINI_MODEL}
  * (로컬은 {@code backend/.env} — 커밋하지 않는다). 앱에는 키를 두지 않는다 (앱 파일을 풀면 꺼낼 수 있어서, D-57).
  *
- * <p>응답이 늦으면 기다리지 않는다: 제한 시간({@code app.llm.timeout-ms}, 기본 5초 — D-66)을 넘기거나 실패하면 빈 값 → 대본형으로.
+ * <p>응답이 늦으면 기다리지 않는다: 제한 시간({@code app.llm.timeout-ms}, 12초 — D-66 · D-92)을 넘기거나 실패하면 빈 값 → 대본형으로.
+ * 503 · 500(요청 몰림)은 남은 시간이 3초 이상이면 0.5초 쉬고 한 번만 다시 한다 (11-26, 앱의 요청 제한 15초 안).
  */
 @Component
 class GeminiClient implements LlmClient {
@@ -39,7 +40,7 @@ class GeminiClient implements LlmClient {
 	private final HttpClient http;
 
 	GeminiClient(@Value("${app.llm.gemini.api-key:}") String apiKey, @Value("${app.llm.gemini.model}") String model,
-			@Value("${app.llm.timeout-ms:5000}") long timeoutMs, JsonMapper json) {
+			@Value("${app.llm.timeout-ms:12000}") long timeoutMs, JsonMapper json) {
 		this.apiKey = apiKey;
 		this.model = model;
 		this.timeout = Duration.ofMillis(timeoutMs);
@@ -63,13 +64,16 @@ class GeminiClient implements LlmClient {
 		body.put("generationConfig", Map.of("responseMimeType", "application/json", "responseSchema", responseSchema,
 				"temperature", 0.3));
 		try {
-			HttpRequest req = HttpRequest.newBuilder(URI.create(BASE + model + ":generateContent"))
-				.timeout(timeout)
-				.header("Content-Type", "application/json")
-				.header("x-goog-api-key", apiKey)
-				.POST(HttpRequest.BodyPublishers.ofString(json.writeValueAsString(body), StandardCharsets.UTF_8))
-				.build();
-			HttpResponse<String> res = http.send(req, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+			String payload = json.writeValueAsString(body);
+			long deadline = System.nanoTime() + timeout.toNanos();
+			HttpResponse<String> res = send(payload, timeout);
+			// 11-26: 503(요청 몰림)이 잦다 → 남은 시간 안에서 한 번만 다시. 429(한도)는 다시 해도 안 되므로 그대로
+			Duration left = Duration.ofNanos(deadline - System.nanoTime()).minus(RETRY_WAIT);
+			if ((res.statusCode() == 503 || res.statusCode() == 500) && left.compareTo(MIN_RETRY) >= 0) {
+				log.warn("Gemini 응답 {} (모델 {}) — 한 번 더", res.statusCode(), model);
+				Thread.sleep(RETRY_WAIT.toMillis());
+				res = send(payload, left);
+			}
 			if (res.statusCode() != 200) {
 				log.warn("Gemini 응답 {} (모델 {})", res.statusCode(), model);
 				return Optional.empty();
@@ -87,5 +91,19 @@ class GeminiClient implements LlmClient {
 			log.warn("Gemini 호출 실패: {}", e.getClass().getSimpleName());
 			return Optional.empty();
 		}
+	}
+
+	/** 다시 하기 전에 쉬는 시간 · 다시 할 만한 최소 남은 시간. */
+	private static final Duration RETRY_WAIT = Duration.ofMillis(500);
+	private static final Duration MIN_RETRY = Duration.ofSeconds(3);
+
+	private HttpResponse<String> send(String payload, Duration limit) throws java.io.IOException, InterruptedException {
+		HttpRequest req = HttpRequest.newBuilder(URI.create(BASE + model + ":generateContent"))
+			.timeout(limit)
+			.header("Content-Type", "application/json")
+			.header("x-goog-api-key", apiKey)
+			.POST(HttpRequest.BodyPublishers.ofString(payload, StandardCharsets.UTF_8))
+			.build();
+		return http.send(req, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
 	}
 }

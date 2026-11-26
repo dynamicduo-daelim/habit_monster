@@ -41,6 +41,9 @@
 --   * 퀘스트 보상은 지갑에 바로 넣지 않고 선물로 → 원장 QUEST_*의 ref_id = gift.gift.id (전: quest.user_quest.id)
 --   * 잠금 순서 맨 앞에 gift(받기만). 퀘스트 경로는 gift에 새 행만 넣는다 (원칙 3-1)
 --   * 가방 대사(verify S-12) = 구매 + 받은 선물의 아이템 − 소모
+-- v1.14 2026-11-26 (API 명세 v11 — 월간 배지, 결정 D-91, 제안서 docs/제안/2026-11-26-퀘스트-월간배지.md)
+--   * quest.user_month 새로: 사용자 · 월 1줄 — 그달 퀘스트 완료 수(카운터) · 배지 받은 시각(한 번만, 트리거)
+--   * 선물 출처 QUEST_MONTHLY (성실볼만 — 골드 없어 원장 사유는 없음)
 -- 설계 문서: 04_논리물리모델.md (v1.7 반영 전)
 -- MVP 밖 구성요소(결제, 수치 변경 이력, AI 기억·호출 로그)는 schema_later.sql (이 파일 다음에 적용)
 --
@@ -954,6 +957,29 @@ CREATE TABLE quest.user_quest (
   CONSTRAINT ck_user_quest_progress CHECK (progress <= target)
 );
 
+-- 월간 배지 (v1.14, D-91): 사용자 · 월 1줄. 퀘스트를 완료할 때마다 completed_count + 1 (카운터).
+--  * 줄은 그달 첫 완료(또는 첫 조회) 때 만들고, 그때 시작값 = 그달 이미 완료한 user_quest 수 (이 기능 전 완료분 포함)
+--  * completed_count가 quest_monthly_target에 닿으면 badge_earned_at을 조건부로 한 번 채우고 성실볼 선물 (gift, QUEST_MONTHLY)
+--  * 완료한 날의 달로 센다 (지난달에 시작한 주간 퀘스트를 이번 달에 끝내면 이번 달). 선물을 받았는지와 무관
+CREATE TABLE quest.user_month (
+  id               BIGINT       GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  user_id          BIGINT       NOT NULL REFERENCES identity.users(id),
+  month_start      DATE         NOT NULL CHECK (extract(day FROM month_start) = 1),   -- 그달 1일
+  completed_count  SMALLINT     NOT NULL DEFAULT 0 CHECK (completed_count >= 0),
+  badge_earned_at  TIMESTAMPTZ  NULL,                                                  -- NULL = 아직 배지 없음
+  CONSTRAINT uq_user_month UNIQUE (user_id, month_start)
+);
+-- 배지는 한 번 받으면 끝: badge_earned_at은 NULL → 값 한 번만 (되돌리기 · 다시 쓰기 금지)
+CREATE FUNCTION quest.forbid_badge_change() RETURNS trigger AS $$
+BEGIN
+  IF OLD.badge_earned_at IS NOT NULL AND NEW.badge_earned_at IS DISTINCT FROM OLD.badge_earned_at THEN
+    RAISE EXCEPTION 'user_month % badge already earned', OLD.id USING ERRCODE = 'check_violation';
+  END IF;
+  RETURN NEW;
+END $$ LANGUAGE plpgsql;
+CREATE TRIGGER tg_user_month_badge_fixed BEFORE UPDATE ON quest.user_month
+  FOR EACH ROW EXECUTE FUNCTION quest.forbid_badge_change();
+
 -- =====================================================================
 -- gift (v1.13) — 쓰기 · 읽기: 선물함 모듈 (결정 D-89)
 --  * 퀘스트 계열 보상(일일 · 주간 · 이후 월간 · 업적 · 깜짝)은 지갑 · 가방에 바로 넣지 않고 여기에 1줄 → 사용자가 받을 때 지급
@@ -968,13 +994,14 @@ CREATE TABLE gift.gift_source (
 );
 INSERT INTO gift.gift_source (code, description) VALUES
  ('QUEST_DAILY','일일 퀘스트 완료'),
- ('QUEST_WEEKLY','주간 퀘스트 완료');
+ ('QUEST_WEEKLY','주간 퀘스트 완료'),
+ ('QUEST_MONTHLY','월간 배지 (성실볼)');   -- v1.14, source_ref = quest.user_month.id
 
 CREATE TABLE gift.gift (
   id             BIGINT       GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   user_id        BIGINT       NOT NULL REFERENCES identity.users(id),
   source_code    TEXT         NOT NULL REFERENCES gift.gift_source(code),
-  source_ref     VARCHAR(64)  NOT NULL,                -- QUEST_* → quest.user_quest.id
+  source_ref     VARCHAR(64)  NOT NULL,                -- QUEST_DAILY · QUEST_WEEKLY → quest.user_quest.id / QUEST_MONTHLY → quest.user_month.id
   title          VARCHAR(40)  NOT NULL,                -- 만들 때 고정 (퀘스트 제목 등)
   gold           INT          NOT NULL DEFAULT 0 CHECK (gold >= 0),
   item_code      TEXT         NULL REFERENCES shop.shop_item(code),

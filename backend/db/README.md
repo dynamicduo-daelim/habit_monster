@@ -1,6 +1,21 @@
 # DB 공식 설계 메모 — 앱 · 서버에 맞추기
 
-## v1.13 (2026-11-26) — 지금 기준 (API 명세 v10 — 선물함, D-89)
+## v1.14 (2026-11-26) — 지금 기준 (API 명세 v11 — 월간 배지, D-91)
+
+윤서 요청(11-26)으로 Claude가 썼다. 근거는 `docs/제안/2026-11-26-퀘스트-월간배지.md` · 퀘스트 4단계(`docs/quest/4-월간배지.md`).
+
+**바뀐 것**
+- 새 테이블 `quest.user_month`: 사용자 · 월(1일만) 1줄 — `completed_count`(그달 완료 수, 카운터) · `badge_earned_at`(트리거 `tg_user_month_badge_fixed` — NULL → 값 한 번만)
+- 선물 출처 `QUEST_MONTHLY` (`source_ref` = `user_month.id`, 성실볼만이라 원장 사유 없음)
+- 시드 설정 `quest_monthly_target` 20 · `quest_monthly_ball_reward` 1. 서버는 아직 읽지 않아 `BalanceConfig.NOT_USED_BY_SERVER`에 임시로 (구현 때 `REQUIRED`로)
+- `verify.sql` +10 (월간 줄 검사 9 · S-37 설정) · S-1 FK 24쌍 · S-36 출처 3개. `verify_later.sql` L-A5 29쌍
+
+**검증 (11-26)**
+- 임시 PostgreSQL 16 새 DB **239개 모두 통과** (229 + 새 10) · v1.13 DB(`HEAD`의 schema · seed)에 `migrate-v1.14.sql` 두 번 → 239개 통과
+
+**이미 만든 DB에 적용** — `backend/db/migrate-v1.14.sql`을 한 번 (v1.13 적용 뒤, 두 번 실행해도 안전). **기존 데이터는 바꾸지 않는다** — 이번 달 줄은 새 서버가 처음 쓸 때 그달 기존 완료 수로 만든다. **새 서버 배포보다 먼저** (새 서버는 새 설정 키가 없으면 뜨지 않음).
+
+## v1.13 (2026-11-26) — (API 명세 v10 — 선물함, D-89)
 
 윤서 요청(11-26)으로 Claude가 썼다. 근거는 `docs/제안/2026-11-26-선물함.md` · 퀘스트 3.5단계(`docs/quest/3.5-선물함.md`).
 

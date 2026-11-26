@@ -10,6 +10,7 @@
 -- v1.11 2026-11-25: 일일 퀘스트 4개 (quest.quest_def) · quest_enabled (API 명세 v8)
 -- v1.12 2026-11-25: 주간 퀘스트 3개 · quest_weekly_rate_threshold (API 명세 v9)
 -- v1.13 2026-11-26: 바뀐 것 없음 — 선물 출처 코드(gift.gift_source)는 원장 사유처럼 schema.sql에 있다 (API 명세 v10, D-89)
+-- v1.14 2026-11-26: 월간 배지 quest_monthly_target 20 · quest_monthly_ball_reward 1 (API 명세 v11, D-91)
 -- =====================================================================
 
 -- 카테고리 (HTML CATS)
@@ -422,7 +423,9 @@ INSERT INTO config.balance_config (key, value, description) VALUES
  ('ai_daily_call_limit',        '60',         '사용자당 하루 AI 해석 호출 한도 (v1.9, 베타에서 조정)'),
  ('ai_min_confidence',          '0.6',        '이보다 확신이 낮은 해석은 다시 묻기 (v1.9, 근거 없는 시작값 — 구현 뒤 조정)'),
  ('quest_enabled',              'true',       '퀘스트 켜기 (끄면 조회 · 진행 · 지급 모두 멈춤) (v1.11)'),
- ('quest_weekly_rate_threshold','80',         '주간 퀘스트 "성실도 N% 이상인 날"의 N — 첫 제출 성실도 기준 (v1.12)');
+ ('quest_weekly_rate_threshold','80',         '주간 퀘스트 "성실도 N% 이상인 날"의 N — 첫 제출 성실도 기준 (v1.12)'),
+ ('quest_monthly_target',       '20',         '월간 배지: 그달 퀘스트 완료 N개 — 베타 달성률 90% 넘으면 재검토 (v1.14)'),
+ ('quest_monthly_ball_reward',  '1',          '월간 배지 보상 성실볼 개수 — 선물함으로 (v1.14)');
 
 -- 퀘스트 (v1.11, 기획 docs/기획/2026-11-12-퀘스트-시스템.md 4-1) — 제목 문구 [가정]
 INSERT INTO quest.quest_def (code, kind, title, target_count, reward_gold, sort_order) VALUES
