@@ -39,7 +39,7 @@ public class BalanceConfig {
 		"starter_affection",
 		"timer_max_minutes", "self_report_max_score", "exp_coef_ratio", "exp_coef_range", "exp_coef_binary",
 		"exp_coef_verified", "ai_daily_call_limit", "ai_min_confidence",
-		"quest_enabled");
+		"quest_enabled", "quest_weekly_rate_threshold");
 
 	/**
 	 * 시드에 있지만 이 클래스가 읽지 않는 키 — 다른 곳에서 정하거나(업무 날짜는 {@code application.properties}),
@@ -158,6 +158,8 @@ public class BalanceConfig {
 	// ---------- 퀘스트 (v1.11) ----------
 	/** false면 퀘스트 조회 · 진행 · 지급이 모두 멈춘다. */
 	public boolean questEnabled() { return values.get("quest_enabled").asBoolean(); }
+	/** 주간 퀘스트 "성실도 N% 이상인 날"의 N (v1.12). */
+	public int questWeeklyRateThreshold() { return integer("quest_weekly_rate_threshold"); }
 
 	/** 진화 단계: 0 기본 · 1 1차 · 2 최종 = 넘은 진화 레벨 수. */
 	public int stageOf(int level) {

@@ -106,7 +106,8 @@ class QuestApiTest extends PostgresTest {
 	}
 
 	int rows() {
-		return jdbc.queryForObject("select count(*) from quest.user_quest where user_id = ?", Integer.class, userIdOf(E));
+		return jdbc.queryForObject("select count(*) from quest.user_quest where user_id = ? and quest_code like 'DAILY%'",
+				Integer.class, userIdOf(E)); // 일일만 (주간은 QuestWeeklyApiTest)
 	}
 
 	// ---------- 조회 ----------

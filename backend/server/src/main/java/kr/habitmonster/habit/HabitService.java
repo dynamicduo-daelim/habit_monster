@@ -30,6 +30,7 @@ import kr.habitmonster.habit.HabitRepository.HabitRow;
 import kr.habitmonster.habit.HabitRepository.MeasureTypeRow;
 import kr.habitmonster.habit.HabitRepository.StreakRow;
 
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -70,13 +71,16 @@ public class HabitService {
 	private final BalanceConfig config;
 	private final Scoring scoring;
 	private final TimerService timers;
+	private final ApplicationEventPublisher events;
 
-	HabitService(HabitRepository habits, BusinessDates dates, BalanceConfig config, Scoring scoring, TimerService timers) {
+	HabitService(HabitRepository habits, BusinessDates dates, BalanceConfig config, Scoring scoring, TimerService timers,
+			ApplicationEventPublisher events) {
 		this.habits = habits;
 		this.dates = dates;
 		this.config = config;
 		this.scoring = scoring;
 		this.timers = timers;
+		this.events = events;
 	}
 
 	// ---------- 마스터 ----------
@@ -754,6 +758,7 @@ public class HabitService {
 		int current = continued ? row.currentStreak() + 1 : 1;
 		int longest = Math.max(row.longestStreak(), current);
 		habits.updateStreak(userId, current, longest, today);
+		events.publishEvent(new Attended(userId, today)); // 그날 첫 출석만 (주간 퀘스트, D-85)
 		return new Attendance(today, false, current, longest);
 	}
 
@@ -783,6 +788,26 @@ public class HabitService {
 			.collect(Collectors.groupingBy(HabitRepository.DayScoreRow::checkinDate,
 					Collectors.collectingAndThen(Collectors.mapping(HabitRepository.DayScoreRow::score, Collectors.toList()),
 							scoring::overallRate)));
+	}
+
+	/**
+	 * 기간 안의 기록 요약 — 주간 퀘스트 판정용 (퀘스트 3단계, 명세 v9). 모두 <b>첫 제출</b> 기준이라 다시 체크해도 바뀌지 않는다.
+	 *
+	 * @param attendedDays 출석한 날 수
+	 * @param goodDays 첫 제출 성실도(반영 습관의 첫 확정 점수로 계산한 달성률 평균)가 기준 이상인 날 수
+	 * @param filledCategories 첫 제출에서 "했어"인 습관의 서로 다른 카테고리 수
+	 */
+	public record PeriodRecord(int attendedDays, int goodDays, int filledCategories) {
+	}
+
+	@Transactional(readOnly = true)
+	public PeriodRecord periodRecord(long userId, LocalDate from, LocalDate to, int rateThreshold) {
+		int attended = habits.attendedDays(userId, from, to).size();
+		Map<LocalDate, List<Integer>> counted = habits.countedRewardedScores(userId, from, to).stream()
+			.collect(Collectors.groupingBy(HabitRepository.DayScoreRow::checkinDate,
+					Collectors.mapping(HabitRepository.DayScoreRow::score, Collectors.toList())));
+		int good = (int) counted.values().stream().filter(s -> scoring.overallRate(s) >= rateThreshold).count();
+		return new PeriodRecord(attended, good, habits.filledCategoryCount(userId, from, to));
 	}
 
 	/** 연 카테고리의 레벨 진행. {@code expRequired}는 그 레벨에 필요한 총량(B2), 최대 레벨이면 null · {@code expInLevel} 0. */

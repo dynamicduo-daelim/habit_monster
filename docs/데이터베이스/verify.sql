@@ -13,6 +13,7 @@
 --       사용자당 하나 · 상태-시각 일치 · 끝난 날 기록), AI 호출 수(daily_call_count), 설정 키 8개
 -- v1.10: 끌기(DRAG) 하루 1회 · 설정 키 affection_drag_gain
 -- v1.11: 퀘스트 (user_quest 기간당 1행 · 진행도 ≤ 목표 · 완료-시각 일치 · 마스터 FK · QUEST_DAILY 적립 · quest 권한) · quest_enabled
+-- v1.12: 주간 퀘스트 시드 3개 · quest_weekly_rate_threshold · QUEST_WEEKLY 적립
 -- =====================================================================
 CREATE TEMP TABLE _result (id text, ok boolean, note text);
 
@@ -791,6 +792,20 @@ SELECT 'S-30 설정값 · 시드 v1.11 (quest_enabled true · 일일 퀘스트 4
        (SELECT value FROM config.balance_config WHERE key = 'quest_enabled') = 'true'::jsonb
    AND (SELECT string_agg(code || ':' || reward_gold, ',' ORDER BY sort_order) FROM quest.quest_def WHERE kind = 'DAILY' AND is_active)
        = 'DAILY_CHECKIN:3,DAILY_PET:1,DAILY_TIMER:1,DAILY_TALK:1', '';
+
+-- ---------- v1.12 주간 퀘스트 ----------
+SELECT pg_temp.expect_ok  ('v1.12 주간 퀘스트 행 (기간 = 그 주 월요일) + QUEST_WEEKLY 적립',
+  $$INSERT INTO quest.user_quest (user_id, period_start, quest_code, target, reward_gold, progress, status, completed_at)
+    VALUES (1,'2026-10-05','WEEKLY_ATTEND',4,5,4,'DONE',now());
+    UPDATE wallet.wallet SET balance = balance + 5 WHERE user_id = 1;
+    INSERT INTO wallet.wallet_ledger (user_id, amount, balance_after, reason_code, ref_id)
+    SELECT 1, 5, w.balance, 'QUEST_WEEKLY', q.id::text FROM wallet.wallet w, quest.user_quest q
+    WHERE w.user_id = 1 AND q.user_id = 1 AND q.quest_code = 'WEEKLY_ATTEND'$$);
+INSERT INTO _result
+SELECT 'S-32 설정값 · 시드 v1.12 (주간 퀘스트 3개 4/2/3일 · 각 5G · 기준 80%)',
+       (SELECT value FROM config.balance_config WHERE key = 'quest_weekly_rate_threshold') = '80'::jsonb
+   AND (SELECT string_agg(code || ':' || target_count || ':' || reward_gold, ',' ORDER BY sort_order) FROM quest.quest_def WHERE kind = 'WEEKLY' AND is_active)
+       = 'WEEKLY_ATTEND:4:5,WEEKLY_GOOD_DAYS:2:5,WEEKLY_CATEGORIES:3:5', '';
 
 -- ---------- api: 중복 요청 방지 키 (v1.7) ----------
 SELECT pg_temp.expect_ok  ('v1.7 키 등록 (처리 중)',

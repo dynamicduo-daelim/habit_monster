@@ -10,5 +10,7 @@ package kr.habitmonster.wallet;
 public enum LedgerReason {
 	CHECKIN, LEVELUP, PERIOD_BONUS, GOAL_WEEKLY, GOAL_MONTHLY, DUPLICATE, SHOP_PURCHASE, ADJUST,
 	/** 일일 퀘스트 완료 (v1.11) — {@code ref_id} = {@code quest.user_quest.id} */
-	QUEST_DAILY
+	QUEST_DAILY,
+	/** 주간 퀘스트 완료 (v1.12) — {@code ref_id} = {@code quest.user_quest.id} */
+	QUEST_WEEKLY
 }
