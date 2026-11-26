@@ -7,6 +7,8 @@
 -- v1.8 보충 2026-10-28: 목표 기간 일수 weekly_goal_days 7 · monthly_goal_days 30 (등록한 날부터, API 명세 v5 보충 10-28)
 -- v1.9 2026-11-04: 자기보고 상한 · 경험치 계수 (D-62) · 타이머 최대 분 · AI 호출 한도 · 확신 기준 (API 명세 v6)
 -- v1.10 2026-11-25: 필드 끌기 호감도 affection_drag_gain (API 명세 v7, D-86)
+-- v1.11 2026-11-25: 일일 퀘스트 4개 (quest.quest_def) · quest_enabled (API 명세 v8)
+-- v1.12 2026-11-25: 주간 퀘스트 3개 · quest_weekly_rate_threshold (API 명세 v9)
 -- =====================================================================
 
 -- 카테고리 (HTML CATS)
@@ -417,5 +419,17 @@ INSERT INTO config.balance_config (key, value, description) VALUES
  ('exp_coef_verified',          '1.2',        '확인된 기록(타이머) 경험치 배수 — 위 계수에 곱하고 습관마다 반올림 (v1.9)'),
  ('timer_max_minutes',          '240',        '습관 타이머 한 번 최대 분 — 일시정지 뺀 경과, 닿으면 자동 종료 (v1.9)'),
  ('ai_daily_call_limit',        '60',         '사용자당 하루 AI 해석 호출 한도 (v1.9, 베타에서 조정)'),
- ('ai_min_confidence',          '0.6',        '이보다 확신이 낮은 해석은 다시 묻기 (v1.9, 근거 없는 시작값 — 구현 뒤 조정)');
+ ('ai_min_confidence',          '0.6',        '이보다 확신이 낮은 해석은 다시 묻기 (v1.9, 근거 없는 시작값 — 구현 뒤 조정)'),
+ ('quest_enabled',              'true',       '퀘스트 켜기 (끄면 조회 · 진행 · 지급 모두 멈춤) (v1.11)'),
+ ('quest_weekly_rate_threshold','80',         '주간 퀘스트 "성실도 N% 이상인 날"의 N — 첫 제출 성실도 기준 (v1.12)');
+
+-- 퀘스트 (v1.11, 기획 docs/기획/2026-11-12-퀘스트-시스템.md 4-1) — 제목 문구 [가정]
+INSERT INTO quest.quest_def (code, kind, title, target_count, reward_gold, sort_order) VALUES
+ ('DAILY_CHECKIN','DAILY','오늘의 기록',        1, 3, 1),
+ ('DAILY_PET',    'DAILY','몬스터 쓰다듬기',    1, 1, 2),
+ ('DAILY_TIMER',  'DAILY','타이머 한 번 쓰기',  1, 1, 3),
+ ('DAILY_TALK',   'DAILY','몬스터에게 말 걸기', 1, 1, 4),
+ ('WEEKLY_ATTEND',     'WEEKLY','주 4일 출석',              4, 5, 11),   -- v1.12, 기획 4-2
+ ('WEEKLY_GOOD_DAYS',  'WEEKLY','성실도 80% 이상인 날 2일',  2, 5, 12),
+ ('WEEKLY_CATEGORIES', 'WEEKLY','카테고리 3곳 체크인',       3, 5, 13);
 -- memory_prompt_max_items는 schema_later.sql C 블록 (v1.2)

@@ -93,13 +93,14 @@
 | POST | /shop/purchases | **Idempotency-Key 필수**. 201 `{purchaseId, totalPrice, gold, itemCode, quantity}` (`quantity` = 산 뒤 가방 개수). 가격은 서버의 상점 가격. 400 수량 1 ~ 99 밖 · 없는 아이템, 422 `NOT_ENOUGH_GOLD` (아무것도 안 남음) |
 | POST | /monsters/{id}/feed | **Idempotency-Key 필수**. 200 `{expGained, levelBefore, levelAfter, stageBefore, stageAfter, evolved, remainingQuantity}`. 400 물약이 아닌 코드, 404 남의 몬스터, 422 `MAX_LEVEL` · `NO_ITEM` |
 | POST | /monsters/{id}/affection | `{action: PET \| PLAY \| DRAG}` → 200 `{gain, affection, affectionTier}` (최대면 gain 0). 하루 1번씩 — PET · PLAY는 409 `ALREADY_DONE_TODAY`, **DRAG는 200 gain 0** (명세 v7 · D-86). 키 없음(명세) |
-| GET | /monsters/{id}/line | `{affectionTier, line}` — 호감도 단계 대사 중 하나 |
+| GET | /monsters/{id}/line | `{affectionTier, line}` — 호감도 단계 대사 중 하나. **v8**: 성공하면 퀘스트 `DAILY_TALK` 진행 (GET이지만 쓰기 트랜잭션) |
 | PATCH | /monsters/{id}/location | `{location: FIELD \| BAG}` → `{userMonsterId, location, fieldCount}`. 422 `FIELD_LIMIT` (필드 1마리 넣기 · 5마리 꺼내기) |
 | PUT | /me/partner | `{userMonsterId}` → `{partnerMonsterId}`. 가방에 있어도 됨 |
 | GET | /habits?status=ACTIVE,ENDED | 생략하면 ACTIVE · ENDED. 기간 값은 마지막 기간 기준 |
 | POST | /habits | **Idempotency-Key 필수**. `{categoryCode, measureTypeId, name, dailyTarget, periodCode}` → 201 (`GET /habits`의 한 줄). 시작일 = 오늘 체크인 전이면 오늘, 후면 내일. 400 값 형식, 422 `CATEGORY_LOCKED` · `HABIT_LIMIT`(진행 중 + 기간 완료 5개) (10-23, D-47) |
 | POST | /habits/{id}/renew | **Idempotency-Key 필수**. `{periodCode, dailyTarget?}` → 200 (새 기간, `filledDays` 0). 404 남의 습관, 400, 409 `HABIT_NOT_ENDED` (10-23) |
 | POST | /habits/{id}/stop | 키 없음. 200 `{habitId, status: STOPPED}`. 404, 409 `HABIT_ALREADY_STOPPED`, 422 `LAST_HABIT`(마지막 1개) (10-23) |
+| GET | /quests | **(명세 v8 · v9 10장)** `{businessDate, enabled, daily[{code, title, progress, target, rewardGold, status IN_PROGRESS·DONE·LOCKED, lockReason?}], weekStart, weekly[같은 모양]}`. **v9 주간**: 주 4일 출석 · 성실도 `quest_weekly_rate_threshold`(80)% 이상인 날 2일 · 카테고리 3곳(연 카테고리 < 3이면 `NOT_ENOUGH_CATEGORIES`), 진행도는 이번 주 기록에서 계산(출석 · 체크인 첫 제출 알림과 조회 때, 내려가지 않음), 원장 `QUEST_WEEKLY` (D-88) — 그날 첫 조회 때 일일 4개 생성, 잠금은 조회 때 계산(`NO_TIMER_HABIT`), `quest_enabled` false면 `enabled false · daily []`. 진행은 이벤트로(체크인 첫 제출 · 쓰다듬기 · 타이머 끝 · 말 걸기), 완료 순간 자동 지급(원장 `QUEST_DAILY`) (11-25, D-85 · D-87) |
 | GET | /goals | `{weekly, monthly}` 각각 `{slotsTotal, slotsUsed, rewardGold, goals[{goalId, goalType, periodStart, periodEnd, title, detail, status}]}` — 기간이 남은 목표만 (등록한 날부터 7 · 30일, 명세 v5 보충 10-28, D-48) |
 | POST | /goals | **Idempotency-Key 필수**. `{goalType, title, detail?}` → 201 (목록의 한 줄). 400 값 형식, 422 `GOAL_SLOT_FULL` (기간이 남은 목표 = 진행 중 + 완료) (10-28) |
 | PATCH | /goals/{id} | 보낸 필드만. `detail: null` = 지우기, `title: null` · `goalType` = 400. 404 · 409 `GOAL_COMPLETED` · `GOAL_PERIOD_ENDED` (10-28) |

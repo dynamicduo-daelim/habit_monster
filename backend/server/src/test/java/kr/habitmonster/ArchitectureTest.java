@@ -41,12 +41,14 @@ class ArchitectureTest {
 	static final String ROOT = "kr.habitmonster";
 
 	/** 패키지 → 그 패키지가 다룰 수 있는 DB 스키마. 여기 없는 패키지(onboarding · home · common …)는 SQL을 쓰지 않는다. */
-	static final Map<String, String> SCHEMA_OF = Map.of(
-		"identity", "identity", "auth", "identity", // auth = 회원 모듈의 서비스 · 컨트롤러
-		"habit", "habit", "goal", "goal", "wallet", "wallet", "shop", "shop", "monster", "monster",
-		"config", "config", "idempotency", "api", "ai", "ai");
+	static final Map<String, String> SCHEMA_OF = Map.ofEntries(
+		Map.entry("identity", "identity"), Map.entry("auth", "identity"), // auth = 회원 모듈의 서비스 · 컨트롤러
+		Map.entry("habit", "habit"), Map.entry("goal", "goal"), Map.entry("wallet", "wallet"), Map.entry("shop", "shop"),
+		Map.entry("monster", "monster"), Map.entry("config", "config"), Map.entry("idempotency", "api"),
+		Map.entry("ai", "ai"), Map.entry("quest", "quest")); // v1.11
 
-	static final Pattern TABLE_REF = Pattern.compile("\\b(identity|habit|goal|wallet|shop|monster|config|ai|api)\\.([a-z_]+)\\b");
+	static final Pattern TABLE_REF =
+		Pattern.compile("\\b(identity|habit|goal|wallet|shop|monster|config|ai|api|quest)\\.([a-z_]+)\\b");
 
 	static final JavaClasses CLASSES = new ClassFileImporter()
 		.withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
@@ -54,7 +56,7 @@ class ArchitectureTest {
 
 	@Test
 	void 저장소는_자기_모듈_안에서만_쓴다() {
-		for (String module : List.of("habit", "goal", "wallet", "shop", "monster", "idempotency", "ai")) {
+		for (String module : List.of("habit", "goal", "wallet", "shop", "monster", "idempotency", "ai", "quest")) {
 			classes().that().resideInAPackage(ROOT + "." + module + "..").and().haveSimpleNameEndingWith("Repository")
 				.should().onlyHaveDependentClassesThat().resideInAPackage(ROOT + "." + module + "..")
 				.allowEmptyShould(true)

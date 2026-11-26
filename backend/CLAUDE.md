@@ -1,7 +1,7 @@
 # 루틴몬 서버 · DB — Claude 작업 안내
 
 루트 `CLAUDE.md`(원칙 · 기록 · 변경 통제)를 따르고, 서버(`backend/`)를 고칠 때는 이것도 지킨다.
-계약의 기준: **API 명세 v7** `docs/api/습관몬스터_API명세_v7.md` · **DB 설계** `docs/데이터베이스/` (스키마 v1.10 + 시드 v1.10). v7 · v1.10은 필드 끌기 DRAG (D-86), v6 · v1.9는 AI 챗봇 · 습관 타이머 · 점수 상한 · 경험치 계수 (D-62 · D-63)
+계약의 기준: **API 명세 v9** `docs/api/습관몬스터_API명세_v9.md` · **DB 설계** `docs/데이터베이스/` (스키마 v1.12 + 시드 v1.12). v9 · v1.12는 주간 퀘스트 (D-88), v8 · v1.11은 퀘스트 기반 + 일일 퀘스트 (D-87), v7 · v1.10은 필드 끌기 DRAG (D-86), v6 · v1.9는 AI 챗봇 · 습관 타이머 · 점수 상한 · 경험치 계수 (D-62 · D-63)
 둘 다 **사용자(윤서)가 직접 썼다** — DB · 명세 파일은 Claude가 고치지 않고, 바꿔야 하면 사용자에게 제안한다.
 명세와 다르게 구현하기로 한 것은 `docs/진행현황-및-계획.md` 1장 (A1 ~ D6) · `docs/결정-기록.md` D-23 ~ D-46. 남은 단계 지시서는 `docs/handoff/` (서버 담당 PC에만 있음 — 원격 저장소에서 뺌, 10-23). 남은 일 전체는 `docs/할-일.md`.
 
@@ -19,8 +19,8 @@
 요청 검사 순서: ① 토큰 → ② `UserGateFilter` → ③ `IdempotencyFilter` → 컨트롤러 ④ 소유권(남의 것은 **404**, C3) → ⑤ 업무 날짜 → ⑥ 값 형식 → ⑦ 규칙.
 
 ## DB 설계 원칙 (`schema.sql` 머리말 요약 — 꼭 원문도 읽기)
-- **모듈 = 스키마** (`identity` · `habit` · `goal` · `wallet` · `shop` · `monster` · `config` · `ai` · `api`). 서버 패키지도 같은 이름으로 나누고, **각 모듈의 저장소는 자기 스키마 테이블만** 다룬다. 다른 모듈 데이터는 그 모듈 서비스를 부른다. 한 요청 = 트랜잭션 하나.
-- 사용자 잠금 순서 고정: `habit_user → goal_user → monster_user → inventory → wallet` (`FOR NO KEY UPDATE`).
+- **모듈 = 스키마** (`identity` · `habit` · `goal` · `wallet` · `shop` · `monster` · `config` · `ai` · `api` · `quest`). 서버 패키지도 같은 이름으로 나누고, **각 모듈의 저장소는 자기 스키마 테이블만** 다룬다. 다른 모듈 데이터는 그 모듈 서비스를 부른다. 한 요청 = 트랜잭션 하나.
+- 사용자 잠금 순서 고정: `habit_user → goal_user → monster_user → inventory → wallet → quest` (`FOR NO KEY UPDATE`). 퀘스트는 항상 지갑을 먼저 잠근다 (D-87).
 - 골드 · 볼 · 물약 차감은 조건부 UPDATE(`… WHERE balance >= ?`), `CHECK(>= 0)` 위반은 422. 골드는 잔액 + 원장(`UNIQUE(reason_code, ref_id)`), 금액 0이면 원장에 안 씀.
 - **수치는 `config.balance_config`에서** (하드코딩 금지). 행은 지우지 않는다(상태값). 보상 기준값 · 완료 목표 · 끝난 탐색은 트리거가 수정을 막는다.
 - JPA는 테이블을 만들지 않는다 (`ddl-auto=none`) — 엔티티 컬럼은 `schema.sql`과 정확히 같게.

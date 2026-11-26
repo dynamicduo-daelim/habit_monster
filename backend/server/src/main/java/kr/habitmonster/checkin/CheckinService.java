@@ -22,6 +22,7 @@ import kr.habitmonster.monster.MonsterService.UnlockedSpecies;
 import kr.habitmonster.wallet.LedgerReason;
 import kr.habitmonster.wallet.WalletService;
 
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -63,14 +64,16 @@ public class CheckinService {
 	private final WalletService wallet;
 	private final BalanceConfig config;
 	private final BusinessDates dates;
+	private final ApplicationEventPublisher events;
 
 	CheckinService(HabitService habits, MonsterService monsters, WalletService wallet, BalanceConfig config,
-			BusinessDates dates) {
+			BusinessDates dates, ApplicationEventPublisher events) {
 		this.habits = habits;
 		this.monsters = monsters;
 		this.wallet = wallet;
 		this.config = config;
 		this.dates = dates;
+		this.events = events;
 	}
 
 	/** 쓰기 트랜잭션 — 습관 모듈이 타이머 자동 종료 정리를 먼저 한다 (명세 v6 5장 {@code timerMinutes}). */
@@ -116,6 +119,9 @@ public class CheckinService {
 			bonuses.add(new PeriodBonusView(b.habitId(), b.periodCode(), b.multiplier(), b.periodScore(), b.bonusGold()));
 		}
 
+		// 퀘스트 등 — 같은 트랜잭션, 지갑을 잠근 뒤라 잠금 순서(… → wallet → quest, D-87)와 맞다
+		events.publishEvent(new CheckinSubmitted(userId, today));
+		balance = wallet.balance(userId); // 응답 잔액은 퀘스트 골드까지 반영한 값 (goldEarned · goldBreakdown에는 퀘스트 골드가 없다)
 		return new Submitted(c.revision(), c.habits(), c.overallRate(), scoreGold + levelUpGold + periodGold,
 				new GoldBreakdown(scoreGold, levelUpGold, periodGold), categoryExp, bonuses, unlocked, exploreTotal, balance);
 	}

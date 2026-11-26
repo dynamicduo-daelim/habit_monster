@@ -134,6 +134,28 @@ class HabitRepository {
 			.params(userId, from, to).query(DayScoreRow.class).list();
 	}
 
+	/**
+	 * 첫 확정에서 반영된(상위 N개) 습관의 첫 확정 점수 — 날짜별. 첫 제출 성실도 = 이 점수들의 달성률 평균
+	 * ({@code HabitService.overallRate}와 같은 계산). 다시 체크해도 바뀌지 않는 값이다 (DB 트리거가 막음).
+	 */
+	List<DayScoreRow> countedRewardedScores(long userId, LocalDate from, LocalDate to) {
+		return db.sql("""
+			select c.checkin_date, h.rewarded_score as score from habit.daily_checkin c
+			  join habit.habit_checkin h on h.daily_checkin_id = c.id
+			 where c.user_id = ? and c.checkin_date between ? and ? and h.is_counted""")
+			.params(userId, from, to).query(DayScoreRow.class).list();
+	}
+
+	/** 기간 안 첫 제출에서 "했어"(채운 날)인 습관의 서로 다른 카테고리 수. */
+	int filledCategoryCount(long userId, LocalDate from, LocalDate to) {
+		return db.sql("""
+			select count(distinct hb.category_code) from habit.daily_checkin c
+			  join habit.habit_checkin h on h.daily_checkin_id = c.id
+			  join habit.habit hb on hb.id = h.habit_id
+			 where c.user_id = ? and c.checkin_date between ? and ? and h.is_filled""")
+			.params(userId, from, to).query(Integer.class).single();
+	}
+
 	/** 오늘 출석 1행. 이미 있으면 false (하루에 여러 번 불러도 1행). */
 	boolean insertAttendance(long userId, LocalDate day) {
 		return db.sql("insert into habit.attendance (user_id, attended_on) values (?, ?) on conflict do nothing")
