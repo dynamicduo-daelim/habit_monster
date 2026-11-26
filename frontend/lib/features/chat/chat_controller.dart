@@ -177,7 +177,13 @@ class ChatController extends ChangeNotifier {
           askingHabitId: asking?.id,
         )));
     if (r == null || (!r.fromAi && r.answers.isEmpty)) {
-      if (r != null) messages.add(ChatMessage.bot(r.reply));
+      // AI 실패(대본형): 서버의 "다시 말해 줄래?"는 보이지 않고 앱이 직접 읽는다 — 둘 다 보이면 질문이 겹쳤다 (11-26).
+      // 위기 신호(서버 키워드)는 예외: 그 말을 보이고 그 자리에 머문다.
+      if (r != null && r.safety) {
+        messages.add(ChatMessage.bot(r.reply));
+        _notify();
+        return;
+      }
       await _readLocally(text, asking);
       return;
     }
@@ -204,20 +210,19 @@ class ChatController extends ChangeNotifier {
   }
 
   /// AI 없이 (시연 모드 · AI 실패): 채팅만으로 답하게 말을 직접 읽는다 (11-12 버튼 없앰).
-  /// "못/안 했어" → 0, 숫자 → 그 값 (했다/안 했다 습관은 1), "했어 · 응 · 다 했어" → 했다/안 했다 습관은 1,
-  /// 양을 재는 습관이면 얼마나 했는지 되묻는다. 그 밖에는 말하는 법을 알려 준다.
+  /// "못/안 했어" → 0, 양("30분" · "한 시간" · "한시간반", [spokenAmount]) → 그 값 (했다/안 했다 습관은 1),
+  /// "했어 · 응 · 웅 · 핶어" → 했다/안 했다 습관은 1, 양을 재는 습관이면 얼마나 했는지 되묻는다. 그 밖에는 말하는 법을 알려 준다.
   Future<void> _readLocally(String text, Habit? h) async {
     if (h == null) return;
     final m = state.measureOf(h);
-    final n = RegExp(r'\d+(\.\d+)?').firstMatch(text);
-    if (RegExp(r'못|안 ?했|아니|안 ?함').hasMatch(text)) {
+    if (RegExp(r'못|안 ?했|아니|안 ?함|안 ?갔').hasMatch(text)) {
       return _record(0);
     }
-    if (n != null) {
-      final v = double.parse(n.group(0)!);
+    final v = spokenAmount(text, m.unit);
+    if (v != null) {
       return _record(m.isOX ? (v > 0 ? 1 : 0) : v);
     }
-    if (RegExp(r'했|응|ㅇㅇ|네|예|그럼|완료|당연').hasMatch(text)) {
+    if (RegExp(r'했|햇|핶|갔|응|웅|ㅇ|네|넹|예|그럼|완료|당연').hasMatch(text)) {
       if (m.isOX) {
         return _record(1);
       }
@@ -419,4 +424,72 @@ class ChatController extends ChangeNotifier {
     _disposed = true;
     super.dispose();
   }
+}
+
+// ---------- 말 속의 양 읽기 (AI 없이, 11-26) ----------
+
+const _native = {
+  '하나': 1, '한': 1, '둘': 2, '두': 2, '셋': 3, '세': 3, '석': 3, '넷': 4, '네': 4, '넉': 4, //
+  '다섯': 5, '여섯': 6, '일곱': 7, '여덟': 8, '아홉': 9,
+};
+const _nativeTens = {'열': 10, '스물': 20, '스무': 20, '서른': 30, '마흔': 40, '쉰': 50, '예순': 60};
+const _sino = {'일': 1, '이': 2, '삼': 3, '사': 4, '오': 5, '육': 6, '칠': 7, '팔': 8, '구': 9};
+
+/// 숫자 하나: 아라비아 숫자 · 고유어("한" · "스물다섯") · 한자어("삼십" · "이십오").
+const _numWord = r'(\d+(?:\.\d+)?|(?:열|스물|스무|서른|마흔|쉰|예순)(?:하나|다섯|여섯|일곱|여덟|아홉|한|두|세|네)?'
+    r'|하나|다섯|여섯|일곱|여덟|아홉|한|두|세|석|네|넉|[일이삼사오육칠팔구십백]+)';
+const _unitWord = r'(시간|분|번|회|개|잔|리터|L|l|점|쪽|페이지|권|장|세트|바퀴|킬로|km|보|걸음|초)';
+final _amountRe = RegExp(_numWord + r'\s*' + _unitWord + r'(\s*반)?');
+
+double? _koNumber(String w) {
+  final d = double.tryParse(w);
+  if (d != null) return d;
+  for (final t in _nativeTens.entries) {
+    if (w.startsWith(t.key)) {
+      final rest = w.substring(t.key.length);
+      if (rest.isEmpty) return t.value.toDouble();
+      final one = _native[rest];
+      return one == null ? null : (t.value + one).toDouble();
+    }
+  }
+  final n = _native[w];
+  if (n != null) return n.toDouble();
+  // 한자어: 삼십오 = 3 × 10 + 5, 백 = 100
+  var total = 0, cur = 0;
+  for (final c in w.split('')) {
+    if (_sino.containsKey(c)) {
+      cur = _sino[c]!;
+    } else if (c == '십' || c == '백') {
+      total += (cur == 0 ? 1 : cur) * (c == '십' ? 10 : 100);
+      cur = 0;
+    } else {
+      return null;
+    }
+  }
+  total += cur;
+  return total == 0 ? null : total.toDouble();
+}
+
+/// 말 속의 양 ([unit]은 습관 단위). "30분" → 30, "한 시간" → 60(분 습관), "한시간반" · "1시간 30분" → 90,
+/// "반시간" → 30, "두 잔" → 2, 단위 없이 "60" → 60. 양이 없으면 null.
+/// "이번에" · "저번에"는 양이 아니다 ("이 번"으로 읽히지 않게).
+@visibleForTesting
+double? spokenAmount(String text, String unit) {
+  final t = text.replaceAll(RegExp(r'이번|저번|요번|지난번'), ' ');
+  final minutes = unit == '분';
+  double? sum;
+  for (final m in _amountRe.allMatches(t)) {
+    final n = _koNumber(m.group(1)!);
+    if (n == null) continue;
+    final half = m.group(3) != null ? 0.5 : 0.0;
+    final isHour = m.group(2) == '시간';
+    final v = isHour && minutes ? (n + half) * 60 : n + half;
+    // 분 습관은 "1시간 30분"처럼 시간 · 분을 더한다. 다른 단위는 첫 양만
+    if (!minutes) return v;
+    sum = (sum ?? 0) + v;
+  }
+  if (sum != null) return sum;
+  if (RegExp(r'반\s*시간').hasMatch(t)) return minutes ? 30 : 0.5;
+  final n = RegExp(r'\d+(\.\d+)?').firstMatch(t);
+  return n == null ? null : double.parse(n.group(0)!);
 }

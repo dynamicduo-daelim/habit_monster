@@ -142,6 +142,53 @@ void main() {
       expect(s.todayRecords, {'h1': 30.0, 'h2': 0.0, 'h3': 2.0});
     });
 
+    test('AI가 실패(대본형)하면 서버 문구는 숨기고 앱이 직접 읽는다 — 같은 질문이 겹치지 않게 (11-26)', () async {
+      final s = GameState.sample(gold: 1240, balls: 1);
+      final repo = _FakeAiRepo(
+        s,
+        (_) => const InterpretResult(reply: "잠깐 못 들었어. '아침 러닝' 다시 말해 줄래?", answers: {}, fromAi: false),
+      );
+      final c = ChatController(state: s, repository: repo);
+      await c.start();
+      final before = c.messages.length;
+      await c.sendText('웅 핶어'); // 오타 · "웅"도 "했다"로
+      expect(c.messages.map((m) => m.text), isNot(contains(contains('다시 말해 줄래'))));
+      expect(c.messages.map((m) => m.text), isNot(contains(contains('잘 못 알아들었어'))));
+      expect(c.step, ChatStep.amount); // 아침 러닝은 분 습관 → 얼마나?
+      expect(c.messages.length, before + 2); // 내 말 + 얼마나?
+
+      await c.sendText('한 시간'); // 한글 숫자
+      expect(c.currentHabit!.id, 'h2');
+    });
+
+    test('대본형이어도 위기 신호(서버 키워드)면 그 말을 보이고 머문다', () async {
+      final s = GameState.sample(gold: 1240, balls: 1);
+      final repo = _FakeAiRepo(
+          s, (_) => const InterpretResult(reply: '많이 힘들었구나.', answers: {}, safety: true, fromAi: false));
+      final c = ChatController(state: s, repository: repo);
+      await c.start();
+      await c.sendText('살기싫다');
+      expect(c.messages.last.text, '많이 힘들었구나.');
+      expect(c.currentHabit!.id, 'h1');
+    });
+
+    test('말 속의 양 읽기: 한글 숫자 · 시간 → 분 · 반', () {
+      expect(spokenAmount('30분 했어', '분'), 30);
+      expect(spokenAmount('한 시간', '분'), 60);
+      expect(spokenAmount('한 시간 했어', '분'), 60);
+      expect(spokenAmount('한시간반 했지', '분'), 90);
+      expect(spokenAmount('1시간 30분', '분'), 90);
+      expect(spokenAmount('반시간 했어', '분'), 30);
+      expect(spokenAmount('삼십 분', '분'), 30);
+      expect(spokenAmount('스물다섯 분', '분'), 25);
+      expect(spokenAmount('2시간', '분'), 120);
+      expect(spokenAmount('두 잔', '잔'), 2);
+      expect(spokenAmount('60', '분'), 60);
+      expect(spokenAmount('웅 핶어', '분'), isNull);
+      expect(spokenAmount('이번에도 했어', '회'), isNull);
+      expect(spokenAmount('오늘 했어', '분'), isNull);
+    });
+
     test('공부 타이머로 잰 분은 공부 습관을 물을 때 미리 채운다', () async {
       final s = GameState.sample(gold: 1240, balls: 1);
       final c = ChatController(state: s, repository: LocalGameRepository(s), timerMinutes: (id) => id == 'h2' ? 45 : 0);
