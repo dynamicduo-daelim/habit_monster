@@ -17,7 +17,6 @@ class GameState extends ChangeNotifier {
     required this.balls,
     required this.monsters,
     required this.habits,
-    required this.goals,
     required this.pickedCategories,
     required this.categoryPoints,
     this.encountersLeft = 0,
@@ -35,7 +34,6 @@ class GameState extends ChangeNotifier {
   int dayCount;
   final List<OwnedMonster> monsters;
   final List<Habit> habits;
-  final List<Goal> goals;
   final List<String> pickedCategories;
   final Map<String, int> categoryPoints;
   final Map<String, int> inventory = {'s': 3, 'm': 1, 'l': 0, 'cookie': 2};
@@ -53,6 +51,9 @@ class GameState extends ChangeNotifier {
 
   /// 오늘 체크인을 확정했는지. 확정 뒤에도 기록은 고칠 수 있지만([resubmitCheckin]) 보상은 첫 확정 그대로 (DB v1.5).
   bool checkedInToday = false;
+
+  /// 방금 새 습관 화면에서 등록한 습관 (습관 탭의 NEW 표시용, 화면에만 쓰고 저장하지 않는다 — 기획 2026-11-26).
+  String? lastAddedHabitId;
 
   /// 오늘 출석했는지 = 오늘 앱(홈)에 들어왔는지. 습관 체크인과는 별개다 (2026-10-10, 결정 D-15).
   bool attendedToday = false;
@@ -90,7 +91,6 @@ class GameState extends ChangeNotifier {
       balls: 0,
       monsters: [],
       habits: [],
-      goals: [],
       pickedCategories: [],
       categoryPoints: {},
       dayCount: 0,
@@ -122,11 +122,6 @@ class GameState extends ChangeNotifier {
         Habit(id: 'h1', name: '아침 러닝', categoryId: 'ex', measureIndex: 0, target: 30, periodIndex: 1),
         Habit(id: 'h2', name: '전공 공부', categoryId: 'st', measureIndex: 0, target: 60, periodIndex: 2),
         Habit(id: 'h3', name: '물 2L 마시기', categoryId: 'fd', measureIndex: 0, target: 2, periodIndex: 0),
-      ],
-      goals: [
-        Goal(id: 'w1', tier: GoalTier.weekly, title: '주 3회 러닝', detail: '월·수·금 아침, 30분 이상', done: true),
-        Goal(id: 'w2', tier: GoalTier.weekly, title: '전공 2챕터 끝내기', detail: '자료구조 5–6장, 연습문제까지'),
-        Goal(id: 'mo1', tier: GoalTier.monthly, title: '책 2권 완독', detail: '10월 안에 소설 1권 + 에세이 1권'),
       ],
     );
     s.chatPartnerUid = 'm2';
@@ -525,61 +520,11 @@ class GameState extends ChangeNotifier {
     return true;
   }
 
-  // ---------- 목표 ----------
-  /// 유료로 연 주간 목표 슬롯 (기록용, 골드 보상 없음). 결제가 없어 화면에서는 열 수 없다 (D-48 — 누르면 "결제가 필요해요" 창).
-  bool extraWeeklySlot = false;
-  int _goalSeq = 0;
-
-  List<Goal> goalsOf(GoalTier tier) => goals.where((g) => g.tier == tier).toList();
-
-  int capOf(GoalTier tier) => tier == GoalTier.weekly
-      ? Economy.weeklyGoalSlots + (extraWeeklySlot ? 1 : 0)
-      : Economy.monthlyGoalSlots;
-
-  /// 목표 달성 → 보상 골드. 완료한 목표는 되돌릴 수 없다 (DB Q-5). 이미 완료면 false.
-  bool toggleGoal(Goal g) {
-    if (g.done) return false;
-    g.done = true;
-    gold += g.reward;
-    notifyListeners();
-    return true;
-  }
-
-  /// 새 목표. 무료 칸을 다 쓴 뒤의 주간 목표는 유료 슬롯(보상 없음)으로 들어간다.
-  Goal addGoal(GoalTier tier, String title, String detail) {
-    final paid = tier == GoalTier.weekly && goalsOf(tier).length >= Economy.weeklyGoalSlots;
-    final g = Goal(id: 'g${_goalSeq++}', tier: tier, title: title, detail: detail, paidSlot: paid);
-    goals.add(g);
-    notifyListeners();
-    return g;
-  }
-
-  void updateGoal(Goal g, String title, String detail) {
-    g
-      ..title = title
-      ..detail = detail;
-    notifyListeners();
-  }
-
-  /// 진행 중인 목표를 지운다. 완료한 목표는 지울 수 없다 (DB Q-5). 못 지우면 false.
-  bool deleteGoal(Goal g) {
-    if (g.done) return false;
-    goals.remove(g);
-    notifyListeners();
-    return true;
-  }
-
-  void unlockExtraWeeklySlot() {
-    extraWeeklySlot = true;
-    notifyListeners();
-  }
-
-  /// 온보딩 1~3단계 결과를 반영한다 (시안의 `enterApp`).
+  /// 온보딩 1~2단계 결과를 반영한다 (시안의 `enterApp`).
   /// 길을 안 골랐거나 습관이 없으면 기존(샘플) 값을 그대로 둔다.
   void completeOnboarding({
     required List<String> picked,
     required List<Habit> habits,
-    required List<Goal> goals,
     String? starterCategory,
   }) {
     if (picked.isNotEmpty) {
@@ -594,9 +539,6 @@ class GameState extends ChangeNotifier {
         ..clear()
         ..addAll(habits);
     }
-    this.goals
-      ..clear()
-      ..addAll(goals);
 
     // 고르지 않은 길의 몬스터는 데리고 시작하지 않는다.
     monsters.removeWhere((m) => !pickedCategories.contains(Catalog.speciesById(m.speciesId).categoryId));
@@ -683,13 +625,6 @@ class GameState extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// `GET /goals` (기간이 남은 목표).
-  void applyGoals(List<Goal> list) {
-    goals
-      ..clear()
-      ..addAll(list);
-  }
-
   /// `GET /dex` · `GET /dex/categories/{code}`: 본 종(가진 종 포함) · 가진 종 · 안 쓴 해금권. 앱을 다시 켜도 본 종이 남는다 (4-3).
   void applyDex({required Set<String> seen, required Set<String> owned, required int tickets}) {
     discoveredSpecies.addAll(seen);
@@ -706,33 +641,6 @@ class GameState extends ChangeNotifier {
       caughtSpecies.add(starter.speciesId);
     }
     serverTickets = tickets;
-    notifyListeners();
-  }
-
-  /// `POST /goals` 응답.
-  void applyGoalAdded(Goal g) {
-    goals.add(g);
-    notifyListeners();
-  }
-
-  /// `PATCH /goals/{id}` 응답.
-  void applyGoalUpdated(Goal g, {required String title, required String detail}) {
-    g
-      ..title = title
-      ..detail = detail;
-    notifyListeners();
-  }
-
-  /// `DELETE /goals/{id}`.
-  void applyGoalDeleted(Goal g) {
-    goals.remove(g);
-    notifyListeners();
-  }
-
-  /// `POST /goals/{id}/complete` 응답: 완료 표시 + 받은 뒤 잔액(서버 값).
-  void applyGoalCompleted(Goal g, {required int gold}) {
-    g.done = true;
-    this.gold = gold;
     notifyListeners();
   }
 

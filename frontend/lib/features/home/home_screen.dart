@@ -523,9 +523,14 @@ class _HomeScreenState extends State<HomeScreen> {
                     icon: PixelIcons.fieldQuest,
                     labelColor: AppColors.text,
                     bob: iconUp ? 0 : -_iconBob,
-                    onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute<void>(builder: (_) => const HabitManageScreen()),
-                    ),
+                    onTap: () async {
+                      // 자리가 남았으면 바로 새 습관 화면 (기획 2026-11-26-습관-빠른-추가). 등록하면 습관 탭에서 확인
+                      final shell = MainShell.of(context);
+                      final msg = await HabitManageScreen.open(context);
+                      if (msg == null) return;
+                      shell.goTab(MainShell.habitsTab);
+                      shell.toast(msg);
+                    },
                   ),
                 ],
               ),
@@ -566,7 +571,6 @@ class _HomeScreenState extends State<HomeScreen> {
               child: HabitSheet(
                 key: widget.sheetKey,
                 maxHeight: box.maxHeight,
-                onGoChat: () => MainShell.of(context).goTab(MainShell.chatTab),
               ),
             ),
             if (_overlay == HomeOverlayKind.shop)

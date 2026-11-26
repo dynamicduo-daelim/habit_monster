@@ -192,34 +192,6 @@ class Habit {
   int periodIndex; // 0: 7일 ×1.2, 1: 30일 ×1.5, 2: 100일 ×2.0 (DB period_code D7/D30/D100)
 }
 
-enum GoalTier { weekly, monthly }
-
-class Goal {
-  Goal({
-    required this.id,
-    required this.tier,
-    required this.title,
-    this.detail = '',
-    this.done = false,
-    this.paidSlot = false,
-    this.due,
-  });
-  final String id;
-  final GoalTier tier;
-  String title;
-  String detail;
-  bool done;
-  bool paidSlot; // 유료 슬롯은 기록용 (골드 없음)
-
-  /// 기간 마지막 날 — 이날까지 완료할 수 있다 (서버 모드만. 기간은 등록한 날부터 주간 7일 · 월간 30일, D-48).
-  final DateTime? due;
-
-  int get reward {
-    if (paidSlot) return 0;
-    return tier == GoalTier.weekly ? Economy.weeklyGoalGold : Economy.monthlyGoalGold;
-  }
-}
-
 /// 카테고리 레벨 곡선: 레벨 N → N+1 에 10×N 성실도. 최대 [Economy.categoryMaxLevel].
 class CategoryLevel {
   const CategoryLevel(this.level, this.current, this.needed);

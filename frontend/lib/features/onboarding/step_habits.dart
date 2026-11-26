@@ -15,8 +15,11 @@ import '../../core/theme/app_theme.dart';
 
 /// 온보딩 2단계: 습관 퀘스트 만들기. 무엇을 → 얼마나 → 언제까지 순서로 한 단계씩.
 class StepHabits extends StatelessWidget {
-  const StepHabits({super.key, required this.c});
+  const StepHabits({super.key, required this.c, required this.onEnter});
   final OnboardingController c;
+
+  /// 마지막 단계: 습관을 1개 이상 등록하면 홈으로 (목표 단계를 없앤 뒤, 기획 2026-11-25).
+  final VoidCallback onEnter;
 
   static const _profLines = [
     '어떤 습관을 키워보겠나? 추천을 고르거나 직접 적어보게!',
@@ -30,7 +33,7 @@ class StepHabits extends StatelessWidget {
     return OnboardingFrame(
       bottom: PixelButton(
         label: has ? '모험 시작 ▶' : '퀘스트를 1개 이상 등록해 주세요',
-        onPressed: has ? c.finishHabits : null,
+        onPressed: has ? onEnter : null,
         disabledColor: AppColors.nightLine2,
         disabledShadowColor: AppColors.ink,
         disabledTextColor: AppColors.night,

@@ -10,10 +10,9 @@ import '../shell/game_action.dart';
 import '../shell/main_shell.dart';
 import 'onboarding_controller.dart';
 import 'step_categories.dart';
-import 'step_goals.dart';
 import 'step_habits.dart';
 
-/// 온보딩 1~3단계 화면. 단계 전환 · 0.5초 박자 · 토스트를 맡는다.
+/// 온보딩 1~2단계 화면. 단계 전환 · 0.5초 박자 · 토스트를 맡는다.
 class OnboardingFlow extends StatefulWidget {
   const OnboardingFlow({super.key});
 
@@ -33,7 +32,7 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
     super.initState();
     _c.addListener(_onChange);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) BgmScope.read(context).play(BgmTrack.intro); // 인트로 곡을 1~3단계까지 이어서
+      if (mounted) BgmScope.read(context).play(BgmTrack.intro); // 인트로 곡을 1~2단계까지 이어서
     });
     _ticker = Timer.periodic(const Duration(milliseconds: 500), (_) {
       if (mounted) setState(() => _tick++);
@@ -74,8 +73,7 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
   Widget build(BuildContext context) {
     final body = switch (_c.step) {
       OnboardingStep.categories => StepCategories(c: _c, tick: _tick),
-      OnboardingStep.habits => StepHabits(c: _c),
-      OnboardingStep.goals => StepGoals(c: _c, onEnter: _enterHome),
+      OnboardingStep.habits => StepHabits(c: _c, onEnter: _enterHome),
     };
     return Scaffold(
       backgroundColor: AppColors.introSky,

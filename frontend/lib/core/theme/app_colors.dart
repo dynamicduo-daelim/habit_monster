@@ -139,7 +139,19 @@ class AppColors {
   static const Color goalTagBorder = Color(0xFFCDBF9F);
 
   // 챗봇 · 탐색
-  static const Color chatMeBubble = Color(0xFF2A2140);
+  // 채팅방은 메신저처럼 하늘색 바탕 · 흰 말풍선(몬스터) · 노란 말풍선(나) (11-26 사용자 요청).
+  static const Color chatRoomBg = Color(0xFFB7CCDF);
+  static const Color chatHeaderBg = Color(0xFFA7BED3);
+  static const Color chatHeaderLine = Color(0xFF93AAC0);
+  static const Color chatBotBubble = Color(0xFFFFFFFF);
+  static const Color chatMeBubble = Color(0xFFFFE14D);
+  static const Color chatInk = Color(0xFF1E1D26); // 말풍선 · 머리글 글자
+  static const Color chatInkSoft = Color(0xFF4A586A); // 이름 · 시각 · 보조 글자
+  static const Color chatDayPill = Color(0x33000000);
+  static const Color chatDockBg = Color(0xFFFFFFFF);
+  static const Color chatDockLine = Color(0xFFDCE3EA);
+  static const Color chatInputBg = Color(0xFFF2F4F6);
+  static const Color chatHint = Color(0xFF8C96A3);
   static const Color chatSoftText = Color(0xFFC9C3E3);
   static const Color chatChip = Color(0xFF171331);
   static const Color bushDark = Color(0xFF3D8A3C);

@@ -2,10 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:habit_monster/core/state/game_state.dart';
+import 'package:habit_monster/features/home/habit_manage_screen.dart';
 import 'package:habit_monster/features/shell/main_shell.dart';
 import 'game_harness.dart';
 
-/// 홈의 "습관" 아이콘: 습관 추가 · 그만두기.
+/// 홈의 "습관" 아이콘: 새 습관 빠른 추가 · 그만두기.
 void main() {
   group('습관 추가 · 그만두기 규칙', () {
     test('열린 카테고리에 최대 5개까지 추가', () {
@@ -55,56 +56,81 @@ void main() {
     });
   });
 
-  testWidgets('홈 → 습관: 추천 습관을 추가하고, 하나를 그만둔다', (tester) async {
+  Future<GameState> pumpHome(WidgetTester tester, [GameState? state]) async {
     tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
-    final s = GameState.sample();
+    final s = state ?? GameState.sample();
     await tester.pumpWidget(withGame(s, const MaterialApp(home: MainShell())));
     await tester.pump();
+    return s;
+  }
 
-    await tester.tap(find.bySemanticsLabel('습관 관리'));
+  Future<void> tapAndSettle(WidgetTester tester, Finder f) async {
+    await tester.ensureVisible(f);
+    await tester.tap(f);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
+  }
+
+  testWidgets('홈 → 습관: 한 화면에서 추천을 고르고 바로 등록 → 습관 탭에 NEW (기획 2026-11-26)', (tester) async {
+    final s = await pumpHome(tester);
+
+    // 아이콘을 누르면 목록이 아니라 바로 새 습관 화면
+    await tapAndSettle(tester, find.bySemanticsLabel('습관 관리'));
+    expect(find.text('새 습관'), findsOneWidget);
+    expect(find.text('내 습관 3/5 ›'), findsOneWidget);
+    expect(find.text('+ 직접 적기'), findsOneWidget);
+
+    // 추천을 누르면 확인 창이 올라오고, 목표 · 기간만 보고 바로 등록 (재는 방법은 "자세히" 안, 11-26)
+    await tapAndSettle(tester, find.text('스쿼트'));
+    expect(find.text('스쿼트 등록하기'), findsOneWidget);
+    expect(find.text('운동 횟수 (회)'), findsNothing);
+    expect(find.textContaining('재는 방법: 운동 횟수'), findsOneWidget);
+    await tapAndSettle(tester, find.bySemanticsLabel('목표 늘리기'));
+    await tapAndSettle(tester, find.text('7일'));
+    await tapAndSettle(tester, find.text('스쿼트 등록하기'));
+
+    expect(s.habits.length, 4);
+    final h = s.habits.last;
+    expect((h.name, h.categoryId, h.measureIndex, h.target, h.periodIndex), ('스쿼트', 'ex', 1, 31.0, 0));
+    // 닫히고 습관 탭으로: 토스트 + NEW
+    await tester.pump(const Duration(milliseconds: 600)); // 닫히는 화면 전환이 끝나게
+    expect(find.byType(HabitManageScreen), findsNothing);
+    expect(find.text('스쿼트 등록! 오늘부터 챗봇이 물어봐요'), findsOneWidget);
+    expect(find.text('오늘의 습관'), findsOneWidget);
+    expect(find.text('NEW'), findsOneWidget);
+    expect(find.text('오늘부터'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 7));
+  });
+
+  testWidgets('직접 적기: 이름을 적으면 등록 버튼이 열린다', (tester) async {
+    final s = await pumpHome(tester);
+    await tapAndSettle(tester, find.bySemanticsLabel('습관 관리'));
+    await tapAndSettle(tester, find.text('+ 직접 적기'));
+    await tester.enterText(find.byType(TextField), '저녁 산책');
+    await tester.pump();
+    await tapAndSettle(tester, find.text('저녁 산책 등록하기'));
+    expect(s.habits.last.name, '저녁 산책');
+    expect(s.habits.last.periodIndex, 1); // 기본 30일
+    await tester.pump(const Duration(seconds: 7));
+  });
+
+  testWidgets('새 습관 화면 → 내 습관 목록에서 그만두기, ◀ 로 닫으면 챗봇은 바뀐 목록으로 묻는다', (tester) async {
+    final s = await pumpHome(tester);
+    await tapAndSettle(tester, find.bySemanticsLabel('습관 관리'));
+    await tapAndSettle(tester, find.text('내 습관 3/5 ›'));
     expect(find.text('내 습관'), findsOneWidget);
     expect(find.text('3 / 5'), findsOneWidget);
     expect(find.text('+ 빈 자리'), findsNWidgets(2));
 
-    // 새 습관: 무엇을(추천: 스쿼트) → 얼마나 → 언제까지 → 등록
-    await tester.tap(find.text('+ 새 습관 추가'));
-    await tester.pump();
-    expect(find.text('어떤 습관을 시작할까요?'), findsOneWidget);
-    expect(find.text('1 / 3'), findsOneWidget);
-    await tester.tap(find.text('스쿼트'));
-    await tester.pump();
-    expect(find.text('하루에 얼마나 할까요?'), findsOneWidget);
-    await tester.tap(find.bySemanticsLabel('목표 늘리기'));
-    await tester.pump();
-    await tester.tap(find.text('다음'));
-    await tester.pump();
-    expect(find.text('언제까지 해 볼까요?'), findsOneWidget);
-    await tester.tap(find.text('등록하기'));
-    await tester.pump();
-    expect(s.habits.length, 4);
-    expect(s.habits.last.name, '스쿼트');
-    expect(s.habits.last.target, 31); // 30회에서 한 번 늘림
-    expect(find.text('4 / 5'), findsOneWidget); // 목록으로 돌아옴
-
-    // 그만두기: 확인 창 → 그만두기
-    await tester.tap(find.bySemanticsLabel('아침 러닝 그만두기'));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 400));
+    await tapAndSettle(tester, find.bySemanticsLabel('아침 러닝 그만두기'));
     expect(find.text("'아침 러닝' 습관을 그만둘까요?"), findsOneWidget);
-    await tester.tap(find.bySemanticsLabel('그만두기 확인'));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 400));
-    expect(s.habits.map((h) => h.name), ['전공 공부', '물 2L 마시기', '스쿼트']);
-    expect(find.text('3 / 5'), findsOneWidget);
+    await tapAndSettle(tester, find.bySemanticsLabel('그만두기 확인'));
+    expect(s.habits.map((h) => h.name), ['전공 공부', '물 2L 마시기']);
+    expect(find.text('2 / 5'), findsOneWidget);
 
-    // ◀ 로 홈으로, 챗봇은 바뀐 목록으로 묻는다
-    await tester.tap(find.bySemanticsLabel('홈으로'));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 400));
+    await tapAndSettle(tester, find.bySemanticsLabel('닫기'));
     await tester.tap(find.text('챗봇'));
     await tester.pump();
     await tester.pump();
@@ -125,7 +151,8 @@ void main() {
     await tester.tap(find.bySemanticsLabel('습관 관리'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
-    expect(find.text('5 / 5'), findsOneWidget);
+    expect(find.text('5 / 5'), findsOneWidget); // 꽉 찼으면 아이콘이 목록을 연다
+    expect(find.text('새 습관'), findsNothing);
     expect(find.textContaining('습관이 꽉 찼어요'), findsOneWidget);
     expect(find.text('+ 빈 자리'), findsNothing);
     await tester.pump(const Duration(seconds: 7));

@@ -23,7 +23,6 @@ abstract class GameRepository {
   Future<void> completeOnboarding({
     required List<String> picked,
     required List<Habit> habits,
-    required List<Goal> goals,
     String? starterCategory,
   });
 
@@ -88,14 +87,6 @@ abstract class GameRepository {
   // ---------- 통계 (/stats, 4-4) ----------
   /// 통계 화면 값. 탭을 열 때마다 부른다 (서버: `GET /stats`, 시연: 앱 값 + 샘플 7일).
   Future<StatsData> loadStats();
-
-  // ---------- 목표 (/goals) ----------
-  Future<Goal> addGoal(GoalTier tier, String title, String detail);
-  Future<void> updateGoal(Goal g, String title, String detail);
-  Future<bool> deleteGoal(Goal g);
-
-  /// 목표 완료 → 보상. 이미 완료면 false.
-  Future<bool> completeGoal(Goal g);
 
   // ---------- 챗봇 대화 해석 (AI, 결정 D-57) ----------
   /// 사용자가 쓴 말을 AI로 해석한다 (서버: `POST /checkins/today/interpret`). 확정하지 않는다.

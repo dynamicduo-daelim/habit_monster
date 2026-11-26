@@ -16,7 +16,7 @@ import '../../data/pixel_icons.dart';
 import '../auth/auth_gate.dart';
 import '../chat/chat_screen.dart';
 import '../dex/dex_screen.dart';
-import '../goals/goals_screen.dart';
+import '../habits/habits_screen.dart';
 import '../home/home_screen.dart';
 import '../stats/stats_screen.dart';
 import '../tutorial/tutorial_overlay.dart';
@@ -35,7 +35,7 @@ class MainShell extends StatefulWidget {
 
   static const int homeTab = 0;
   static const int chatTab = 1;
-  static const int goalsTab = 2;
+  static const int habitsTab = 2;
   static const int dexTab = 3;
   static const int statsTab = 4;
 
@@ -54,9 +54,9 @@ class MainShellState extends State<MainShell> {
   bool _toastCoin = false;
   Timer? _toastTimer;
 
-  static const _tabs = ['홈', '챗봇', '목표', '도감', '통계'];
+  static const _tabs = ['홈', '챗봇', '습관', '도감', '통계'];
 
-  /// 탭 순서 → `PixelIcons.nav`(시안 순서: 홈 · 챗봇 · 통계 · 도감 · 목표)의 아이콘 번호.
+  /// 탭 순서 → `PixelIcons.nav`(시안 순서: 홈 · 챗봇 · 통계 · 도감 · 목표)의 아이콘 번호. 습관 탭은 목표 탭의 체크리스트 아이콘을 물려받았다.
   static const _tabIcons = [0, 1, 4, 3, 2];
 
   /// 탭 안에서 잠깐 바꾸는 곡 (홈의 상점 → 상점 곡, 챗봇의 탐색 → 탐색 곡).
@@ -121,7 +121,7 @@ class MainShellState extends State<MainShell> {
         TutorialStep(
           targets: [_sheetKey],
           title: '오늘의 성실도',
-          body: '오늘 습관을 얼마나 지켰는지 보여줘요. 위로 밀면 내 습관 리스트가 나와요.',
+          body: '오늘 습관을 얼마나 지켰는지 보여줘요. 위로 밀면 습관마다 받은 점수가 나와요.',
         ),
         TutorialStep(
           targets: [_tabKeys[MainShell.chatTab]],
@@ -141,9 +141,9 @@ class MainShellState extends State<MainShell> {
           body: '상점에서 물건을 사고, 가방에서 꺼내 써요. 출석부에서는 연속 출석을 보고, 습관에서는 새 습관을 추가하거나 그만둘 수 있어요.',
         ),
         TutorialStep(
-          targets: [_tabKeys[MainShell.goalsTab], _tabKeys[MainShell.dexTab]],
-          title: '목표와 도감',
-          body: '목표 탭에서 주간 · 월간 목표를 달성하면 골드를 받아요. 도감에는 만난 루틴몬이 기록돼요.',
+          targets: [_tabKeys[MainShell.habitsTab], _tabKeys[MainShell.dexTab]],
+          title: '습관과 도감',
+          body: '습관 탭에서 오늘 습관을 한눈에 보고, 새 습관을 추가할 수 있어요. 도감에는 만난 루틴몬이 기록돼요.',
         ),
         const TutorialStep(
           title: '이제 시작해 볼까요?',
@@ -227,7 +227,7 @@ class MainShellState extends State<MainShell> {
                           sheetKey: _sheetKey,
                         ),
                         ChatScreen(active: _tab == MainShell.chatTab, keyboardOpen: keyboardOpen),
-                        const GoalsScreen(),
+                        const HabitsScreen(),
                         DexScreen(active: _tab == MainShell.dexTab),
                         StatsScreen(active: _tab == MainShell.statsTab),
                       ],
@@ -347,10 +347,6 @@ class _TopBar extends StatelessWidget {
                 onAdd: () => showInfoPopup(context, title: '골드 얻는 법', items: const [
                   ('습관 체크하기', '챗봇에서 습관을 체크하면 성실도가 쌓이고, 성실도 1점마다 ${Economy.goldPerSincerity}골드를 받아요.'),
                   ('성실도 레벨업', '카테고리 성실도 레벨이 오를 때마다 ${Economy.categoryLevelUpGold}골드를 받아요.'),
-                  (
-                    '목표 달성',
-                    '주간 목표를 달성하면 ${Economy.weeklyGoalGold}골드, 월간 목표를 달성하면 ${Economy.monthlyGoalGold}골드를 받아요.'
-                  ),
                   ('이미 있는 몬스터', '이미 가진 몬스터가 또 나오면 볼을 던지지 않고 바로 ${Economy.duplicateMonsterGold}골드를 받아요.'),
                 ]),
               ),
@@ -363,44 +359,10 @@ class _TopBar extends StatelessWidget {
               const _SettingsButton(),
             ],
           ),
-          const SizedBox(height: 9),
-          Row(
-            children: [
-              _barChip('연속 ${s.currentStreak}일째', AppColors.purpleDeep, AppColors.goldLight),
-              // 탐색 기회는 챗봇 체크를 마친 뒤에만 보인다 (기획 2026-10-29-교감-창-개편)
-              if (s.checkedInToday) ...[
-                const SizedBox(width: 8),
-                Flexible(child: _barChip('탐색 기회 ${s.encountersLeft}번 남음', AppColors.yellowButton, AppColors.brownText)),
-                const SizedBox(width: 2),
-                const HelpButton(title: '탐색이란?', items: [
-                      (
-                        '탐색이 뭐예요?',
-                        '챗봇에서 오늘 습관을 체크하면 그날 탐색을 ${Economy.encountersPerDay}번 할 수 있어요. 탐색하면 몬스터가 나타나요. 아무도 안 나올 때도 있어요.'
-                      ),
-                      ('몬스터 잡기', '만난 몬스터에게 성실볼을 던지면 잡을 수 있어요. 희귀한 몬스터일수록 잘 도망가요. 성실볼은 상점에서 살 수 있어요.'),
-                      ('어떤 몬스터가 나와요?', '오늘 체크한 습관의 카테고리에 사는 몬스터가 나와요. 카테고리 레벨이 오르면 새로운 몬스터가 나타나요.'),
-                    ]),
-              ],
-            ],
-          ),
         ],
       ),
     );
   }
-
-  /// 상단 바의 작은 둥근 칩.
-  Widget _barChip(String text, Color bg, Color fg) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-        decoration: BoxDecoration(
-          color: bg,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: AppColors.ink, width: 2),
-        ),
-        child: Text(text,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: fg)),
-      );
 }
 
 /// 상단 바 오른쪽 위 톱니바퀴 → 설정 창 (배경음악 · 계정 · 로그아웃).

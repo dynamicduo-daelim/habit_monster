@@ -4,7 +4,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:habit_monster/core/constants/economy.dart';
 import 'package:habit_monster/core/state/game_state.dart';
 import 'package:habit_monster/core/state/local_game_repository.dart';
-import 'package:habit_monster/data/models.dart';
 import 'package:habit_monster/features/onboarding/onboarding_controller.dart';
 import 'package:habit_monster/features/onboarding/onboarding_flow.dart';
 import 'game_harness.dart';
@@ -57,8 +56,7 @@ void main() {
       c.addHabit();
       expect(c.habits.single.name, '영양제 먹기');
       expect(c.draftName.text, '');
-      c.finishHabits();
-      expect(c.step, OnboardingStep.goals);
+      expect(c.step, OnboardingStep.habits); // 마지막 단계 (목표 단계는 없앴다, 2026-11-25)
     });
 
     test('퀘스트 단계: 무엇을 → 얼마나 → 언제까지 → 등록하면 처음으로', () {
@@ -86,17 +84,6 @@ void main() {
       expect(c.habStep, 1); // 추천은 바로 '얼마나'
     });
 
-    test('목표 칸 수 제한', () {
-      for (final t in ['a', 'b', 'c', 'd']) {
-        c.goalInputs[GoalTier.weekly]!.text = t;
-        c.addGoal(GoalTier.weekly);
-      }
-      expect(c.goals[GoalTier.weekly]!.length, 3);
-      expect(c.goalInputs[GoalTier.weekly]!.text, 'd');
-      c.addGoal(GoalTier.monthly);
-      expect(toasts.last, '목표를 적어주세요');
-    });
-
     test('완료하면 첫 파트너가 필드에 들어온다', () async {
       final s = GameState.sample(gold: 1240, balls: 1);
       c.toggleCategory('sl');
@@ -107,7 +94,6 @@ void main() {
       await c.commit(LocalGameRepository(s));
       expect(s.pickedCategories, ['sl']);
       expect(s.habits.single.name, '7시간 자기');
-      expect(s.goals, isEmpty);
       final squirrel = s.monsters.firstWhere((m) => m.speciesId == 'squirrel');
       expect(squirrel.level, 1);
       expect(squirrel.affection, Economy.starterAffection);
@@ -116,21 +102,21 @@ void main() {
     });
   });
 
-  testWidgets('온보딩 1→2→3단계 화면 흐름', (tester) async {
+  testWidgets('온보딩 1→2단계 화면 흐름', (tester) async {
     tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     final state = GameState.sample(gold: 1240, balls: 1);
     await tester.pumpWidget(withGame(state, const MaterialApp(home: OnboardingFlow())));
 
-    expect(find.text('STEP 1 / 3 · 모험의 길 고르기'), findsOneWidget);
+    expect(find.text('STEP 1 / 2 · 모험의 길 고르기'), findsOneWidget);
     await tester.tap(find.text('운동'));
     await tester.pump();
     expect(find.text('1/3'), findsOneWidget);
     await tester.tap(find.text('이 길로 간다 ▶'));
     await tester.pump();
 
-    expect(find.text('STEP 2 / 3 · 습관 퀘스트 만들기'), findsOneWidget);
+    expect(find.text('STEP 2 / 2 · 습관 퀘스트 만들기'), findsOneWidget);
     // 1. 무엇을: 추천을 고르면 바로 2. 얼마나
     await tester.tap(find.text('아침 러닝'));
     await tester.pump();
@@ -145,11 +131,9 @@ void main() {
     await tester.pump();
     expect(find.text('등록한 퀘스트 · 1개'), findsOneWidget);
     expect(find.text('1. 무엇을'), findsOneWidget); // 다시 처음 단계로
-    await tester.tap(find.text('모험 시작 ▶'));
-    await tester.pump();
-
-    expect(find.text('STEP 3 / 3 · 목표 세우기'), findsOneWidget);
-    expect(find.text('목표 없이 시작 ▶'), findsOneWidget);
+    // 마지막 단계: "모험 시작"이 바로 홈으로 간다 (목표 단계 없음). 홈 진입은 셸 테스트에서 본다.
+    expect(find.text('모험 시작 ▶'), findsOneWidget);
+    expect(find.textContaining('목표 세우기'), findsNothing);
     await tester.pump(const Duration(seconds: 2)); // 토스트 타이머 정리
   });
 }

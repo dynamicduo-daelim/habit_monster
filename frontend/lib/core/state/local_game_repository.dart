@@ -21,10 +21,9 @@ class LocalGameRepository implements GameRepository {
   Future<void> completeOnboarding({
     required List<String> picked,
     required List<Habit> habits,
-    required List<Goal> goals,
     String? starterCategory,
   }) async =>
-      state.completeOnboarding(picked: picked, habits: habits, goals: goals, starterCategory: starterCategory);
+      state.completeOnboarding(picked: picked, habits: habits, starterCategory: starterCategory);
 
   @override
   Future<bool> buy(ShopItem item, {int count = 1}) async => state.buy(item, count: count);
@@ -137,16 +136,4 @@ class LocalGameRepository implements GameRepository {
 
   /// 시안의 지난 6일 점수(42 · 55 · 30 · 61 · 48 · 52 / 75)를 달성률 %로.
   static const _sampleRates = [56, 73, 40, 81, 64, 69];
-
-  @override
-  Future<Goal> addGoal(GoalTier tier, String title, String detail) async => state.addGoal(tier, title, detail);
-
-  @override
-  Future<void> updateGoal(Goal g, String title, String detail) async => state.updateGoal(g, title, detail);
-
-  @override
-  Future<bool> deleteGoal(Goal g) async => state.deleteGoal(g);
-
-  @override
-  Future<bool> completeGoal(Goal g) async => state.toggleGoal(g);
 }

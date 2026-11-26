@@ -16,7 +16,7 @@ import 'game_state.dart';
 /// 서버 id ↔ 앱 모델 (결정 D2 · D-38):
 /// - 몬스터 `uid` = 서버 `userMonsterId` 문자열, 종 = `imageKey`(= 종 코드 = 앱 종 id)
 /// - 습관 `id` = 서버 `habitId` 문자열, 측정 항목 = `GET /measure-types`의 (카테고리, 순서) ↔ `measureTypeId`
-/// - 목표 `id` = 서버 `goalId` 문자열, 아이템 = [Catalog.itemByServerCode]
+/// - 아이템 = [Catalog.itemByServerCode]
 class HttpGameRepository implements GameRepository {
   HttpGameRepository(this.state, this.api);
 
@@ -50,7 +50,7 @@ class HttpGameRepository implements GameRepository {
 
   // ---------- 조회 (3-2) ----------
 
-  /// 홈을 그릴 데이터를 모두 불러온다: 상단 바 · 오늘 요약 · 연 카테고리 · 몬스터 · 가방 · 습관 · 목표 · 오늘 체크인 대상(선택지).
+  /// 홈을 그릴 데이터를 모두 불러온다: 상단 바 · 오늘 요약 · 연 카테고리 · 몬스터 · 가방 · 습관 · 오늘 체크인 대상(선택지).
   /// 몬스터 목록엔 호감도 · 경험치가 없어서 마리마다 상세(`GET /monsters/{id}`)를 같이 부른다 (명세 그대로).
   @override
   Future<void> load() async {
@@ -61,7 +61,6 @@ class HttpGameRepository implements GameRepository {
       api.get('/monsters'),
       api.get('/inventory'),
       api.get('/habits'),
-      api.get('/goals'),
       _measureTable(),
       api.get('/checkins/today'),
       api.get('/dex'),
@@ -72,7 +71,7 @@ class HttpGameRepository implements GameRepository {
     final list = (r[3] as List).cast<Map<String, dynamic>>().where((m) => _knownSpecies(m['imageKey'])).toList();
     final details =
         (await Future.wait(list.map((m) => api.get('/monsters/${m['userMonsterId']}')))).cast<Map<String, dynamic>>();
-    final measures = r[7] as Map<int, (String, int)>;
+    final measures = r[6] as Map<int, (String, int)>;
 
     final items = ((r[4] as Map<String, dynamic>)['items'] as List).cast<Map<String, dynamic>>();
     final potions = <String, int>{};
@@ -103,17 +102,16 @@ class HttpGameRepository implements GameRepository {
         for (final h in (r[5] as List).cast<Map<String, dynamic>>())
           if (measures.containsKey(h['measureTypeId'])) _habit(h, measures),
       ])
-      ..applyGoals(_goals(r[6] as Map<String, dynamic>))
       ..applyDex(
         seen: {
-          for (final m in _dexMonsters(r.skip(10)))
+          for (final m in _dexMonsters(r.skip(9)))
             if (m['status'] != 'UNKNOWN') m['imageKey'] as String
         },
         owned: {
-          for (final m in _dexMonsters(r.skip(10)))
+          for (final m in _dexMonsters(r.skip(9)))
             if (m['status'] == 'OWNED') m['imageKey'] as String
         },
-        tickets: ((r[9] as Map<String, dynamic>)['slot'] as Map<String, dynamic>)['availableTickets'] as int,
+        tickets: ((r[8] as Map<String, dynamic>)['slot'] as Map<String, dynamic>)['availableTickets'] as int,
       );
     if (today['checkedIn'] == true) {
       final hs = (today['habits'] as List).cast<Map<String, dynamic>>();
@@ -126,7 +124,7 @@ class HttpGameRepository implements GameRepository {
         },
       );
     }
-    _applyBoard(r[8] as Map<String, dynamic>);
+    _applyBoard(r[7] as Map<String, dynamic>);
     _businessDate = status['businessDate'] as String;
     state.markLoaded();
   }
@@ -184,22 +182,6 @@ class HttpGameRepository implements GameRepository {
     );
   }
 
-  static List<Goal> _goals(Map<String, dynamic> json) => [
-        for (final (key, tier) in [('weekly', GoalTier.weekly), ('monthly', GoalTier.monthly)])
-          for (final g in ((json[key] as Map<String, dynamic>)['goals'] as List).cast<Map<String, dynamic>>())
-            _goal(g, tier),
-      ];
-
-  /// 목표 한 줄. 기간 마지막 날(`periodEnd`)은 카드의 "10/29까지" (명세 v5 보충 10-28).
-  static Goal _goal(Map<String, dynamic> g, GoalTier tier) => Goal(
-        id: '${g['goalId']}',
-        tier: tier,
-        title: g['title'] as String? ?? '',
-        detail: g['detail'] as String? ?? '',
-        done: g['status'] == 'COMPLETED',
-        due: switch (g['periodEnd']) { final String d => DateTime.parse(d), _ => null },
-      );
-
   // ---------- 출석 · 온보딩 (3-1) ----------
 
   /// 오늘 출석. 앱이 다른 업무 날짜로 돌아왔으면(자정을 넘겨 다시 열었으면) 오늘 데이터를 다시 불러온다.
@@ -211,13 +193,12 @@ class HttpGameRepository implements GameRepository {
     return res['alreadyAttended'] != true;
   }
 
-  /// 온보딩 일괄 제출 (`POST /onboarding`, 중복 방지 키). 서버가 스타터 · 대화 상대 · 습관 · 목표를 만들고,
+  /// 온보딩 일괄 제출 (`POST /onboarding`, 중복 방지 키). 서버가 스타터 · 대화 상대 · 습관을 만들고,
   /// 끝나면 [load]로 서버 상태를 그대로 받아 온다. 1단계에서 고른 첫 파트너는 `partnerCategory`로 보낸다 (결정 D-36).
   @override
   Future<void> completeOnboarding({
     required List<String> picked,
     required List<Habit> habits,
-    required List<Goal> goals,
     String? starterCategory,
   }) async {
     final table = await _measureTable();
@@ -234,14 +215,7 @@ class HttpGameRepository implements GameRepository {
             'periodCode': _periodCodes[h.periodIndex],
           },
       ],
-      'goals': [
-        for (final g in goals)
-          {
-            'goalType': g.tier == GoalTier.weekly ? 'WEEKLY' : 'MONTHLY',
-            'title': g.title,
-            if (g.detail.isNotEmpty) 'detail': g.detail,
-          },
-      ],
+      'goals': [], // 목표 기능은 앱에서 없앴다 (2026-11-25). 서버 명세가 필드를 받으므로 빈 목록으로 보낸다.
     });
     await load();
   }
@@ -481,6 +455,10 @@ class HttpGameRepository implements GameRepository {
   @override
   Future<bool> buy(ShopItem item, {int count = 1}) async {
     if (count < 1) return false;
+    if (!Catalog.hasServerCode(item)) {
+      // 쿠키: 서버 아이템 코드 · 시드가 나오면 연결 (가격은 앱 임시값 Economy.cookiePrice, 11-26)
+      throw const ApiException('NOT_READY', '쿠키는 아직 서버에서 살 수 없어요');
+    }
     final res = await api.send('POST', '/shop/purchases',
         idempotent: true, body: {'itemCode': Catalog.serverCodeOf(item), 'quantity': count}) as Map<String, dynamic>;
     state.applyPurchase(gold: res['gold'] as int, item: item, quantity: res['quantity'] as int);
@@ -582,49 +560,6 @@ class HttpGameRepository implements GameRepository {
                 CategoryLevel(c['level'] as int, c['expInLevel'] as int, c['expRequired'] as int? ?? 0),
       },
     );
-  }
-
-  // ---------- 목표 (4-2) ----------
-  // 기간은 등록한 날부터 주간 7일 · 월간 30일, 칸 · 등록 당일 완료 불가 · 기간 끝은 서버가 판단한다 (D-48).
-  // 실패는 서버 문구를 그대로 올린다 — 예: 409 GOAL_TOO_EARLY "목표는 다음 날부터 완료할 수 있어요".
-
-  /// 목표 등록 (`POST /goals`, 중복 방지 키). 상세가 비었으면 서버가 "없음"으로 저장한다.
-  @override
-  Future<Goal> addGoal(GoalTier tier, String title, String detail) async {
-    final res = await api.send('POST', '/goals',
-            idempotent: true,
-            body: {'goalType': tier == GoalTier.weekly ? 'WEEKLY' : 'MONTHLY', 'title': title, 'detail': detail})
-        as Map<String, dynamic>;
-    final g = _goal(res, tier);
-    state.applyGoalAdded(g);
-    return g;
-  }
-
-  /// 목표 수정 (`PATCH /goals/{id}`). 상세를 비우면 `null`(지우기)로 보낸다.
-  @override
-  Future<void> updateGoal(Goal g, String title, String detail) async {
-    final res =
-        await api.send('PATCH', '/goals/${g.id}', body: {'title': title, 'detail': detail.isEmpty ? null : detail})
-            as Map<String, dynamic>;
-    state.applyGoalUpdated(g, title: res['title'] as String? ?? title, detail: res['detail'] as String? ?? '');
-  }
-
-  /// 목표 삭제 (`DELETE /goals/{id}`). 완료한 목표는 서버를 부르지 않고 false.
-  @override
-  Future<bool> deleteGoal(Goal g) async {
-    if (g.done) return false;
-    await api.send('DELETE', '/goals/${g.id}');
-    state.applyGoalDeleted(g);
-    return true;
-  }
-
-  /// 목표 완료 (`POST /goals/{id}/complete`, 중복 방지 키). 이미 완료면 서버를 부르지 않고 false.
-  @override
-  Future<bool> completeGoal(Goal g) async {
-    if (g.done) return false;
-    final res = await api.send('POST', '/goals/${g.id}/complete', idempotent: true) as Map<String, dynamic>;
-    state.applyGoalCompleted(g, gold: res['gold'] as int);
-    return true;
   }
 
   // ---------- 아직 앱 안에서 계산 (서버에 저장되지 않음) ----------

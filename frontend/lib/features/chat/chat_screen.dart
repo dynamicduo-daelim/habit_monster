@@ -22,7 +22,8 @@ import 'chat_controller.dart';
 import 'explore_view.dart';
 import 'study_timer_view.dart';
 
-/// 챗봇 탭: [챗봇 | 공부 타이머] 칸 전환. 챗봇 = 대화 상대 고르기 + 습관 체크 대화(버튼 또는 말 — AI 해석, D-57) + 탐색.
+/// 챗봇 탭: 메신저형 채팅방(대화 상대 고르기 + 습관 체크 대화 — 말로 답하기 AI 해석, D-57 + 탐색).
+/// 공부 타이머는 채팅방 머리글의 타이머 아이콘으로 들어간다 (11-26 — [챗봇 | 공부 타이머] 칸을 없앰).
 class ChatScreen extends StatefulWidget {
   const ChatScreen({super.key, this.active = true, this.keyboardOpen, this.controllerBuilder});
 
@@ -30,7 +31,7 @@ class ChatScreen extends StatefulWidget {
   final bool active;
 
   /// 자판이 올라와 있는지 (셸이 알려 준다. 없으면 이 화면의 MediaQuery로 본다).
-  /// 올라와 있으면 [챗봇 | 공부 타이머] 줄을 숨기고 대화 상대 줄을 얇게 해 대화가 보이게 한다 (11-12).
+  /// 올라와 있으면 대화 상대 줄을 얇게 해 대화가 보이게 한다 (11-12).
   final bool? keyboardOpen;
 
   /// 테스트나 AI 챗봇 연결 때 다른 [ChatController]를 넣을 수 있다.
@@ -52,7 +53,7 @@ class _ChatScreenState extends State<ChatScreen> {
   /// 말로 답하기 입력칸 (AI 해석).
   final _text = TextEditingController();
 
-  /// 0 = 챗봇, 1 = 공부 타이머.
+  /// 0 = 채팅방, 1 = 공부 타이머 (머리글 아이콘으로 들어감).
   int _pane = 0;
 
   /// 앱 전체 타이머 (없으면 이 화면만의 타이머 — 위젯 테스트).
@@ -165,35 +166,40 @@ class _ChatScreenState extends State<ChatScreen> {
     await _c!.sendText(t);
   }
 
-  /// 위쪽 [챗봇 | 공부 타이머] 전환.
-  Widget _paneTabs() {
-    Widget tab(int i, String label) => Expanded(
-          child: Semantics(
+  /// 공부 타이머 화면 위 막대: ◀ 채팅방으로 · 제목.
+  Widget _timerHeader() {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(10, 8, 12, 8),
+      decoration: const BoxDecoration(
+        color: AppColors.nightPanel,
+        border: Border(bottom: BorderSide(color: AppColors.nightLine, width: 3)),
+      ),
+      child: Row(
+        children: [
+          Semantics(
             button: true,
-            selected: _pane == i,
+            label: '채팅방으로',
+            excludeSemantics: true,
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
-              onTap: () => setState(() => _pane = i),
+              onTap: () => setState(() => _pane = 0),
               child: Container(
-                height: 40,
+                width: 44,
+                height: 44,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: _pane == i ? AppColors.purpleDeep : Colors.transparent,
+                  color: AppColors.nightRaised,
                   borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: AppColors.nightLine2, width: 2),
                 ),
-                child: Text(label,
-                    style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: _pane == i ? FontWeight.w700 : FontWeight.w400,
-                        color: _pane == i ? AppColors.goldLight : AppColors.textMuted)),
+                child: const Text('◀', style: TextStyle(fontSize: 14, color: AppColors.text)),
               ),
             ),
           ),
-        );
-    return Container(
-      padding: const EdgeInsets.fromLTRB(10, 8, 10, 6),
-      color: AppColors.nightPanel,
-      child: Row(children: [tab(0, '챗봇'), const SizedBox(width: 6), tab(1, '공부 타이머')]),
+          const SizedBox(width: 12),
+          const Text('공부 타이머', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.text)),
+        ],
+      ),
     );
   }
 
@@ -230,7 +236,7 @@ class _ChatScreenState extends State<ChatScreen> {
       children: [
         Column(
           children: [
-            if (c.step != ChatStep.explore && !(keyboard && _pane == 0)) _paneTabs(),
+            if (_pane == 1 && c.step != ChatStep.explore) _timerHeader(),
             if (_pane == 1 && c.step != ChatStep.explore)
               Expanded(
                 child: StudyTimerView(
@@ -255,7 +261,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     ? ExploreView(controller: c, bobUp: _bobUp, onNeedBall: _openBallShop)
                     : Column(
                         children: [
-                          Expanded(child: _messages(c)),
+                          Expanded(child: ColoredBox(color: AppColors.chatRoomBg, child: _messages(c))),
                           _dock(s, c),
                         ],
                       ),
@@ -297,56 +303,105 @@ class _ChatScreenState extends State<ChatScreen> {
     MainShell.of(context).toast('성실볼 $n개를 샀어요 · 던질 수 있어요!');
   }
 
-  /// 채팅방 머리글: 대화 상대 프로필 · 이름. 누르면 옆으로 밀어 고르는 창이 열린다 (메신저형, 11-12).
+  /// 채팅방 머리글: 대화 상대 프로필 · 이름(누르면 옆으로 밀어 고르는 창, 11-12) + 오른쪽 공부 타이머 아이콘(11-26).
   /// [compact]: 자판이 올라온 동안 얇게.
   Widget _roomHeader(GameState s, ChatController c, {bool compact = false}) {
     final p = c.partner;
     final sp = p == null ? null : Catalog.speciesById(p.speciesId);
     final box = compact ? 30.0 : 40.0;
-    return Semantics(
-      button: true,
-      label: '대화 상대 바꾸기',
-      excludeSemantics: true,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: s.monsters.isEmpty ? null : () => setState(() => _picking = true),
-        child: Container(
-          padding: EdgeInsets.symmetric(horizontal: 12, vertical: compact ? 5 : 8),
-          decoration: const BoxDecoration(
-            color: AppColors.nightPanel,
-            border: Border(bottom: BorderSide(color: AppColors.nightLine, width: 3)),
-          ),
-          child: Row(
-            children: [
-              _Avatar(asset: sp == null ? AppAssets.seongsilBall : sp.assetAt(p!.level), size: box),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
+    return Container(
+      padding: EdgeInsets.fromLTRB(12, compact ? 5 : 8, 10, compact ? 5 : 8),
+      decoration: const BoxDecoration(
+        color: AppColors.chatHeaderBg,
+        border: Border(bottom: BorderSide(color: AppColors.chatHeaderLine, width: 1.5)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Semantics(
+              button: true,
+              label: '대화 상대 바꾸기',
+              excludeSemantics: true,
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: s.monsters.isEmpty ? null : () => setState(() => _picking = true),
+                child: Row(
                   children: [
-                    Row(
-                      children: [
-                        Flexible(
-                          child: Text(sp?.name ?? '대화 상대 없음',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.text)),
-                        ),
-                        const SizedBox(width: 2),
-                        const Icon(Icons.keyboard_arrow_down, size: 18, color: AppColors.textMuted),
-                      ],
+                    _Avatar(asset: sp == null ? AppAssets.seongsilBall : sp.assetAt(p!.level), size: box),
+                    const SizedBox(width: 10),
+                    Flexible(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Row(
+                            children: [
+                              Flexible(
+                                child: Text(sp?.name ?? '대화 상대 없음',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.chatInk)),
+                              ),
+                              const SizedBox(width: 2),
+                              const Icon(Icons.keyboard_arrow_down, size: 18, color: AppColors.chatInkSoft),
+                            ],
+                          ),
+                          if (!compact && p != null)
+                            Text('Lv.${p.level} · 호감도 ${p.affection}/${Economy.maxAffection}',
+                                style: const TextStyle(fontSize: 10.5, color: AppColors.chatInkSoft)),
+                        ],
+                      ),
                     ),
-                    if (!compact && p != null)
-                      Text('Lv.${p.level} · 호감도 ${p.affection}/${Economy.maxAffection}',
-                          style: const TextStyle(fontSize: 10.5, color: AppColors.textMuted)),
                   ],
                 ),
               ),
-              if (!compact && s.monsters.length > 1)
-                const Text('눌러서 바꾸기', style: TextStyle(fontSize: 10, color: AppColors.lavender)),
-            ],
+            ),
           ),
+          if (c.step != ChatStep.explore) _timerButton(compact),
+        ],
+      ),
+    );
+  }
+
+  /// 머리글 오른쪽 공부 타이머 아이콘. 재는 중이면 빨간 점.
+  Widget _timerButton(bool compact) {
+    final size = compact ? 36.0 : 44.0;
+    return Semantics(
+      button: true,
+      label: _timer.running ? '공부 타이머 (재는 중)' : '공부 타이머',
+      excludeSemantics: true,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => setState(() => _pane = 1),
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Container(
+              width: size,
+              height: size,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: AppColors.chatBotBubble,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.chatHeaderLine, width: 1.5),
+              ),
+              child: Icon(Icons.timer_outlined, size: compact ? 20 : 24, color: AppColors.chatInk),
+            ),
+            if (_timer.running)
+              Positioned(
+                right: -2,
+                top: -2,
+                child: Container(
+                  width: 12,
+                  height: 12,
+                  decoration: BoxDecoration(
+                    color: AppColors.orange,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: AppColors.chatBotBubble, width: 2),
+                  ),
+                ),
+              ),
+          ],
         ),
       ),
     );
@@ -455,8 +510,8 @@ class _ChatScreenState extends State<ChatScreen> {
     return Container(
       padding: const EdgeInsets.fromLTRB(10, 9, 10, 10),
       decoration: const BoxDecoration(
-        color: AppColors.nightDeep,
-        border: Border(top: BorderSide(color: AppColors.nightLine, width: 3)),
+        color: AppColors.chatDockBg,
+        border: Border(top: BorderSide(color: AppColors.chatDockLine, width: 1.5)),
       ),
       child: AbsorbPointer(absorbing: c.busy, child: content),
     );
@@ -479,16 +534,16 @@ class _ChatScreenState extends State<ChatScreen> {
               child: TextField(
                 controller: _text,
                 maxLength: 300,
-                cursorColor: AppColors.gold,
+                cursorColor: AppColors.chatInk,
                 textInputAction: TextInputAction.send,
-                style: const TextStyle(fontSize: 14, color: AppColors.text),
+                style: const TextStyle(fontSize: 14, color: AppColors.chatInk),
                 decoration: InputDecoration(
                   isDense: true,
                   border: InputBorder.none,
                   counterText: '',
                   contentPadding: EdgeInsets.zero,
                   hintText: hint,
-                  hintStyle: const TextStyle(color: AppColors.textMuted, fontSize: 12.5),
+                  hintStyle: const TextStyle(color: AppColors.chatHint, fontSize: 12.5),
                 ),
                 onSubmitted: (_) => _sendText(),
               ),
@@ -520,19 +575,18 @@ class _Bubble extends StatelessWidget {
     final bubble = Container(
       padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
       decoration: BoxDecoration(
-        color: bot ? AppColors.nightRaised : AppColors.chatMeBubble,
+        color: bot ? AppColors.chatBotBubble : AppColors.chatMeBubble,
         borderRadius: BorderRadius.only(
           topLeft: Radius.circular(bot && showProfile ? 4 : 14),
           topRight: Radius.circular(bot ? 14 : 4),
           bottomLeft: const Radius.circular(14),
           bottomRight: const Radius.circular(14),
         ),
-        border: Border.all(color: bot ? AppColors.purple : AppColors.gold, width: 2),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(message.text, style: const TextStyle(fontSize: 13, height: 1.6, color: AppColors.text)),
+          Text(message.text, style: const TextStyle(fontSize: 14, height: 1.55, color: AppColors.chatInk)),
           if (message.reward != null) ...[
             const SizedBox(height: 7),
             Container(
@@ -547,7 +601,7 @@ class _Bubble extends StatelessWidget {
               foregroundPainter: const DashedBorderPainter(color: AppColors.purple, dash: 5, gap: 3),
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-                child: Text(message.levelUp!, style: const TextStyle(fontSize: 11, color: AppColors.purpleSoft)),
+                child: Text(message.levelUp!, style: const TextStyle(fontSize: 11, color: AppColors.purple)),
               ),
             ),
           ],
@@ -555,7 +609,7 @@ class _Bubble extends StatelessWidget {
       ),
     );
     final timeText =
-        time == null ? null : Text(_clock(time!), style: const TextStyle(fontSize: 9.5, color: AppColors.textMuted));
+        time == null ? null : Text(_clock(time!), style: const TextStyle(fontSize: 9.5, color: AppColors.chatInkSoft));
     return LayoutBuilder(builder: (context, box) {
       final maxW = box.maxWidth * 0.68;
       final line = Row(
@@ -580,7 +634,7 @@ class _Bubble extends StatelessWidget {
                 if (showProfile && name.isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.only(left: 2, bottom: 4),
-                    child: Text(name, style: const TextStyle(fontSize: 11, color: AppColors.chatSoftText)),
+                    child: Text(name, style: const TextStyle(fontSize: 11.5, color: AppColors.chatInkSoft)),
                   ),
                 line,
               ],
@@ -611,9 +665,8 @@ class _Avatar extends StatelessWidget {
       height: size,
       padding: EdgeInsets.all(size * 0.1),
       decoration: BoxDecoration(
-        color: AppColors.purpleDeep,
-        borderRadius: BorderRadius.circular(size * 0.34),
-        border: Border.all(color: AppColors.purple, width: 2),
+        color: AppColors.chatBotBubble,
+        borderRadius: BorderRadius.circular(size * 0.38),
       ),
       child: PixelImage(asset),
     );
@@ -633,12 +686,11 @@ class _DayDivider extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
         decoration: BoxDecoration(
-          color: AppColors.nightRaised,
+          color: AppColors.chatDayPill,
           borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: AppColors.nightLine2, width: 1.5),
         ),
         child: Text('${date.year}년 ${date.month}월 ${date.day}일 ${_weekdays[date.weekday - 1]}',
-            style: const TextStyle(fontSize: 10.5, color: AppColors.textMuted)),
+            style: const TextStyle(fontSize: 10.5, color: AppColors.chatBotBubble)),
       ),
     );
   }
@@ -654,9 +706,8 @@ class _PillField extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
       decoration: BoxDecoration(
-        color: AppColors.night,
+        color: AppColors.chatInputBg,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: AppColors.nightLine2, width: 2),
       ),
       child: child,
     );
@@ -680,12 +731,11 @@ class _SendButton extends StatelessWidget {
           alignment: Alignment.center,
           padding: const EdgeInsets.symmetric(horizontal: 14),
           decoration: BoxDecoration(
-            color: AppColors.gold,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: AppColors.goldLight, width: 2),
+            color: AppColors.chatMeBubble,
+            borderRadius: BorderRadius.circular(999),
           ),
           child:
-              Text(label, style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: AppColors.night)),
+              Text(label, style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: AppColors.chatInk)),
         ),
       ),
     );

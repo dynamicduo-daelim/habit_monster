@@ -16,10 +16,19 @@ import '../shell/game_action.dart';
 import 'home_parts.dart';
 import '../../core/theme/app_theme.dart';
 
-/// 홈의 "습관" 아이콘 → 내 습관 목록(그만두기) ↔ 새 습관 추가(무엇을 → 얼마나 → 언제까지).
-/// 입력 상태와 검사는 온보딩과 같은 [OnboardingController]를 쓰고, 화면은 홈과 같은 어두운 테마로 따로 그린다.
+/// 습관 관리: 새 습관 빠른 추가(한 화면) ↔ 내 습관 목록(그만두기).
+/// 홈의 "습관" 아이콘 · 습관 탭에서 [startAdding]으로 열면 바로 새 습관 화면 (자리가 꽉 찼으면 목록).
+/// 바로 열었으면 등록 뒤 화면을 닫고 안내 문구를 돌려준다 (부르는 쪽이 토스트) — 기획 2026-11-26-습관-빠른-추가.
+/// 입력 값(분야 · 이름 · 재는 방법 · 목표 · 기간)은 온보딩과 같은 [OnboardingController]의 draft를 쓴다.
 class HabitManageScreen extends StatefulWidget {
-  const HabitManageScreen({super.key});
+  const HabitManageScreen({super.key, this.startAdding = false});
+
+  /// 열자마자 새 습관 화면으로 (자리가 남았을 때).
+  final bool startAdding;
+
+  /// 새 습관 화면을 열고, 등록하면 안내 문구를 받는다 (닫기만 하면 null).
+  static Future<String?> open(BuildContext context) =>
+      Navigator.of(context).push<String>(MaterialPageRoute(builder: (_) => const HabitManageScreen(startAdding: true)));
 
   @override
   State<HabitManageScreen> createState() => _HabitManageScreenState();
@@ -30,41 +39,28 @@ class _HabitManageScreenState extends State<HabitManageScreen> {
   Timer? _toastTimer;
   String? _toastText;
   bool _ready = false;
+  bool _busy = false;
 
-  /// 추가 폼을 보는 중인지 (아니면 목록).
+  /// 새 습관 화면을 보는 중인지 (아니면 목록).
   bool _adding = false;
+
+  /// 고른 추천 번호 (없으면 null) · 직접 적는 중인지.
+  int? _preset;
+  bool _custom = false;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     if (_ready) return;
     _ready = true;
+    final s = GameScope.read(context);
     // 지금 열려 있는 카테고리에서만 고를 수 있다.
-    _c.picked.addAll(GameScope.read(context).pickedCategories);
-    _c.addListener(_onForm);
+    _c.picked.addAll(s.pickedCategories);
+    _c.addListener(_onChange);
+    if (widget.startAdding && s.canAddHabit) _startAdd();
   }
 
-  /// 폼이 등록한 습관을 게임 상태로 옮기고 목록으로 돌아간다.
-  Future<void> _onForm() async {
-    if (_c.habits.isNotEmpty) {
-      final drafts = [..._c.habits];
-      _c.habits.clear();
-      _adding = false;
-      for (final h in drafts) {
-        await runGameAction(
-          context,
-          (r) => r.addHabit(
-            name: h.name,
-            categoryId: h.categoryId,
-            measureIndex: h.measureIndex,
-            target: h.target,
-            periodIndex: h.periodIndex,
-          ),
-          onError: _toast,
-        );
-        if (!mounted) return;
-      }
-    }
+  void _onChange() {
     if (mounted) setState(() {});
   }
 
@@ -76,23 +72,98 @@ class _HabitManageScreenState extends State<HabitManageScreen> {
     });
   }
 
-  void _startAdd() {
-    _c.habStep = 0;
+  void _resetDraft() {
+    _preset = null;
+    _custom = false;
     _c.draftName.clear();
-    if (_c.picked.isNotEmpty) _c.pickDraftCategory(_c.picked.first);
-    setState(() => _adding = true);
+    _c.draftPeriod = 1; // 30일
   }
 
-  /// ◀: 추가 중이면 앞 단계(첫 단계면 목록)로, 목록이면 홈으로.
-  void _back() {
-    if (!_adding) {
-      Navigator.of(context).pop();
-    } else if (_c.habStep > 0) {
-      _c.habPrev();
-    } else {
-      setState(() => _adding = false);
+  void _startAdd() {
+    _resetDraft();
+    if (_c.picked.isNotEmpty) _c.pickDraftCategory(_c.draftCategory ?? _c.picked.first);
+    _adding = true;
+  }
+
+  void _pickCategory(String id) {
+    _resetDraft();
+    _c.pickDraftCategory(id);
+  }
+
+  void _pickPreset(int i, (String, int, double) p) {
+    _preset = i;
+    _custom = false;
+    _c.pickPreset(p);
+    _openSheet();
+  }
+
+  void _pickCustom() {
+    _preset = null;
+    _custom = true;
+    _c.draftName.clear();
+    _c.pickMeasure(0);
+    _openSheet();
+  }
+
+  /// 고른 습관의 확인 창 (아래에서 올라옴). 등록하기를 누르면 창을 닫고 등록한다.
+  Future<void> _openSheet() async {
+    final submit = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      barrierColor: AppColors.black.withValues(alpha: 0.5),
+      builder: (ctx) => _DraftSheet(c: _c, custom: _custom, onSubmit: () => Navigator.of(ctx).pop(true)),
+    );
+    if (submit == true && mounted) {
+      await _submit();
+    } else if (mounted) {
+      setState(() {
+        _preset = null;
+        _custom = false;
+      });
     }
   }
+
+  /// 확인 창의 "○○ 등록하기". 바로 열었으면 닫으면서 문구를 돌려주고, 목록에서 왔으면 목록으로.
+  Future<void> _submit() async {
+    if (_busy || !_c.canAddHabit) return;
+    final s = GameScope.read(context);
+    final name = _c.draftName.text.trim();
+    setState(() => _busy = true);
+    final h = await runGameAction(
+      context,
+      (r) => r.addHabit(
+        name: name,
+        categoryId: _c.draftCategory!,
+        measureIndex: _c.draftMeasure,
+        target: _c.draftNeedsTarget ? _c.draftTarget : 1,
+        periodIndex: _c.draftPeriod,
+      ),
+      onError: _toast,
+    );
+    if (!mounted) return;
+    setState(() => _busy = false);
+    if (h == null) return;
+    s.lastAddedHabitId = h.id;
+    final msg = '$name 등록! ${s.checkedInToday ? '내일' : '오늘'}부터 챗봇이 물어봐요';
+    if (widget.startAdding) {
+      Navigator.of(context).pop(msg);
+    } else {
+      setState(() => _adding = false);
+      _toast(msg);
+    }
+  }
+
+  /// ◀: 바로 열었거나 목록이면 닫기, 목록에서 온 새 습관 화면이면 목록으로.
+  void _back() {
+    if (_adding && !widget.startAdding) {
+      setState(() => _adding = false);
+    } else {
+      Navigator.of(context).pop();
+    }
+  }
+
+  void _openList() => setState(() => _adding = false);
 
   Future<void> _confirmRemove(GameState s, Habit h) async {
     if (!s.canRemoveHabit) {
@@ -114,7 +185,7 @@ class _HabitManageScreenState extends State<HabitManageScreen> {
   @override
   void dispose() {
     _toastTimer?.cancel();
-    _c.removeListener(_onForm);
+    _c.removeListener(_onChange);
     _c.dispose();
     super.dispose();
   }
@@ -122,6 +193,8 @@ class _HabitManageScreenState extends State<HabitManageScreen> {
   @override
   Widget build(BuildContext context) {
     final s = GameScope.of(context);
+    final count = '${s.habits.length}/${Economy.maxActiveHabits}';
+    final listCount = '${s.habits.length} / ${Economy.maxActiveHabits}';
     return Scaffold(
       backgroundColor: AppColors.night,
       body: SafeArea(
@@ -131,12 +204,24 @@ class _HabitManageScreenState extends State<HabitManageScreen> {
               children: [
                 _TopBar(
                   title: _adding ? '새 습관' : '내 습관',
-                  badge: _adding ? '${_c.habStep + 1} / 3' : '${s.habits.length} / ${Economy.maxActiveHabits}',
-                  backLabel: _adding ? '이전으로' : '홈으로',
+                  badge: _adding ? '내 습관 $count ›' : listCount,
+                  onBadgeTap: _adding ? _openList : null,
+                  backLabel: _adding && !widget.startAdding ? '내 습관으로' : '닫기',
                   onBack: _back,
                 ),
-                Expanded(child: _adding ? _AddForm(c: _c) : _list(s)),
-                _bottom(s),
+                Expanded(
+                  child: _adding
+                      ? _AddForm(
+                          c: _c,
+                          preset: _preset,
+                          custom: _custom,
+                          onCategory: _pickCategory,
+                          onPreset: _pickPreset,
+                          onCustom: _pickCustom,
+                        )
+                      : _list(s),
+                ),
+                if (!_adding) _bottom(s),
               ],
             ),
             if (_toastText != null)
@@ -170,7 +255,7 @@ class _HabitManageScreenState extends State<HabitManageScreen> {
           const SizedBox(height: 10),
         ],
         for (var i = 0; i < empty; i++) ...[
-          _EmptySlot(onTap: _startAdd),
+          _EmptySlot(onTap: () => setState(_startAdd)),
           const SizedBox(height: 10),
         ],
       ],
@@ -179,26 +264,13 @@ class _HabitManageScreenState extends State<HabitManageScreen> {
 
   // ---------- 아래 버튼 ----------
   Widget _bottom(GameState s) {
-    final Widget child;
-    if (!_adding) {
-      child = PixelButton(
-        label: s.canAddHabit ? '+ 새 습관 추가' : '습관이 꽉 찼어요 (${s.habits.length}/${Economy.maxActiveHabits})',
-        onPressed: s.canAddHabit ? _startAdd : null,
-        disabledColor: AppColors.nightLine2,
-        disabledShadowColor: AppColors.ink,
-        disabledTextColor: AppColors.textMuted,
-      );
-    } else {
-      final step = _c.habStep;
-      final ok = step == 0 ? _c.hasDraftName : (step == 2 ? _c.canAddHabit : true);
-      child = PixelButton(
-        label: step == 2 ? '등록하기' : '다음',
-        onPressed: ok ? _c.habNext : null,
-        disabledColor: AppColors.nightLine2,
-        disabledShadowColor: AppColors.ink,
-        disabledTextColor: AppColors.textMuted,
-      );
-    }
+    final child = PixelButton(
+      label: s.canAddHabit ? '+ 새 습관 추가' : '습관이 꽉 찼어요 (${s.habits.length}/${Economy.maxActiveHabits})',
+      onPressed: s.canAddHabit ? () => setState(_startAdd) : null,
+      disabledColor: AppColors.nightLine2,
+      disabledShadowColor: AppColors.ink,
+      disabledTextColor: AppColors.textMuted,
+    );
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
       decoration: const BoxDecoration(
@@ -212,11 +284,14 @@ class _HabitManageScreenState extends State<HabitManageScreen> {
 
 /// 위 막대: ◀ · 제목 · 개수(또는 단계).
 class _TopBar extends StatelessWidget {
-  const _TopBar({required this.title, required this.badge, required this.backLabel, required this.onBack});
+  const _TopBar({required this.title, required this.badge, required this.backLabel, required this.onBack, this.onBadgeTap});
   final String title;
   final String badge;
   final String backLabel;
   final VoidCallback onBack;
+
+  /// 오른쪽 칩을 누르면 (새 습관 화면의 "내 습관 n/5 ›" → 목록).
+  final VoidCallback? onBadgeTap;
 
   @override
   Widget build(BuildContext context) {
@@ -252,13 +327,22 @@ class _TopBar extends StatelessWidget {
           Expanded(
             child: Text(title, style: const TextStyle(fontFamily: AppTheme.pixelFont, fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.text)),
           ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: AppColors.nightRaised,
-              border: Border.all(color: AppColors.gold, width: 2),
+          Semantics(
+            button: onBadgeTap != null,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: onBadgeTap,
+              child: Container(
+                constraints: BoxConstraints(minHeight: onBadgeTap != null ? 44 : 0),
+                alignment: Alignment.center,
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: AppColors.nightRaised,
+                  border: Border.all(color: AppColors.gold, width: 2),
+                ),
+                child: Text(badge, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.gold)),
+              ),
             ),
-            child: Text(badge, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.gold)),
           ),
         ],
       ),
@@ -373,262 +457,338 @@ class _EmptySlot extends StatelessWidget {
 // ---------- 추가 폼 ----------
 
 /// 새 습관: 한 화면에 한 가지씩 묻는다 (무엇을 → 얼마나 → 언제까지).
+/// 새 습관 화면: 분야 칩 + 추천 목록 + 직접 적기만. 누르면 [_DraftSheet] 확인 창에서 목표 · 기간을 보고 바로 등록
+/// (기획 2026-11-26-습관-빠른-추가, 같은 날 "화면이 복잡함" 피드백으로 카드를 확인 창으로 옮김).
 class _AddForm extends StatelessWidget {
-  const _AddForm({required this.c});
+  const _AddForm({
+    required this.c,
+    required this.preset,
+    required this.custom,
+    required this.onCategory,
+    required this.onPreset,
+    required this.onCustom,
+  });
   final OnboardingController c;
-
-  static const _questions = ['어떤 습관을 시작할까요?', '하루에 얼마나 할까요?', '언제까지 해 볼까요?'];
-  static const _hints = [
-    '추천에서 고르거나 직접 적어 주세요.',
-    '무엇으로 잴지, 하루 목표를 정해요.',
-    '기간을 정하면 그 동안 매일 챗봇이 물어봐요.',
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    final step = c.habStep;
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
-      children: [
-        _Progress(step: step),
-        const SizedBox(height: 20),
-        Text(_questions[step],
-            style: const TextStyle(fontFamily: AppTheme.pixelFont, fontSize: 19, height: 1.3, fontWeight: FontWeight.w700, color: AppColors.text)),
-        const SizedBox(height: 6),
-        Text(_hints[step], style: const TextStyle(fontSize: 12, height: 1.6, color: AppColors.textMuted)),
-        const SizedBox(height: 18),
-        if (step == 0) ..._what(),
-        if (step == 1) ..._howMuch(),
-        if (step == 2) ..._until(),
-      ],
-    );
-  }
+  final int? preset;
+  final bool custom;
+  final void Function(String id) onCategory;
+  final void Function(int i, (String, int, double) p) onPreset;
+  final VoidCallback onCustom;
 
   static Widget _label(String text) => Padding(
         padding: const EdgeInsets.only(bottom: 8),
         child: Text(text, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.purpleSoft)),
       );
 
-  /// 1. 무엇을 — 분야 · 추천 습관 · 직접 입력
-  List<Widget> _what() {
+
+  @override
+  Widget build(BuildContext context) {
     final cat = c.draftCat;
     final presets = cat == null ? const <(String, int, double)>[] : (Catalog.habitPresets[cat.id] ?? const []);
-    return [
-      _label('분야'),
-      Wrap(
-        spacing: 8,
-        runSpacing: 8,
-        children: [
-          for (final id in c.picked)
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
+      children: [
+        _label('분야'),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final id in c.picked)
+              _Choice(
+                selected: c.draftCategory == id,
+                semanticLabel: Catalog.category(id).name,
+                onTap: () => onCategory(id),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    CategoryIcon(id, size: 20, outline: 0),
+                    const SizedBox(width: 7),
+                    _ChoiceText(Catalog.category(id).short, selected: c.draftCategory == id),
+                  ],
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 18),
+        _label('추천 — 누르면 바로 등록 창이 떠요'),
+        if (cat != null)
+          for (var i = 0; i < presets.length; i++) ...[
             _Choice(
-              selected: c.draftCategory == id,
-              semanticLabel: Catalog.category(id).name,
-              onTap: () => c.pickDraftCategory(id),
+              selected: !custom && preset == i,
+              expand: true,
+              onTap: () => onPreset(i, presets[i]),
               child: Row(
-                mainAxisSize: MainAxisSize.min,
                 children: [
-                  CategoryIcon(id, size: 20, outline: 0),
-                  const SizedBox(width: 7),
-                  _ChoiceText(Catalog.category(id).short, selected: c.draftCategory == id),
+                  Expanded(child: _ChoiceText(presets[i].$1, selected: !custom && preset == i, size: 14.5)),
+                  Text(
+                    cat.measures[presets[i].$2].isOX
+                        ? '했다 / 못 했다'
+                        : '하루 ${formatNum(presets[i].$3)}${cat.measures[presets[i].$2].unit}',
+                    style: TextStyle(fontSize: 12, color: !custom && preset == i ? AppColors.brownText : AppColors.textMuted),
+                  ),
                 ],
               ),
             ),
-        ],
-      ),
-      const SizedBox(height: 20),
-      if (cat != null && presets.isNotEmpty) ...[
-        _label('추천 습관'),
-        for (final p in presets) ...[
-          _Choice(
-            selected: c.draftName.text == p.$1,
-            expand: true,
-            onTap: () => c.pickPreset(p),
-            child: Row(
-              children: [
-                Expanded(child: _ChoiceText(p.$1, selected: c.draftName.text == p.$1, size: 14.5)),
-                Text(cat.measures[p.$2].isOX ? '했다 / 못 했다' : '하루 ${formatNum(p.$3)}${cat.measures[p.$2].unit}',
+            const SizedBox(height: 8),
+          ],
+        Semantics(
+          button: true,
+          selected: custom,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: onCustom,
+            child: CustomPaint(
+              foregroundPainter: custom
+                  ? null
+                  : const DashedBorderPainter(color: AppColors.nightLine2, width: 3, dash: 6, gap: 3),
+              child: Container(
+                constraints: const BoxConstraints(minHeight: 48),
+                alignment: Alignment.center,
+                decoration: custom ? BoxDecoration(border: Border.all(color: AppColors.gold, width: 3)) : null,
+                child: Text('+ 직접 적기',
                     style: TextStyle(
-                        fontSize: 12, color: c.draftName.text == p.$1 ? AppColors.brownText : AppColors.textMuted)),
-              ],
-            ),
-          ),
-          const SizedBox(height: 8),
-        ],
-        const SizedBox(height: 12),
-      ],
-      _label('직접 입력'),
-      Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-        decoration: BoxDecoration(
-          color: AppColors.nightPanel,
-          border: Border.all(color: AppColors.nightLine2, width: 3),
-        ),
-        child: Semantics(
-          label: '습관 이름',
-          child: TextField(
-            controller: c.draftName,
-            cursorColor: AppColors.gold,
-            style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w700, color: AppColors.text),
-            decoration: const InputDecoration(
-              border: InputBorder.none,
-              hintText: '예: 저녁 산책',
-              hintStyle: TextStyle(fontSize: 14, fontWeight: FontWeight.w400, color: AppColors.textMuted),
-            ),
-            textInputAction: TextInputAction.done,
-          ),
-        ),
-      ),
-    ];
-  }
-
-  /// 2. 얼마나 — 재는 방법 · 하루 목표
-  List<Widget> _howMuch() {
-    final cat = c.draftCat!;
-    final measure = c.draftMeasureInfo!;
-    return [
-      _NameBanner(categoryId: cat.id, name: c.draftName.text.trim()),
-      const SizedBox(height: 20),
-      _label('무엇으로 잴까요?'),
-      Wrap(
-        spacing: 8,
-        runSpacing: 8,
-        children: [
-          for (var i = 0; i < cat.measures.length; i++)
-            _Choice(
-              selected: c.draftMeasure == i,
-              onTap: () => c.pickMeasure(i),
-              child: _ChoiceText(
-                cat.measures[i].isOX ? '${cat.measures[i].label} (했다 / 못 했다)' : '${cat.measures[i].label} (${cat.measures[i].unit})',
-                selected: c.draftMeasure == i,
+                        fontSize: 14, fontWeight: FontWeight.w700, color: custom ? AppColors.gold : AppColors.textMuted)),
               ),
             ),
-        ],
-      ),
-      const SizedBox(height: 22),
-      if (c.draftNeedsTarget) ...[
-        _label('하루 목표'),
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: AppColors.nightPanel,
-            border: Border.all(color: AppColors.nightLine, width: 3),
-          ),
-          child: Row(
-            children: [
-              _StepButton(label: '−', semanticLabel: '목표 줄이기', onTap: c.decTarget),
-              Expanded(
-                child: Text.rich(
-                  TextSpan(children: [
-                    TextSpan(text: formatNum(c.draftTarget)),
-                    TextSpan(
-                        text: ' ${measure.unit}',
-                        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w400, color: AppColors.textMuted)),
-                  ]),
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(fontFamily: AppTheme.pixelFont, fontSize: 30, fontWeight: FontWeight.w700, color: AppColors.gold),
-                ),
-              ),
-              _StepButton(label: '+', semanticLabel: '목표 늘리기', onTap: c.incTarget),
-            ],
           ),
         ),
-        const SizedBox(height: 8),
-        const Text('목표를 채우면 20점, 더 하면 최대 ${Economy.maxSincerityPerHabit}점까지 받아요.',
-            style: TextStyle(fontSize: 11.5, height: 1.6, color: AppColors.textMuted)),
       ],
-      if (c.draftIsOX)
-        Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: AppColors.nightPanel,
-            border: Border.all(color: AppColors.nightLine, width: 3),
-          ),
-          child: const Text('매일 챗봇이 "오늘 했어?"라고 물어봐요.\n했으면 20점, 못 했으면 0점이에요.',
-              style: TextStyle(fontSize: 13, height: 1.7, color: AppColors.text)),
-        ),
-    ];
+    );
   }
+}
 
-  /// 3. 언제까지 — 기간 · 확인
-  List<Widget> _until() {
-    final cat = c.draftCat!;
-    final m = c.draftMeasureInfo!;
-    return [
-      _label('기간'),
-      Row(
-        children: [
-          for (var i = 0; i < Catalog.periods.length; i++) ...[
-            if (i > 0) const SizedBox(width: 8),
-            Expanded(
-              child: _Choice(
-                selected: c.draftPeriod == i,
-                expand: true,
-                semanticLabel: '${Catalog.periods[i].$1} 도전',
-                onTap: () => c.pickPeriod(i),
+/// 추천 · 직접 적기를 누르면 아래에서 올라오는 작은 확인 창: 이름 → 하루 목표 → 기간 → [등록하기].
+/// 재는 방법은 기본값이 맞는 경우가 많아 "자세히" 안에 숨긴다 (11-26 피드백 "화면이 복잡함").
+class _DraftSheet extends StatefulWidget {
+  const _DraftSheet({required this.c, required this.custom, required this.onSubmit});
+  final OnboardingController c;
+  final bool custom;
+  final VoidCallback onSubmit;
+
+  @override
+  State<_DraftSheet> createState() => _DraftSheetState();
+}
+
+class _DraftSheetState extends State<_DraftSheet> {
+  bool _more = false;
+
+  static Widget _small(String text) => Text(text, style: const TextStyle(fontSize: 11.5, color: AppColors.textMuted));
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: widget.c,
+      builder: (context, _) {
+        final c = widget.c;
+        final cat = c.draftCat!;
+        final m = c.draftMeasureInfo!;
+        final name = c.draftName.text.trim();
+        return Padding(
+          padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
+            decoration: const BoxDecoration(
+              color: AppColors.nightDeep,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+              border: Border(top: BorderSide(color: AppColors.purple, width: 3)),
+            ),
+            child: SafeArea(
+              top: false,
+              child: SingleChildScrollView(
                 child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    _ChoiceText(Catalog.periods[i].$1, selected: c.draftPeriod == i, size: 17),
-                    const SizedBox(height: 3),
-                    Text('보너스 ${Catalog.periodMult(i)}',
-                        style: TextStyle(
-                            fontSize: 10.5, color: c.draftPeriod == i ? AppColors.brownText : AppColors.textMuted)),
+                    Center(child: Container(width: 46, height: 5, color: AppColors.sheetHandle)),
+                    const SizedBox(height: 14),
+                    // 이름
+                    Row(
+                      children: [
+                        CategoryIcon(cat.id, size: 28),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: widget.custom
+                              ? Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.nightPanel,
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(color: AppColors.gold, width: 2),
+                                  ),
+                                  child: Semantics(
+                                    label: '습관 이름',
+                                    child: TextField(
+                                      controller: c.draftName,
+                                      autofocus: true,
+                                      cursorColor: AppColors.gold,
+                                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.text),
+                                      decoration: const InputDecoration(
+                                        border: InputBorder.none,
+                                        isDense: true,
+                                        contentPadding: EdgeInsets.symmetric(vertical: 12),
+                                        hintText: '습관 이름 (예: 저녁 산책)',
+                                        hintStyle: TextStyle(fontSize: 14, fontWeight: FontWeight.w400, color: AppColors.textMuted),
+                                      ),
+                                      textInputAction: TextInputAction.done,
+                                    ),
+                                  ),
+                                )
+                              : Text(name,
+                                  style: const TextStyle(
+                                      fontFamily: AppTheme.pixelFont, fontSize: 19, fontWeight: FontWeight.w700, color: AppColors.text)),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 18),
+                    // 하루 목표
+                    if (c.draftNeedsTarget)
+                      Row(
+                        children: [
+                          SizedBox(width: 64, child: _small('하루 목표')),
+                          _StepButton(label: '−', semanticLabel: '목표 줄이기', onTap: c.decTarget),
+                          Expanded(
+                            child: Text.rich(
+                              TextSpan(children: [
+                                TextSpan(text: formatNum(c.draftTarget)),
+                                TextSpan(
+                                    text: ' ${m.unit}',
+                                    style: const TextStyle(
+                                        fontFamily: AppTheme.bodyFont,
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w400,
+                                        color: AppColors.textMuted)),
+                              ]),
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                  fontFamily: AppTheme.pixelFont, fontSize: 28, fontWeight: FontWeight.w700, color: AppColors.gold),
+                            ),
+                          ),
+                          _StepButton(label: '+', semanticLabel: '목표 늘리기', onTap: c.incTarget),
+                        ],
+                      )
+                    else
+                      const Text('매일 챗봇이 "오늘 했어?"라고 물어봐요.',
+                          style: TextStyle(fontSize: 13, height: 1.6, color: AppColors.text)),
+                    const SizedBox(height: 16),
+                    // 기간
+                    Row(
+                      children: [
+                        SizedBox(width: 64, child: _small('기간')),
+                        for (var i = 0; i < Catalog.periods.length; i++) ...[
+                          if (i > 0) const SizedBox(width: 6),
+                          Expanded(
+                            child: _Choice(
+                              selected: c.draftPeriod == i,
+                              expand: true,
+                              semanticLabel: '${Catalog.periods[i].$1} 도전',
+                              onTap: () => c.pickPeriod(i),
+                              child: Center(
+                                child: Text(Catalog.periods[i].$1,
+                                    style: TextStyle(
+                                        fontFamily: AppTheme.pixelFont,
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w700,
+                                        color: c.draftPeriod == i ? AppColors.night : AppColors.text)),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Padding(
+                      padding: const EdgeInsets.only(left: 64),
+                      child: Text('끝까지 지키면 보너스 ${Catalog.periodMult(c.draftPeriod)}',
+                          style: const TextStyle(fontSize: 11, color: AppColors.textMuted)),
+                    ),
+                    const SizedBox(height: 10),
+                    // 자세히: 재는 방법
+                    Semantics(
+                      button: true,
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () => setState(() => _more = !_more),
+                        child: SizedBox(
+                          height: 40,
+                          child: Row(
+                            children: [
+                              Text(_more ? '자세히 ▲' : '자세히 ▼',
+                                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.purpleSoft)),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text('재는 방법: ${m.isOX ? '${m.label} (했다/못 했다)' : '${m.label} (${m.unit})'}',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(fontSize: 11.5, color: AppColors.textMuted)),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    if (_more) ...[
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
+                        children: [
+                          for (var i = 0; i < cat.measures.length; i++)
+                            _MeasureChip(
+                              label: cat.measures[i].isOX
+                                  ? '${cat.measures[i].label} (했다/못 했다)'
+                                  : '${cat.measures[i].label} (${cat.measures[i].unit})',
+                              selected: c.draftMeasure == i,
+                              onTap: () => c.pickMeasure(i),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                    ],
+                    const SizedBox(height: 6),
+                    PixelButton(
+                      label: c.canAddHabit ? '$name 등록하기' : '습관 이름을 적어 주세요',
+                      onPressed: c.canAddHabit ? widget.onSubmit : null,
+                      disabledColor: AppColors.nightLine2,
+                      disabledShadowColor: AppColors.ink,
+                      disabledTextColor: AppColors.textMuted,
+                    ),
                   ],
                 ),
               ),
             ),
-          ],
-        ],
-      ),
-      const SizedBox(height: 22),
-      _label('이대로 등록할까요?'),
-      Container(
-        padding: const EdgeInsets.fromLTRB(14, 12, 14, 4),
-        decoration: BoxDecoration(
-          color: AppColors.nightPanel,
-          border: Border.all(color: AppColors.nightLine, width: 3),
-        ),
-        child: Column(
-          children: [
-            _SummaryRow('습관', c.draftName.text.trim()),
-            _SummaryRow('분야', cat.name),
-            _SummaryRow('하루 목표', m.isOX ? '${m.label} · 했다 / 못 했다' : '${m.label} ${formatNum(c.draftTarget)}${m.unit}'),
-            _SummaryRow('기간', '${Catalog.periods[c.draftPeriod].$1} 도전'),
-          ],
-        ),
-      ),
-    ];
+          ),
+        );
+      },
+    );
   }
 }
 
-/// 1 무엇을 · 2 얼마나 · 3 언제까지 진행 막대.
-class _Progress extends StatelessWidget {
-  const _Progress({required this.step});
-  final int step;
+/// 재는 방법 칩 (작게, 고르면 보라색).
+class _MeasureChip extends StatelessWidget {
+  const _MeasureChip({required this.label, required this.selected, required this.onTap});
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    const labels = OnboardingController.habStepLabels;
-    return Row(
-      children: [
-        for (var i = 0; i < labels.length; i++) ...[
-          if (i > 0) const SizedBox(width: 6),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(height: 8, color: i <= step ? AppColors.gold : AppColors.nightLine2),
-                const SizedBox(height: 6),
-                Text('${i + 1} ${labels[i]}',
-                    style: TextStyle(
-                      fontSize: 11.5,
-                      fontWeight: i == step ? FontWeight.w700 : FontWeight.w400,
-                      color: i == step ? AppColors.gold : AppColors.textMuted,
-                    )),
-              ],
-            ),
+    return Semantics(
+      button: true,
+      selected: selected,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 40),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+          decoration: BoxDecoration(
+            color: selected ? AppColors.purpleDeep : AppColors.nightDeep,
+            border: Border.all(color: selected ? AppColors.purpleSoft : AppColors.nightLine2, width: 2),
           ),
-        ],
-      ],
+          child: Text(label,
+              style: TextStyle(
+                  fontSize: 12, fontWeight: FontWeight.w700, color: selected ? AppColors.text : AppColors.textMuted)),
+        ),
+      ),
     );
   }
 }
@@ -689,33 +849,6 @@ class _ChoiceText extends StatelessWidget {
   }
 }
 
-/// 2단계 위에 보이는 "지금 만드는 습관".
-class _NameBanner extends StatelessWidget {
-  const _NameBanner({required this.categoryId, required this.name});
-  final String categoryId;
-  final String name;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: AppColors.introFloor,
-        border: Border.all(color: AppColors.purple, width: 3),
-      ),
-      child: Row(
-        children: [
-          CategoryIcon(categoryId, size: 26),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(name, style: const TextStyle(fontFamily: AppTheme.pixelFont, fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.text)),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 /// 하루 목표 − / + 버튼.
 class _StepButton extends StatelessWidget {
   const _StepButton({required this.label, required this.semanticLabel, required this.onTap});
@@ -734,8 +867,8 @@ class _StepButton extends StatelessWidget {
         behavior: HitTestBehavior.opaque,
         onTap: onTap,
         child: Container(
-          width: 52,
-          height: 52,
+          width: 44,
+          height: 44,
           alignment: Alignment.center,
           decoration: BoxDecoration(
             color: AppColors.nightRaised,
@@ -743,28 +876,6 @@ class _StepButton extends StatelessWidget {
           ),
           child: Text(label, style: const TextStyle(fontSize: 22, height: 1, color: AppColors.text)),
         ),
-      ),
-    );
-  }
-}
-
-class _SummaryRow extends StatelessWidget {
-  const _SummaryRow(this.label, this.value);
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 9),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(width: 76, child: Text(label, style: const TextStyle(fontSize: 12, color: AppColors.textMuted))),
-          Expanded(
-            child: Text(value, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.text)),
-          ),
-        ],
       ),
     );
   }

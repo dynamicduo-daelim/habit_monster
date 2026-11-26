@@ -115,7 +115,10 @@ void main() {
     expect(find.byKey(const ValueKey('habit-sheet-summary')), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('habit-sheet-summary')));
     await tester.pump(const Duration(milliseconds: 400));
-    expect(find.text('챗봇에게 오늘 습관 체크받기'), findsOneWidget);
+    // 펼치면 오늘의 성실도만 (습관 리스트는 가운데 습관 탭으로, 2026-11-25)
+    expect(find.text('오늘의 성실도'), findsOneWidget);
+    expect(find.text('습관 리스트'), findsNothing);
+    expect(find.text('챗봇에게 오늘 습관 체크받기'), findsNothing);
     await tester.tap(find.bySemanticsLabel('시트 접기'));
     await tester.pump(const Duration(milliseconds: 400));
 
