@@ -46,7 +46,7 @@ void main() {
     });
   });
 
-  testWidgets('새로 시작한 사람: 아래 탭은 오늘 · 챗봇만 → 체크인하면 "필드" 축하 창 → 보러 가기 → 필드 탭', (tester) async {
+  testWidgets('새로 시작한 사람: 아래 탭 5칸은 보이고 잠긴 칸은 누르면 조건 안내 → 체크인하면 "필드" 축하 창 → 보러 가기 → 필드 탭', (tester) async {
     tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
@@ -58,10 +58,17 @@ void main() {
     await u.startFresh(s.dayCount);
     await tester.pumpWidget(UnlocksScope(unlocks: u, child: withGame(s, const MaterialApp(home: MainShell()))));
     await tester.pump();
-    expect(find.text('필드'), findsNothing);
-    expect(find.text('도감'), findsNothing);
-    expect(find.text('통계'), findsNothing);
-    expect(find.text('챗봇'), findsOneWidget);
+    // 탭은 5칸 다 있고, 잠긴 3칸은 자물쇠
+    for (final t in ['오늘', '챗봇', '필드', '도감', '통계']) {
+      expect(find.text(t), findsOneWidget);
+    }
+    expect(find.byIcon(Icons.lock_rounded), findsNWidgets(3));
+    // 잠긴 칸을 누르면 여는 조건만 알려 주고 탭은 그대로
+    await tester.tap(find.text('필드'));
+    await tester.pump();
+    expect(find.text(Feature.field.lockHint), findsOneWidget);
+    expect(find.bySemanticsLabel('상점'), findsNothing);
+    await tester.pump(const Duration(seconds: 2));
 
     s.confirmCheckin({'h1': 30, 'h2': 0, 'h3': 0});
     await tester.pump();
@@ -72,7 +79,8 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
     await tester.pump();
-    expect(find.text('필드'), findsWidgets); // 아래 탭에 생김 + 비추기 안내
+    expect(find.text('필드'), findsWidgets); // 아래 탭 + 비추기 안내
+    expect(find.byIcon(Icons.lock_rounded), findsNWidgets(2)); // 필드 자물쇠가 풀림
     await tester.tap(find.text('시작하기!'));
     await tester.pump(const Duration(milliseconds: 400));
     // 체크인으로 선물도 생겨 이어서 선물함 축하 창 → 나중에
