@@ -372,33 +372,51 @@ class MainShellState extends State<MainShell> {
           top: false,
           child: Row(
             children: [
+              // 탭 5칸은 늘 보인다. 잠긴 칸은 흐리게 + 자물쇠, 누르면 여는 조건 (11-27, D-101)
               for (var i = 0; i < _tabs.length; i++)
-                if (_tabOpen(i)) Expanded(
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: () => goTab(i),
-                    child: Container(
-                      key: _tabKeys[i],
-                      height: 54,
-                      margin: const EdgeInsets.symmetric(horizontal: 2),
-                      decoration: BoxDecoration(
-                        color: _tab == i ? AppColors.purpleDeep : Colors.transparent,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          PixelIcon(
-                            layers: [PixelLayer(PixelIcons.nav[_tabIcons[i]], _tab == i ? AppColors.gold : AppColors.textMuted)],
-                            size: 20,
+                Expanded(
+                  child: Semantics(
+                    label: _tabOpen(i) ? null : '${_tabs[i]} 잠김',
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () => _tabOpen(i) ? goTab(i) : toast(_tabFeature[i]!.lockHint),
+                      child: Opacity(
+                        opacity: _tabOpen(i) ? 1 : 0.4,
+                        child: Container(
+                          key: _tabKeys[i],
+                          height: 54,
+                          margin: const EdgeInsets.symmetric(horizontal: 2),
+                          decoration: BoxDecoration(
+                            color: _tab == i ? AppColors.purpleDeep : Colors.transparent,
+                            borderRadius: BorderRadius.circular(10),
                           ),
-                          const SizedBox(height: 4),
-                          Text(_tabs[i],
-                              style: TextStyle(
-                                  fontSize: 11.5,
-                                  fontWeight: _tab == i ? FontWeight.w700 : FontWeight.w400,
-                                  color: _tab == i ? AppColors.gold : AppColors.textMuted)),
-                        ],
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Stack(
+                                clipBehavior: Clip.none,
+                                children: [
+                                  PixelIcon(
+                                    layers: [PixelLayer(PixelIcons.nav[_tabIcons[i]], _tab == i ? AppColors.gold : AppColors.textMuted)],
+                                    size: 20,
+                                  ),
+                                  if (!_tabOpen(i))
+                                    const Positioned(
+                                      right: -8,
+                                      bottom: -4,
+                                      child: Icon(Icons.lock_rounded, size: 12, color: AppColors.textMuted),
+                                    ),
+                                ],
+                              ),
+                              const SizedBox(height: 4),
+                              Text(_tabs[i],
+                                  style: TextStyle(
+                                      fontSize: 11.5,
+                                      fontWeight: _tab == i ? FontWeight.w700 : FontWeight.w400,
+                                      color: _tab == i ? AppColors.gold : AppColors.textMuted)),
+                            ],
+                          ),
+                        ),
                       ),
                     ),
                   ),
