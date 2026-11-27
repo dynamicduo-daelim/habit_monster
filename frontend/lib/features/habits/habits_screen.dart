@@ -18,7 +18,7 @@ import '../home/habit_manage_screen.dart';
 import '../home/habit_sheet.dart' show SincerityHelp;
 import '../shell/main_shell.dart';
 
-/// 첫 화면 "오늘" 탭 (11-26 개편, D-97): 위에 필드 장면 + 랜덤 루틴몬 1마리의 말풍선 → 체크 수 · 성실도 → 습관 리스트 → 체크받기.
+/// 첫 화면 "오늘" 탭 (11-26 개편, D-99): 위에 필드 장면 + 랜덤 루틴몬 1마리의 말풍선 → 체크 수 · 성실도 → 습관 리스트 → 체크받기.
 /// 루틴몬은 이 탭에 들어올 때마다 가진 아이 중 하나를 랜덤으로 고른다. 필드(여러 마리 · 상점 아이콘)는 가운데 "필드" 탭.
 class HabitsScreen extends StatefulWidget {
   const HabitsScreen({super.key, this.active = true, this.random});

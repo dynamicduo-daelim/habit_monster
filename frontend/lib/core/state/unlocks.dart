@@ -3,7 +3,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import 'game_state.dart';
 
-/// 단계별로 열리는 기능 (기획 2026-11-26-단계별-열기, D-98).
+/// 단계별로 열리는 기능 (기획 2026-11-26-단계별-열기, D-100).
 enum Feature {
   field('필드', '루틴몬들이 사는 곳이에요. 상점 · 출석부 · 습관 관리도 여기 있어요.'),
   bag('가방', '잡은 루틴몬과 산 물건이 들어 있어요. 필드로 꺼내거나 넣을 수 있어요.'),

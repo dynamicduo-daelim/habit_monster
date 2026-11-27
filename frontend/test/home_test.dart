@@ -111,7 +111,7 @@ void main() {
     await tester.pumpWidget(withGame(state, const MaterialApp(home: MainShell(initialTab: MainShell.homeTab))));
     await tester.pump();
 
-    // 필드에는 바텀시트가 없다 — 습관은 첫 화면 "오늘" 탭 (11-26, D-97)
+    // 필드에는 바텀시트가 없다 — 습관은 첫 화면 "오늘" 탭 (11-26, D-99)
     expect(find.byKey(const ValueKey('habit-sheet-summary')), findsNothing);
 
     // 상점에서 하급 물약 사기

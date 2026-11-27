@@ -38,7 +38,7 @@ class MainShell extends StatefulWidget {
   /// 처음 보이는 탭 (기본: 오늘).
   final int initialTab;
 
-  // 아래 탭: 오늘 · 챗봇 · 필드 · 도감 · 통계 — 처음 화면은 습관 중심의 "오늘", 가운데가 필드(옛 홈) (11-26 피드백 12, D-97)
+  // 아래 탭: 오늘 · 챗봇 · 필드 · 도감 · 통계 — 처음 화면은 습관 중심의 "오늘", 가운데가 필드(옛 홈) (11-26 피드백 12, D-99)
   static const int todayTab = 0;
   static const int chatTab = 1;
   static const int homeTab = 2; // 필드 (옛 홈 화면)
@@ -211,7 +211,7 @@ class MainShellState extends State<MainShell> {
     super.dispose();
   }
 
-  // ---------- 단계별 열기 (D-98) ----------
+  // ---------- 단계별 열기 (D-100) ----------
   Unlocks? get _unlocks => UnlocksScope.maybeOf(context);
 
   /// 열린 기능인지 (저장소가 없으면 전부 열림).
@@ -635,7 +635,7 @@ class _SettingsPopup extends StatelessWidget {
   }
 }
 
-/// 새 기능이 열렸을 때 축하 창: 이름 · 한 줄 설명 · [보러 가기] / [나중에] (D-98).
+/// 새 기능이 열렸을 때 축하 창: 이름 · 한 줄 설명 · [보러 가기] / [나중에] (D-100).
 class _UnlockPopup extends StatelessWidget {
   const _UnlockPopup({required this.feature});
   final Feature feature;

@@ -58,7 +58,7 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
     }, onError: _toast);
     if (ok != true || !mounted) return;
     AuthScope.maybeRead(context)?.completeOnboarding(); // 다음 로그인부터는 바로 홈
-    // 새로 시작: 오늘 · 챗봇만 열고 해 볼 때마다 하나씩 연다 (D-98)
+    // 새로 시작: 오늘 · 챗봇만 열고 해 볼 때마다 하나씩 연다 (D-100)
     await UnlocksScope.maybeOf(context)?.startFresh(GameScope.read(context).dayCount);
     if (!mounted) return;
     // 처음 들어가는 홈이니 튜토리얼부터

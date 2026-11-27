@@ -61,7 +61,7 @@ class HomeScreen extends StatefulWidget {
   final List<GlobalKey>? monsterKeys;
   final GlobalKey? iconsKey;
 
-  /// 가방 · 선물함 아이콘 — 단계별 열기 때 그 자리를 비춘다 (D-98).
+  /// 가방 · 선물함 아이콘 — 단계별 열기 때 그 자리를 비춘다 (D-100).
   final GlobalKey? bagKey;
   final GlobalKey? giftKey;
 
@@ -187,7 +187,7 @@ class _HomeScreenState extends State<HomeScreen> {
     const monH = MonsterSpecies.fieldBox + labelH;
     final minX = leftGap, maxX = max(minX, w - columnW - rightGap);
     final minY = max(fieldBarBottom, grassPx - MonsterSpecies.fieldBox + 6);
-    final maxY = max(minY, h - 12 - monH); // 바텀시트를 뺐다 — 습관은 첫 화면 "오늘" 탭에 (11-26, D-97)
+    final maxY = max(minY, h - 12 - monH); // 바텀시트를 뺐다 — 습관은 첫 화면 "오늘" 탭에 (11-26, D-99)
     var px = (x / 100 * w).clamp(minX, maxX), py = (y / 100 * h).clamp(minY, maxY);
 
     // 버튼 영역과 겹치면 왼쪽으로 비키거나 아래로 내려가기 중 덜 움직이는 쪽
@@ -411,7 +411,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     _syncShopMusic();
     final s = GameScope.of(context);
-    final unlocks = UnlocksScope.maybeOf(context); // 단계별 열기 (D-98)
+    final unlocks = UnlocksScope.maybeOf(context); // 단계별 열기 (D-100)
     final mons = s.fieldMonsters;
     final sel = s.monsterByUid(_selUid);
     _syncTopBar(_overlay == HomeOverlayKind.monster && sel != null);

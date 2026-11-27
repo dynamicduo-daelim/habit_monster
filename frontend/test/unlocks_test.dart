@@ -6,7 +6,7 @@ import 'package:habit_monster/features/shell/main_shell.dart';
 
 import 'game_harness.dart';
 
-/// 단계별 열기 (기획 2026-11-26-단계별-열기, D-98).
+/// 단계별 열기 (기획 2026-11-26-단계별-열기, D-100).
 void main() {
   group('조건', () {
     test('기록이 없는 사람(기존 · 시연)은 전부 열림', () async {

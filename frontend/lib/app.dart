@@ -32,7 +32,7 @@ class HabitMonsterApp extends StatefulWidget {
   /// 공부 타이머 보관함 (기본: 메모리 — 앱에선 `main.dart`가 기기 저장소를 넣는다).
   final StudyTimerStore? timerStore;
 
-  /// 단계별 열기 보관함 (기본: 메모리 — 앱에선 `main.dart`가 기기 저장소를 넣는다, D-98).
+  /// 단계별 열기 보관함 (기본: 메모리 — 앱에선 `main.dart`가 기기 저장소를 넣는다, D-100).
   final UnlockStore? unlockStore;
 
   /// 테스트에선 소리 없는 [SilentBgm] (기본: 실제로 재생하는 [AudioBgm]).

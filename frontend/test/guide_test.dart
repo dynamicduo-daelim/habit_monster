@@ -65,7 +65,7 @@ void main() {
     expect(find.text('모아루틴에 온 걸 환영해요!'), findsNothing);
   });
 
-  testWidgets('아래 탭 순서: 오늘 · 챗봇 · 필드 · 도감 · 통계, 앱을 열면 오늘 탭 (11-26, D-97)', (tester) async {
+  testWidgets('아래 탭 순서: 오늘 · 챗봇 · 필드 · 도감 · 통계, 앱을 열면 오늘 탭 (11-26, D-99)', (tester) async {
     tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);

@@ -4,7 +4,7 @@ import '../../core/constants/economy.dart';
 import '../../core/state/game_state.dart';
 import '../../core/widgets/help_button.dart';
 
-// 홈 바텀시트(HabitSheet)는 11-26에 뺐다 — 습관 · 성실도는 첫 화면 "오늘" 탭에 (D-97). 성실도 ? 도움말만 남는다.
+// 홈 바텀시트(HabitSheet)는 11-26에 뺐다 — 습관 · 성실도는 첫 화면 "오늘" 탭에 (D-99). 성실도 ? 도움말만 남는다.
 
 /// "오늘의 성실도" 옆 ? 버튼: 성실도가 무엇이고 어디에 쓰이는지.
 class SincerityHelp extends StatelessWidget {
