@@ -463,7 +463,7 @@ void main() {
       await tester.pump();
       await tester.pump();
       expect(find.textContaining('에게 말 걸기'), findsOneWidget);
-      expect(find.text('다시 체크'), findsOneWidget);
+      expect(find.bySemanticsLabel('다시 체크'), findsOneWidget);
       await tester.enterText(find.byType(TextField), '안녕');
       await tester.tap(find.text('보내기'));
       await tester.pump();

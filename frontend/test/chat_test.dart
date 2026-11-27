@@ -254,7 +254,7 @@ void main() {
     expect(find.text('식습관/건강 Lv.3 달성! +20G'), findsOneWidget); // 물 25점으로 21 → 46점
     expect(s.gold, 1240 + 45 + 20);
     expect(find.text('연속 12일째'), findsNothing); // 상단 바의 연속 · 탐색 줄은 뺐다 (11-26)
-    expect(find.text('다시 체크'), findsOneWidget); // 기록은 고칠 수 있다 (보상은 그대로)
+    expect(find.bySemanticsLabel('다시 체크'), findsOneWidget); // 기록은 고칠 수 있다 (보상은 그대로, 11-26 작은 글자로)
 
     await tester.tap(find.text('탐색하기 (3회 남음)'));
     await tester.pump();
@@ -296,7 +296,7 @@ void main() {
 
     // 다시 체크: 기록만 고치고 보상 · 탐색 횟수는 그대로
     final goldBefore = s.gold;
-    await tester.tap(find.text('다시 체크'));
+    await tester.tap(find.bySemanticsLabel('다시 체크'));
     await tester.pump();
     await tester.pump();
     expect(find.textContaining('처음부터 다시 물어볼게'), findsOneWidget);
@@ -325,7 +325,7 @@ void _amountFieldTests() {
     await tester.tap(find.text('챗봇'));
     await tester.pump();
     await tester.pump();
-    expect(find.text('했어!'), findsNothing); // 빠른 답장 버튼이 없다
+    expect(find.bySemanticsLabel('했어! 보내기'), findsOneWidget); // 추천 답장 칩 (11-26)
     expect(find.text('메시지 보내기 (예: 했어 / 못 했어)'), findsOneWidget);
 
     await say(tester, '음…');
@@ -343,6 +343,26 @@ void _amountFieldTests() {
     await say(tester, '60'); // 숫자만
     expect(find.textContaining("'물 2L 마시기' 오늘 했어?"), findsOneWidget);
   });
+  testWidgets('추천 답장 칩: 했어! → 얼마나? 칩 (목표만큼) → 다음 습관 (11-26)', (tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final s = GameState.sample(gold: 1240, balls: 1);
+    await tester.pumpWidget(withGame(s, const MaterialApp(home: MainShell())));
+    await tester.tap(find.text('챗봇'));
+    await tester.pump();
+    await tester.pump();
+    await tester.tap(find.bySemanticsLabel('했어! 보내기'));
+    await tester.pump();
+    await tester.pump();
+    expect(find.bySemanticsLabel('30분 했어 보내기'), findsOneWidget); // 아침 러닝 목표 30분
+    await tester.tap(find.bySemanticsLabel('30분 했어 보내기'));
+    await tester.pump();
+    await tester.pump();
+    expect(find.text("[공부/학습] '전공 공부' 오늘 했어?"), findsOneWidget);
+    await tester.pump(const Duration(seconds: 7));
+  });
+
 }
 
 /// 체크인 확정 (탐색하려면 먼저 필요): 샘플 습관 3개 모두 응답.

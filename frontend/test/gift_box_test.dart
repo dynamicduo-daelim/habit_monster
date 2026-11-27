@@ -80,7 +80,7 @@ void main() {
     }
     s.confirmCheckin({'h1': 0, 'h2': 0, 'h3': 0});
     final gold = s.gold;
-    await tester.pumpWidget(withGame(s, const MaterialApp(home: MainShell())));
+    await tester.pumpWidget(withGame(s, const MaterialApp(home: MainShell(initialTab: MainShell.homeTab))));
     await tester.pump();
     final icon = find.bySemanticsLabel('선물함, 받을 선물 있음'); // 개수 없이 점만 (명세 v10)
     expect(icon, findsOneWidget);
@@ -88,9 +88,8 @@ void main() {
     await tester.tap(icon);
     await tester.pumpAndSettle();
     expect(find.byType(GiftBoxScreen), findsOneWidget);
-    expect(find.text('오늘의 퀘스트'), findsOneWidget);
-    expect(find.text('이번 주 퀘스트'), findsOneWidget);
-    expect(find.text('완료 · 보상은 선물로'), findsWidgets);
+    expect(find.text('받을 선물'), findsOneWidget);
+    expect(find.text('오늘의 퀘스트'), findsNothing); // 선물함은 받을 보상만 (11-26)
 
     await tester.tap(find.text('3G 받기'));
     await tester.pumpAndSettle();

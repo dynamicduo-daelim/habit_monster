@@ -46,12 +46,16 @@ class AttendancePopup extends StatelessWidget {
       // 오늘 칸만 습관 결과를 안다 (지난 날은 날짜별 기록이 없어 출석 도장만).
       final result = isToday ? s.todayHabitResult : null;
       final future = d > now.day;
+      // 출석한 날만 색이 찬다 (11-26 — 들어온 날이 도드라지게). 안 온 날은 비어 있다.
       final (Color bg, Color line, Color num) = switch (result) {
         DayHabitResult.all => (AppColors.gold, AppColors.goldShadow, AppColors.brownText),
         DayHabitResult.partial => (AppColors.goldLight, AppColors.brownShadow, AppColors.brownText),
         null when future => (AppColors.cream, AppColors.slotInset, AppColors.slotInset),
-        null => (AppColors.slotEmpty, attended ? AppColors.brownShadow : AppColors.slotInset, AppColors.brownMuted),
+        null when attended => (AppColors.goldLight, AppColors.goldShadow, AppColors.brownText),
+        null => (AppColors.slotEmpty, AppColors.slotInset, AppColors.brownMuted),
       };
+      // 오늘 칸은 열 때 아래에서 색이 차오르고 도장이 "쾅" 찍힌다
+      if (isToday && attended) return _TodayCell(day: d, bg: bg, line: line, num: num, result: result);
       return Container(
         height: 34,
         decoration: BoxDecoration(
@@ -232,6 +236,68 @@ class _Legend extends StatelessWidget {
         const SizedBox(width: 4),
         Text(label, style: const TextStyle(fontSize: 9.5, color: AppColors.brownMuted)),
       ],
+    );
+  }
+}
+
+/// 오늘 칸: 출석부를 열면 0.5초 동안 아래에서 색이 차오르고, 이어서 도장이 크게 찍혔다가 자리를 잡는다 (11-26).
+class _TodayCell extends StatelessWidget {
+  const _TodayCell({required this.day, required this.bg, required this.line, required this.num, required this.result});
+  final int day;
+  final Color bg;
+  final Color line;
+  final Color num;
+  final DayHabitResult? result;
+
+  @override
+  Widget build(BuildContext context) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: const Duration(milliseconds: 1100),
+      builder: (context, t, _) {
+        final fill = Curves.easeOut.transform((t / 0.45).clamp(0.0, 1.0));
+        final pop = t < 0.45 ? 0.0 : Curves.elasticOut.transform(((t - 0.45) / 0.55).clamp(0.0, 1.0));
+        return Container(
+          height: 34,
+          decoration: BoxDecoration(
+            color: AppColors.slotEmpty,
+            border: Border.all(color: AppColors.purple, width: 3),
+          ),
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Align(
+                alignment: Alignment.bottomCenter,
+                child: FractionallySizedBox(heightFactor: fill, widthFactor: 1, child: ColoredBox(color: bg)),
+              ),
+              Positioned(left: 3, top: 1, child: Text('$day', style: TextStyle(fontSize: 8.5, fontWeight: FontWeight.w700, color: num))),
+              Positioned.fill(
+                child: Center(
+                  child: Transform.scale(
+                    scale: pop * 1.0,
+                    child: Transform.rotate(
+                      angle: -0.2,
+                      child: Container(
+                        padding: const EdgeInsets.all(3),
+                        decoration: BoxDecoration(
+                          color: AppColors.redSoft,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: AppColors.white, width: 1.5),
+                        ),
+                        child: PixelIcon(
+                          layers: [PixelLayer(result == DayHabitResult.all ? PixelIcons.star : PixelIcons.checkStroke, AppColors.white)],
+                          size: 12,
+                          strokeWidth: result == DayHabitResult.all ? null : 3.5,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

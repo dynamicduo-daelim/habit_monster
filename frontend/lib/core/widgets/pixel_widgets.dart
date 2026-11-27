@@ -246,12 +246,15 @@ class CoinChip extends StatelessWidget {
 
 /// 성실볼 아이콘 + 개수.
 class BallChip extends StatelessWidget {
-  const BallChip({super.key, required this.count});
+  const BallChip({super.key, required this.count, this.onTap});
   final int count;
+
+  /// 누르면 (상단 바: 상점으로, 11-26).
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    final chip = Container(
       padding: const EdgeInsets.fromLTRB(6, 4, 9, 4),
       decoration: BoxDecoration(
         color: AppColors.cream,
@@ -268,6 +271,17 @@ class BallChip extends StatelessWidget {
               style: const TextStyle(
                   fontFamily: AppTheme.pixelFont, fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.brownText)),
         ],
+      ),
+    );
+    if (onTap == null) return chip;
+    return Semantics(
+      button: true,
+      label: '성실볼 $count개, 상점으로',
+      excludeSemantics: true,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: Padding(padding: const EdgeInsets.symmetric(vertical: 6), child: chip), // 누르는 영역 넓히기
       ),
     );
   }

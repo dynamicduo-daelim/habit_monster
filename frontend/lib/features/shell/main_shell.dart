@@ -20,6 +20,8 @@ import '../habits/habits_screen.dart';
 import '../home/home_screen.dart';
 import '../stats/stats_screen.dart';
 import '../tutorial/tutorial_overlay.dart';
+import '../../core/state/unlocks.dart';
+import '../../core/utils/format.dart';
 import 'game_action.dart';
 import '../../core/theme/app_theme.dart';
 
@@ -28,16 +30,23 @@ import '../../core/theme/app_theme.dart';
 /// 하위 화면에서 `MainShell.of(context)`로 탭 이동([MainShellState.goTab])과
 /// 토스트([MainShellState.toast])를 쓸 수 있다.
 class MainShell extends StatefulWidget {
-  const MainShell({super.key, this.showTutorial = false});
+  const MainShell({super.key, this.showTutorial = false, this.initialTab = todayTab});
 
-  /// 온보딩을 막 끝내고 처음 들어왔으면 튜토리얼부터 보여준다.
+  /// 온보딩을 막 끝내고 처음 들어왔으면 튜토리얼부터 보여준다 (필드 탭에서).
   final bool showTutorial;
 
-  static const int homeTab = 0;
+  /// 처음 보이는 탭 (기본: 오늘).
+  final int initialTab;
+
+  // 아래 탭: 오늘 · 챗봇 · 필드 · 도감 · 통계 — 처음 화면은 습관 중심의 "오늘", 가운데가 필드(옛 홈) (11-26 피드백 12, D-99)
+  static const int todayTab = 0;
   static const int chatTab = 1;
-  static const int habitsTab = 2;
+  static const int homeTab = 2; // 필드 (옛 홈 화면)
   static const int dexTab = 3;
   static const int statsTab = 4;
+
+  /// 예전 이름 — 습관 리스트는 이제 "오늘" 탭.
+  static const int habitsTab = todayTab;
 
   static MainShellState of(BuildContext context) => context.findAncestorStateOfType<MainShellState>()!;
 
@@ -49,15 +58,24 @@ class MainShell extends StatefulWidget {
 }
 
 class MainShellState extends State<MainShell> {
-  int _tab = 0;
+  late int _tab = widget.showTutorial ? MainShell.homeTab : widget.initialTab;
+
+  /// 홈 밖에서 상점을 열어 달라는 요청 (상단 바의 성실볼 칩, 11-26). 홈 화면이 듣고 상점을 연다.
+  final shopRequests = ValueNotifier<int>(0);
+
+  /// 홈 탭으로 가서 상점을 연다.
+  void openShop() {
+    goTab(MainShell.homeTab);
+    shopRequests.value++;
+  }
   String? _toastText;
   bool _toastCoin = false;
   Timer? _toastTimer;
 
-  static const _tabs = ['홈', '챗봇', '습관', '도감', '통계'];
+  static const _tabs = ['오늘', '챗봇', '필드', '도감', '통계'];
 
   /// 탭 순서 → `PixelIcons.nav`(시안 순서: 홈 · 챗봇 · 통계 · 도감 · 목표)의 아이콘 번호. 습관 탭은 목표 탭의 체크리스트 아이콘을 물려받았다.
-  static const _tabIcons = [0, 1, 4, 3, 2];
+  static const _tabIcons = [4, 1, 0, 3, 2]; // 오늘 = 체크리스트, 필드 = 집 아이콘
 
   /// 탭 안에서 잠깐 바꾸는 곡 (홈의 상점 → 상점 곡, 챗봇의 탐색 → 탐색 곡).
   final Map<int, BgmTrack> _musicOverrides = {};
@@ -99,7 +117,6 @@ class MainShellState extends State<MainShell> {
   final _walletKey = GlobalKey();
   final _monsterKeys = [for (var i = 0; i < Economy.fieldCapacity; i++) GlobalKey()];
   final _iconsKey = GlobalKey();
-  final _sheetKey = GlobalKey();
   final _tabKeys = [for (var i = 0; i < _tabs.length; i++) GlobalKey()];
 
   /// 홈으로 돌아가 튜토리얼을 처음부터 보여준다 (설정의 "다시 보기").
@@ -108,7 +125,15 @@ class MainShellState extends State<MainShell> {
     setState(() => _tutorial = true);
   }
 
-  List<TutorialStep> get _tutorialSteps => [
+  List<TutorialStep> get _tutorialSteps {
+    final field = _isOpen(Feature.field);
+    return [for (final st in _allTutorialSteps) if (field || !_fieldSteps.contains(st.title)) st];
+  }
+
+  /// 필드가 열려야 보이는 안내 (단계별 열기 — 필드가 열릴 때 따로 안내한다).
+  static const _fieldSteps = {'나의 필드', '상점 · 가방 · 출석 · 습관', '필드와 도감'};
+
+  List<TutorialStep> get _allTutorialSteps => [
         const TutorialStep(
           title: '모아루틴에 온 걸 환영해요!',
           body: '습관을 지키면 루틴몬이 함께 자라는 곳이에요. 루틴몬은 여기 사는 동물 친구들이에요. 화면을 하나씩 알려 드릴게요.',
@@ -119,9 +144,9 @@ class MainShellState extends State<MainShell> {
           body: '함께하는 몬스터가 여기서 지내요. 몬스터를 누르면 쓰다듬고, 간식을 주고, 같이 놀 수 있어요.',
         ),
         TutorialStep(
-          targets: [_sheetKey],
-          title: '오늘의 성실도',
-          body: '오늘 습관을 얼마나 지켰는지 보여줘요. 위로 밀면 습관마다 받은 점수가 나와요.',
+          targets: [_tabKeys[MainShell.todayTab]],
+          title: '오늘 탭',
+          body: '앱을 열면 가장 먼저 보이는 곳이에요. 오늘 할 습관과 성실도, 루틴몬 한 마리의 응원이 있어요.',
         ),
         TutorialStep(
           targets: [_tabKeys[MainShell.chatTab]],
@@ -141,9 +166,9 @@ class MainShellState extends State<MainShell> {
           body: '상점에서 물건을 사고, 가방에서 꺼내 써요. 출석부에서는 연속 출석을 보고, 습관에서는 새 습관을 추가하거나 그만둘 수 있어요.',
         ),
         TutorialStep(
-          targets: [_tabKeys[MainShell.habitsTab], _tabKeys[MainShell.dexTab]],
-          title: '습관과 도감',
-          body: '습관 탭에서 오늘 습관을 한눈에 보고, 새 습관을 추가할 수 있어요. 도감에는 만난 루틴몬이 기록돼요.',
+          targets: [_tabKeys[MainShell.homeTab], _tabKeys[MainShell.dexTab]],
+          title: '필드와 도감',
+          body: '가운데 필드 탭이 지금 이 화면이에요. 도감에는 만난 루틴몬이 기록돼요.',
         ),
         const TutorialStep(
           title: '이제 시작해 볼까요?',
@@ -182,11 +207,87 @@ class MainShellState extends State<MainShell> {
   @override
   void dispose() {
     _toastTimer?.cancel();
+    shopRequests.dispose();
     super.dispose();
+  }
+
+  // ---------- 단계별 열기 (D-100) ----------
+  Unlocks? get _unlocks => UnlocksScope.maybeOf(context);
+
+  /// 열린 기능인지 (저장소가 없으면 전부 열림).
+  bool _isOpen(Feature f) => _unlocks?.isOpen(f) ?? true;
+
+  static const _tabFeature = {MainShell.homeTab: Feature.field, MainShell.dexTab: Feature.dex, MainShell.statsTab: Feature.stats};
+  bool _tabOpen(int i) => _tabFeature[i] == null || _isOpen(_tabFeature[i]!);
+
+  /// 홈 아이콘 (선물함 · 가방) — 비추기 대상.
+  final bagKey = GlobalKey();
+  final giftKey = GlobalKey();
+
+  bool _tabInit = false;
+  final List<Feature> _celebrate = []; // 축하 창을 띄울 차례
+  bool _celebrating = false;
+  List<TutorialStep>? _spotlight; // 열린 자리를 비추는 안내 한 장
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_tabInit) return;
+    _tabInit = true;
+    // 필드가 아직 잠겨 있으면 튜토리얼도 오늘 탭에서
+    if (widget.showTutorial && !_isOpen(Feature.field)) _tab = MainShell.todayTab;
+  }
+
+  /// 게임이 바뀔 때마다 (그린 뒤) 조건을 다시 보고, 새로 열린 기능을 축하한다.
+  void _checkUnlocks(GameState s) {
+    final u = _unlocks;
+    if (u == null || !u.loaded || !u.fresh) return;
+    final opened = u.evaluate(s);
+    if (opened.isEmpty && _celebrate.isEmpty) return;
+    _celebrate.addAll(opened);
+    _nextCelebration();
+  }
+
+  Future<void> _nextCelebration() async {
+    if (_celebrating || _tutorial || _spotlight != null || _celebrate.isEmpty || !mounted) return;
+    _celebrating = true;
+    final f = _celebrate.removeAt(0);
+    final go = await showGeneralDialog<bool>(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: '닫기',
+      barrierColor: AppColors.black.withValues(alpha: 0.55),
+      pageBuilder: (ctx, _, __) => _UnlockPopup(feature: f),
+    );
+    _celebrating = false;
+    if (!mounted) return;
+    if (go == true) {
+      final tab = switch (f) { Feature.dex => MainShell.dexTab, Feature.stats => MainShell.statsTab, _ => MainShell.homeTab };
+      goTab(tab);
+      final target = switch (f) {
+        Feature.bag => bagKey,
+        Feature.gift => giftKey,
+        Feature.field => _tabKeys[MainShell.homeTab],
+        Feature.dex => _tabKeys[MainShell.dexTab],
+        Feature.stats => _tabKeys[MainShell.statsTab],
+      };
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          setState(() => _spotlight = [TutorialStep(targets: [target], title: '${f.label}${josaIGa(f.label)} 열렸어요!', body: f.description)]);
+        }
+      });
+    } else {
+      _nextCelebration();
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final s = GameScope.of(context);
+    UnlocksScope.maybeOf(context); // 열림이 바뀌면 다시 그림
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _checkUnlocks(s);
+    });
     return Stack(
       children: [
         _scaffold(context),
@@ -194,8 +295,21 @@ class MainShellState extends State<MainShell> {
           Positioned.fill(
             child: TutorialOverlay(
               steps: _tutorialSteps,
-              guide: _tutorialGuide(GameScope.of(context)),
-              onDone: () => setState(() => _tutorial = false),
+              guide: _tutorialGuide(s),
+              onDone: () {
+                setState(() => _tutorial = false);
+                _nextCelebration();
+              },
+            ),
+          ),
+        if (_spotlight != null)
+          Positioned.fill(
+            child: TutorialOverlay(
+              steps: _spotlight!,
+              onDone: () {
+                setState(() => _spotlight = null);
+                _nextCelebration();
+              },
             ),
           ),
       ],
@@ -219,15 +333,16 @@ class MainShellState extends State<MainShell> {
                     child: IndexedStack(
                       index: _tab,
                       children: [
+                        HabitsScreen(active: _tab == MainShell.todayTab),
+                        ChatScreen(active: _tab == MainShell.chatTab, keyboardOpen: keyboardOpen),
                         HomeScreen(
                           active: _tab == MainShell.homeTab,
                           tutorial: _tutorial,
                           monsterKeys: _monsterKeys,
                           iconsKey: _iconsKey,
-                          sheetKey: _sheetKey,
+                          bagKey: bagKey,
+                          giftKey: giftKey,
                         ),
-                        ChatScreen(active: _tab == MainShell.chatTab, keyboardOpen: keyboardOpen),
-                        const HabitsScreen(),
                         DexScreen(active: _tab == MainShell.dexTab),
                         StatsScreen(active: _tab == MainShell.statsTab),
                       ],
@@ -258,7 +373,7 @@ class MainShellState extends State<MainShell> {
           child: Row(
             children: [
               for (var i = 0; i < _tabs.length; i++)
-                Expanded(
+                if (_tabOpen(i)) Expanded(
                   child: GestureDetector(
                     behavior: HitTestBehavior.opaque,
                     onTap: () => goTab(i),
@@ -352,7 +467,7 @@ class _TopBar extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               const SizedBox(width: 8),
-                  BallChip(count: s.balls),
+                  BallChip(count: s.balls, onTap: () => MainShell.maybeOf(context)?.openShop()),
                 ],
               ),
               const SizedBox(width: 4),
@@ -515,6 +630,40 @@ class _SettingsPopup extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// 새 기능이 열렸을 때 축하 창: 이름 · 한 줄 설명 · [보러 가기] / [나중에] (D-100).
+class _UnlockPopup extends StatelessWidget {
+  const _UnlockPopup({required this.feature});
+  final Feature feature;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      type: MaterialType.transparency,
+      child: PopupCard(
+        title: '새 기능!',
+        ribbonColor: AppColors.gold,
+        ribbonText: AppColors.night,
+        maxWidth: 300,
+        children: [
+          Text('${feature.label}${josaIGa(feature.label)} 열렸어요!',
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontFamily: AppTheme.pixelFont, fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.brownText)),
+          const SizedBox(height: 8),
+          Text(feature.description,
+              textAlign: TextAlign.center, style: const TextStyle(fontSize: 13, height: 1.6, color: AppColors.brownText)),
+          const SizedBox(height: 16),
+          PixelButton(label: '보러 가기', onPressed: () => Navigator.of(context).pop(true)),
+          const SizedBox(height: 6),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('나중에', style: TextStyle(fontSize: 13, color: AppColors.brownMuted)),
+          ),
+        ],
       ),
     );
   }

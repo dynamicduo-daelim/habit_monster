@@ -14,7 +14,7 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     final state = GameState.sample(); // 어제까지 연속 11일, 오늘은 아직 체크 전
-    await tester.pumpWidget(withGame(state, MaterialApp(home: MainShell(showTutorial: tutorial))));
+    await tester.pumpWidget(withGame(state, MaterialApp(home: MainShell(showTutorial: tutorial, initialTab: MainShell.homeTab))));
     await tester.pump();
     return state;
   }
@@ -47,7 +47,7 @@ void main() {
     expect(find.text('모아루틴에 온 걸 환영해요!'), findsOneWidget);
     expect(find.text('1 / 8'), findsOneWidget);
 
-    for (final title in ['나의 필드', '오늘의 성실도', '챗봇에서 습관 체크', '골드와 성실볼', '상점 · 가방 · 출석 · 습관', '습관과 도감']) {
+    for (final title in ['나의 필드', '오늘 탭', '챗봇에서 습관 체크', '골드와 성실볼', '상점 · 가방 · 출석 · 습관', '필드와 도감']) {
       await tapAndWait(tester, find.text('다음 ▶'));
       expect(find.text(title), findsOneWidget);
     }
@@ -65,15 +65,20 @@ void main() {
     expect(find.text('모아루틴에 온 걸 환영해요!'), findsNothing);
   });
 
-  testWidgets('아래 탭 순서: 홈 · 챗봇 · 습관 · 도감 · 통계', (tester) async {
-    await pumpShell(tester);
-    // '습관'은 홈 오른쪽 아이콘 이름에도 있다 → 아래 탭(화면 트리에서 마지막)으로 고른다
-    final xs = [for (final t in ['홈', '챗봇', '습관', '도감', '통계']) tester.getCenter(find.text(t).last).dx];
+  testWidgets('아래 탭 순서: 오늘 · 챗봇 · 필드 · 도감 · 통계, 앱을 열면 오늘 탭 (11-26, D-99)', (tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(withGame(GameState.sample(), const MaterialApp(home: MainShell())));
+    await tester.pump();
+    final xs = [for (final t in ['오늘', '챗봇', '필드', '도감', '통계']) tester.getCenter(find.text(t).last).dx];
     expect(xs, orderedEquals([...xs]..sort()));
-    expect(find.text('목표'), findsNothing);
-    await tapAndWait(tester, find.text('습관').last);
-    expect(find.text('오늘의 습관'), findsOneWidget); // 가운데 탭이 습관 리스트
+    // 첫 화면 = 오늘: 루틴몬 1마리 말풍선 + 습관 리스트
+    expect(find.text('오늘의 습관'), findsOneWidget);
     expect(find.text('아침 러닝'), findsOneWidget);
+    expect(find.textContaining('나한테 알려 줘!'), findsOneWidget);
+    await tapAndWait(tester, find.text('필드'));
+    expect(find.bySemanticsLabel('상점'), findsOneWidget); // 가운데 = 옛 홈(필드)
   });
 
   testWidgets('튜토리얼 없이 들어오면 바로 홈', (tester) async {
@@ -105,8 +110,8 @@ void main() {
       await tapAndWait(tester, find.text('확인'));
       expect(find.text(head), findsNothing);
     }
-    // 성실도 ? 는 시트를 펼친 "오늘의 성실도"에 있다 (접힌 시트는 글자 없이 막대만, 11-12 · 펼치면 성실도만, 11-25)
-    await tapAndWait(tester, find.byKey(const ValueKey('habit-sheet-summary')));
+    // 성실도 ? 는 첫 화면 "오늘" 탭에 (바텀시트를 뺐다, 11-26)
+    await tapAndWait(tester, find.text('오늘'));
     await tapAndWait(tester, find.byType(SincerityHelp));
     expect(find.text('성실도가 뭐예요?'), findsOneWidget);
     await tapAndWait(tester, find.text('확인'));
@@ -124,7 +129,7 @@ void main() {
 
     state.confirmCheckin({'h1': 30});
     await tester.pump();
-    await tapAndWait(tester, find.text('홈'));
+    await tapAndWait(tester, find.text('필드'));
     await tapAndWait(tester, find.bySemanticsLabel('출석부'));
     expect(find.text('연속 12일'), findsOneWidget); // 체크인해도 더 오르지 않는다
     // 습관 하나만 체크 → 일부 완료 (11-12)

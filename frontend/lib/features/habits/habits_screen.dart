@@ -1,5 +1,8 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
+import '../../core/constants/app_assets.dart';
 import '../../core/constants/economy.dart';
 import '../../core/state/game_state.dart';
 import '../../core/theme/app_colors.dart';
@@ -15,11 +18,38 @@ import '../home/habit_manage_screen.dart';
 import '../home/habit_sheet.dart' show SincerityHelp;
 import '../shell/main_shell.dart';
 
-/// 하단 가운데 "습관" 탭: 오늘 습관을 한눈에.
-/// 위에서부터 제목 + [+ 새 습관] → 체크 수 · 성실도 → 습관마다 한 줄(체크 상태는 아이콘) → 맨 아래 챗봇 체크받기(파트너 그림).
-/// 목표 탭 자리를 대신한다 (기획 2026-11-25-습관-탭-목표-제거 · 11-26 다듬기).
-class HabitsScreen extends StatelessWidget {
-  const HabitsScreen({super.key});
+/// 첫 화면 "오늘" 탭 (11-26 개편, D-99): 위에 필드 장면 + 랜덤 루틴몬 1마리의 말풍선 → 체크 수 · 성실도 → 습관 리스트 → 체크받기.
+/// 루틴몬은 이 탭에 들어올 때마다 가진 아이 중 하나를 랜덤으로 고른다. 필드(여러 마리 · 상점 아이콘)는 가운데 "필드" 탭.
+class HabitsScreen extends StatefulWidget {
+  const HabitsScreen({super.key, this.active = true, this.random});
+
+  /// 이 탭이 보이는 중인지 — 다시 보일 때마다 루틴몬을 새로 고른다.
+  final bool active;
+
+  /// 테스트용 난수 (없으면 `Random()`).
+  final math.Random? random;
+
+  @override
+  State<HabitsScreen> createState() => _HabitsScreenState();
+}
+
+class _HabitsScreenState extends State<HabitsScreen> {
+  late final math.Random _rng = widget.random ?? math.Random();
+  String? _uid; // 오늘 탭에 나온 루틴몬
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _uid ??= _pick(GameScope.read(context));
+  }
+
+  @override
+  void didUpdateWidget(HabitsScreen old) {
+    super.didUpdateWidget(old);
+    if (widget.active && !old.active) _uid = _pick(GameScope.read(context));
+  }
+
+  String? _pick(GameState s) => s.monsters.isEmpty ? null : s.monsters[_rng.nextInt(s.monsters.length)].uid;
 
   @override
   Widget build(BuildContext context) {
@@ -30,21 +60,26 @@ class HabitsScreen extends StatelessWidget {
       if (msg != null) shell?.toast(msg);
     }
 
+    final mon = s.monsterByUid(_uid) ?? s.monsters.firstOrNull;
     return ListView(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
       children: [
+        if (mon != null) ...[
+          _MonsterScene(s: s, monster: mon),
+          const SizedBox(height: 12),
+        ],
+        _TodayCard(s: s),
+        const SizedBox(height: 14),
         Row(
           children: [
             const Expanded(
               child: Text('오늘의 습관',
-                  style: TextStyle(fontFamily: AppTheme.pixelFont, fontSize: 19, fontWeight: FontWeight.w700, color: AppColors.text)),
+                  style: TextStyle(fontFamily: AppTheme.pixelFont, fontSize: 17, fontWeight: FontWeight.w700, color: AppColors.text)),
             ),
             _NewHabitButton(onTap: add),
           ],
         ),
-        const SizedBox(height: 12),
-        _TodayCard(s: s),
-        const SizedBox(height: 14),
+        const SizedBox(height: 10),
         if (s.habits.isEmpty)
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 24),
@@ -61,6 +96,81 @@ class HabitsScreen extends StatelessWidget {
           _ChatCheckButton(s: s, onTap: () => shell.goTab(MainShell.chatTab)),
         ],
       ],
+    );
+  }
+}
+
+/// 오늘 탭 위 장면: 필드 배경 위에 루틴몬 1마리 + 말풍선 (오늘 상황에 맞는 한마디).
+class _MonsterScene extends StatelessWidget {
+  const _MonsterScene({required this.s, required this.monster});
+  final GameState s;
+  final OwnedMonster monster;
+
+  /// 말풍선: 체크 전이면 첫 습관을 묻고, 하는 중이면 다음 습관, 다 했으면 칭찬.
+  String _line() {
+    if (s.habits.isEmpty) return '같이 할 습관을 하나 만들어 볼까?';
+    if (s.todayRecords.isEmpty) return '오늘 ${s.activeHabits.first.name} 했어? 나한테 알려 줘!';
+    // 실제로 해낸 습관만 센다 (기록만 있고 0이면 못 한 것)
+    final missed = [for (final h in s.activeHabits) if ((s.todayRecords[h.id] ?? 0) <= 0) h];
+    if (missed.isEmpty) return '오늘 다 했어! 정말 최고야';
+    if (s.checkedInToday) return '수고했어! ${missed.first.name}은 내일 같이 해 보자';
+    return '잘하고 있어! 다음은 ${missed.first.name} 어때?';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final sp = Catalog.speciesById(monster.speciesId);
+    return Semantics(
+      label: '${sp.name}: ${_line()}',
+      excludeSemantics: true,
+      child: Container(
+        height: 210,
+        clipBehavior: Clip.antiAlias,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.ink, width: 3),
+          boxShadow: const [BoxShadow(color: AppColors.ink, offset: Offset(0, 4))],
+        ),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            const Image(
+              image: AssetImage(AppAssets.homeField),
+              fit: BoxFit.cover,
+              alignment: Alignment(0, -0.2), // 나무 · 풀밭이 같이 보이게
+              filterQuality: FilterQuality.none,
+            ),
+            Positioned(
+              left: 12,
+              right: 12,
+              top: 10,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                decoration: BoxDecoration(
+                  color: AppColors.cream,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: AppColors.ink, width: 3),
+                ),
+                child: Column(
+                  children: [
+                    Text(_line(),
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(fontSize: 13, height: 1.4, fontWeight: FontWeight.w700, color: AppColors.brownText)),
+                    const SizedBox(height: 1),
+                    Text('— ${sp.name}', style: const TextStyle(fontSize: 10.5, color: AppColors.brownMuted)),
+                  ],
+                ),
+              ),
+            ),
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 8,
+              child: Center(child: PixelImage(sp.assetAt(monster.level), height: 104)),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

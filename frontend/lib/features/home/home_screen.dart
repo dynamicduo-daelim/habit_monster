@@ -21,8 +21,8 @@ import '../shell/main_shell.dart';
 import 'attendance_popup.dart';
 import 'bag_overlay.dart';
 import 'habit_manage_screen.dart';
-import 'habit_sheet.dart';
 import 'home_parts.dart';
+import '../../core/state/unlocks.dart';
 import '../gift/gift_box_screen.dart';
 import 'monster_overlay.dart';
 import 'purchase_popups.dart';
@@ -47,7 +47,8 @@ class HomeScreen extends StatefulWidget {
     this.tutorial = false,
     this.monsterKeys,
     this.iconsKey,
-    this.sheetKey,
+    this.bagKey,
+    this.giftKey,
   });
 
   /// 홈 탭이 보이는 중인지 (아니면 돌아다니기/말풍선을 멈춘다).
@@ -59,7 +60,10 @@ class HomeScreen extends StatefulWidget {
   /// 튜토리얼이 가리킬 곳: 필드 몬스터들(필드 순서대로) · 오른쪽 위 아이콘들 · 아래 시트.
   final List<GlobalKey>? monsterKeys;
   final GlobalKey? iconsKey;
-  final GlobalKey? sheetKey;
+
+  /// 가방 · 선물함 아이콘 — 단계별 열기 때 그 자리를 비춘다 (D-100).
+  final GlobalKey? bagKey;
+  final GlobalKey? giftKey;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -104,8 +108,14 @@ class _HomeScreenState extends State<HomeScreen> {
       if (mounted) setState(() => _tick++);
     });
     _chatter = Timer.periodic(const Duration(milliseconds: 5200), (_) => _chatterStep());
-    WidgetsBinding.instance.addPostFrameCallback((_) => _openingChatter());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _openingChatter();
+      _shopRequests = MainShell.maybeOf(context)?.shopRequests?..addListener(_openShop);
+    });
   }
+
+  /// 상단 바 성실볼 칩 → 상점 (셸이 보내는 요청).
+  ValueNotifier<int>? _shopRequests;
 
   bool get _idle => widget.active && !widget.tutorial && _overlay == HomeOverlayKind.none;
 
@@ -177,7 +187,7 @@ class _HomeScreenState extends State<HomeScreen> {
     const monH = MonsterSpecies.fieldBox + labelH;
     final minX = leftGap, maxX = max(minX, w - columnW - rightGap);
     final minY = max(fieldBarBottom, grassPx - MonsterSpecies.fieldBox + 6);
-    final maxY = max(minY, h - HabitSheet.closedHeight - monH);
+    final maxY = max(minY, h - 12 - monH); // 바텀시트를 뺐다 — 습관은 첫 화면 "오늘" 탭에 (11-26, D-99)
     var px = (x / 100 * w).clamp(minX, maxX), py = (y / 100 * h).clamp(minY, maxY);
 
     // 버튼 영역과 겹치면 왼쪽으로 비키거나 아래로 내려가기 중 덜 움직이는 쪽
@@ -373,6 +383,7 @@ class _HomeScreenState extends State<HomeScreen> {
     for (final t in [_wander, _firstWander, _bob, _chatter, _talkClear, ..._heartClear.values, ..._rest.values]) {
       t?.cancel();
     }
+    _shopRequests?.removeListener(_openShop);
     super.dispose();
   }
 
@@ -400,6 +411,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     _syncShopMusic();
     final s = GameScope.of(context);
+    final unlocks = UnlocksScope.maybeOf(context); // 단계별 열기 (D-100)
     final mons = s.fieldMonsters;
     final sel = s.monsterByUid(_selUid);
     _syncTopBar(_overlay == HomeOverlayKind.monster && sel != null);
@@ -497,7 +509,9 @@ class _HomeScreenState extends State<HomeScreen> {
                     onTap: _openShop,
                   ),
                   const SizedBox(height: 6),
+                  if (unlocks?.isOpen(Feature.bag) ?? true)
                   _IconSpot(
+                    key: widget.bagKey,
                     label: '가방',
                     semantic: '내 가방',
                     icon: PixelIcons.fieldBag,
@@ -505,8 +519,10 @@ class _HomeScreenState extends State<HomeScreen> {
                     bob: iconUp ? 0 : -_iconBob,
                     onTap: () => setState(() => _overlay = HomeOverlayKind.bag),
                   ),
+                  if (unlocks?.isOpen(Feature.gift) ?? true) ...[
                   const SizedBox(height: 6),
                   _IconSpot(
+                    key: widget.giftKey,
                     label: '선물함',
                     semantic: s.hasPendingGift ? '선물함, 받을 선물 있음' : '선물함',
                     icon: PixelIcons.fieldGift,
@@ -515,6 +531,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     badge: s.hasPendingGift, // 점만 — 개수는 할 일처럼 보이지 않게 (명세 v10 · D-89)
                     onTap: () => GiftBoxScreen.open(context),
                   ),
+                  ],
                   const SizedBox(height: 6),
                   _IconSpot(
                     label: '출석',
@@ -573,15 +590,6 @@ class _HomeScreenState extends State<HomeScreen> {
                     child: const Text('◀', style: TextStyle(fontSize: 11, color: AppColors.text)),
                   ),
                 ),
-              ),
-            ),
-            Positioned(
-              left: _fieldInset,
-              right: _fieldInset,
-              bottom: _fieldInset,
-              child: HabitSheet(
-                key: widget.sheetKey,
-                maxHeight: box.maxHeight,
               ),
             ),
             if (_overlay == HomeOverlayKind.shop)
@@ -823,6 +831,7 @@ class _TalkBubble extends StatelessWidget {
 
 class _IconSpot extends StatelessWidget {
   const _IconSpot({
+    super.key,
     required this.label,
     required this.semantic,
     required this.icon,

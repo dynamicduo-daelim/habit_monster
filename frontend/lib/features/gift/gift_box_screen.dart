@@ -11,7 +11,7 @@ import '../../data/models.dart';
 import '../../data/pixel_icons.dart';
 import '../shell/game_action.dart';
 
-/// 선물함: 위에 받을 선물(퀘스트 보상 · [받기] · [모두 받기]), 아래에 오늘의 퀘스트 · 이번 주 퀘스트.
+/// 선물함: 받을 선물(퀘스트 보상 · [받기] · [모두 받기])만 보인다 (11-26 — 퀘스트 목록은 뺌).
 /// 퀘스트를 깨면 보상이 선물로 쌓이고, [받기]를 눌러야 골드가 들어온다 — 서버(명세 v10 11장)와 시연 모드가 같다
 /// (기획 2026-11-26-선물함).
 class GiftBoxScreen extends StatefulWidget {
@@ -94,11 +94,8 @@ class _GiftBoxScreenState extends State<GiftBoxScreen> {
                               : ListView(
                                   padding: const EdgeInsets.fromLTRB(14, 14, 14, 24),
                                   children: [
+                                    // 받을 보상만 (11-26 피드백 — 퀘스트 목록은 뺌)
                                     _GiftSection(board: b, busy: _busy, onClaim: _claim),
-                                    const SizedBox(height: 22),
-                                    _QuestSection(title: '오늘의 퀘스트', sub: '매일 0시에 새로', quests: b.daily),
-                                    const SizedBox(height: 22),
-                                    _QuestSection(title: '이번 주 퀘스트', sub: '매주 월요일에 새로', quests: b.weekly),
                                   ],
                                 ),
                 ),
@@ -300,115 +297,6 @@ class _GiftCard extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-/// 퀘스트 목록: 제목 · 진행 막대 · 보상 · 상태.
-class _QuestSection extends StatelessWidget {
-  const _QuestSection({required this.title, required this.sub, required this.quests});
-  final String title;
-  final String sub;
-  final List<Quest> quests;
-  @override
-  Widget build(BuildContext context) {
-    final s = GameScope.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            Text(title,
-                style: const TextStyle(fontFamily: AppTheme.pixelFont, fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.text)),
-            const SizedBox(width: 8),
-            Text(sub, style: const TextStyle(fontSize: 11, color: AppColors.textMuted)),
-          ],
-        ),
-        const SizedBox(height: 10),
-        for (final q in quests) ...[
-          _QuestRow(quest: q, s: s),
-          const SizedBox(height: 8),
-        ],
-      ],
-    );
-  }
-}
-
-class _QuestRow extends StatelessWidget {
-  const _QuestRow({required this.quest, required this.s});
-  final Quest quest;
-  final GameState s;
-
-  String? get _lockText => switch (quest.lockReason) {
-        'NO_TIMER_HABIT' => '시간(분) 습관을 등록하면 도전할 수 있어요',
-        'NOT_ENOUGH_CATEGORIES' => '카테고리를 ${(3 - s.pickedCategories.length).clamp(1, 3)}개 더 열면 도전할 수 있어요',
-        _ => quest.locked ? '지금은 도전할 수 없어요' : null,
-      };
-
-  @override
-  Widget build(BuildContext context) {
-    final q = quest;
-    final pct = q.target == 0 ? 0.0 : (q.progress / q.target).clamp(0.0, 1.0);
-    final String state;
-    final Color stateColor;
-    if (q.locked) {
-      state = '잠김';
-      stateColor = AppColors.textMuted;
-    } else if (q.done) {
-      state = '완료 · 보상은 선물로';
-      stateColor = AppColors.green;
-    } else {
-      state = '${q.progress} / ${q.target}';
-      stateColor = AppColors.purpleSoft;
-    }
-    return Opacity(
-      opacity: q.locked ? 0.6 : 1,
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: AppColors.nightPanel,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: q.done ? AppColors.green : AppColors.nightLine, width: 3),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(q.title, style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: AppColors.text)),
-                ),
-                Text('+${q.rewardGold}G',
-                    style: const TextStyle(fontFamily: AppTheme.pixelFont, fontSize: 13, color: AppColors.gold)),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(
-                  child: Container(
-                    height: 10,
-                    decoration: BoxDecoration(color: AppColors.nightDeep, border: Border.all(color: AppColors.nightLine2, width: 2)),
-                    alignment: Alignment.centerLeft,
-                    child: FractionallySizedBox(
-                      widthFactor: q.locked ? 0 : pct,
-                      heightFactor: 1,
-                      child: ColoredBox(color: q.done ? AppColors.green : AppColors.gold),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Text(state, style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: stateColor)),
-              ],
-            ),
-            if (_lockText != null) ...[
-              const SizedBox(height: 6),
-              Text(_lockText!, style: const TextStyle(fontSize: 11, color: AppColors.textMuted)),
-            ],
-          ],
-        ),
       ),
     );
   }

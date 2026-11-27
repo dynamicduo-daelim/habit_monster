@@ -4,6 +4,7 @@ import 'core/api/api_client.dart';
 import 'core/audio/bgm.dart';
 import 'core/auth/auth_service.dart';
 import 'core/auth/login_prefs.dart';
+import 'core/state/unlocks.dart';
 import 'core/state/game_repository.dart';
 import 'core/state/game_state.dart';
 import 'core/state/http_game_repository.dart';
@@ -15,7 +16,8 @@ import 'features/auth/auth_gate.dart';
 /// 앱 루트. 로그인 상태(AuthScope) · 게임 상태(GameScope, 읽기) · 게임 동작(GameRepositoryScope, 바꾸기) ·
 /// 배경음악(BgmScope)을 하위 위젯에 내려준다.
 class HabitMonsterApp extends StatefulWidget {
-  const HabitMonsterApp({super.key, this.authService, this.bgm, this.api, this.loginPrefs, this.timerStore});
+  const HabitMonsterApp(
+      {super.key, this.authService, this.bgm, this.api, this.loginPrefs, this.timerStore, this.unlockStore});
 
   /// 테스트나 서버 연결 때 다른 인증 구현을 넣는다 (기본: 앱 안에서만 동작하는 FakeAuthService).
   final AuthService? authService;
@@ -29,6 +31,9 @@ class HabitMonsterApp extends StatefulWidget {
 
   /// 공부 타이머 보관함 (기본: 메모리 — 앱에선 `main.dart`가 기기 저장소를 넣는다).
   final StudyTimerStore? timerStore;
+
+  /// 단계별 열기 보관함 (기본: 메모리 — 앱에선 `main.dart`가 기기 저장소를 넣는다, D-100).
+  final UnlockStore? unlockStore;
 
   /// 테스트에선 소리 없는 [SilentBgm] (기본: 실제로 재생하는 [AudioBgm]).
   final Bgm? bgm;
@@ -49,6 +54,7 @@ class _HabitMonsterAppState extends State<HabitMonsterApp> {
     prefsStore: widget.loginPrefs,
   );
   late final StudyTimer _timer = StudyTimer(store: widget.timerStore);
+  late final Unlocks _unlocks = Unlocks(widget.unlockStore ?? MemoryUnlockStore())..load();
 
   GameState _newState() => widget.api != null ? GameState.empty() : GameState.sample();
 
@@ -82,6 +88,7 @@ class _HabitMonsterAppState extends State<HabitMonsterApp> {
     _bgm.dispose();
     _auth.dispose();
     _timer.dispose();
+    _unlocks.dispose();
     super.dispose();
   }
 
@@ -101,11 +108,14 @@ class _HabitMonsterAppState extends State<HabitMonsterApp> {
             child: Listener(
               behavior: HitTestBehavior.translucent,
               onPointerDown: (_) => _bgm.unlock(),
-              child: MaterialApp(
-                title: '모아루틴',
-                debugShowCheckedModeBanner: false,
-                theme: AppTheme.build(),
-                home: const AuthGate(),
+              child: UnlocksScope(
+                unlocks: _unlocks,
+                child: MaterialApp(
+                  title: '모아루틴',
+                  debugShowCheckedModeBanner: false,
+                  theme: AppTheme.build(),
+                  home: const AuthGate(),
+                ),
               ),
             ),
           ),

@@ -28,22 +28,22 @@ Future<void> _checkAllNo(WidgetTester tester) async {
 }
 
 void main() {
-  group('온보딩: 고른 길의 몬스터만', () {
-    test('고르지 않은 길의 샘플 몬스터는 빠진다', () async {
+  group('온보딩: 처음엔 루틴몬 1마리 (11-26)', () {
+    test('샘플 몬스터는 빠지고 첫 길의 스타터 1마리만', () async {
       final s = GameState.sample(gold: 1240, balls: 1); // 불씨 원숭이(운동) · 찌릿 쥐(공부) · 새싹냥(식습관)
       final c = OnboardingController(onToast: (_) {});
       c.toggleCategory('ex');
       c.toggleCategory('sl');
       c.habits.add(Habit(id: 'h', name: '7시간 자기', categoryId: 'sl', measureIndex: 0, target: 7, periodIndex: 0));
       await c.commit(LocalGameRepository(s));
-      expect(s.monsters.map((m) => m.speciesId), ['monkey', 'squirrel']); // 고른 길마다 초기 몬스터
-      expect(s.chatPartnerUid, 'm1');
+      expect(s.monsters.map((m) => m.speciesId), ['monkey']); // 파트너를 안 골랐으면 첫 길(운동)
+      expect(s.chatPartnerUid, s.monsters.single.uid);
       expect(s.pickedCategories, ['ex', 'sl']);
-      expect(s.discoveredSpecies, {'monkey', 'squirrel'});
+      expect(s.discoveredSpecies, {'monkey'});
       c.dispose();
     });
 
-    test('고른 길마다 초기 몬스터 1마리, 대화 상대는 고른 첫 파트너', () async {
+    test('고른 첫 파트너 1마리만, 대화 상대도 그 아이', () async {
       final s = GameState.sample(gold: 1240, balls: 1);
       final c = OnboardingController(onToast: (_) {});
       for (final id in ['ex', 'sl', 'md']) {
@@ -52,7 +52,7 @@ void main() {
       c.pickStarter(1); // 수면 길의 달밤 다람쥐
       c.habits.add(Habit(id: 'h', name: '7시간 자기', categoryId: 'sl', measureIndex: 0, target: 7, periodIndex: 0));
       await c.commit(LocalGameRepository(s));
-      expect(s.monsters.map((m) => m.speciesId), ['monkey', 'squirrel', 'koala']); // 명상 길도 물방울 코알라
+      expect(s.monsters.map((m) => m.speciesId), ['squirrel']); // 다른 길의 몬스터는 탐색으로 만난다
       final squirrel = s.monsters.firstWhere((m) => m.speciesId == 'squirrel');
       expect(s.chatPartnerUid, squirrel.uid);
       expect(squirrel.affection, Economy.starterAffection);
@@ -77,8 +77,8 @@ void main() {
       c.toggleCategory('sl');
       c.habits.add(Habit(id: 'h', name: '7시간 자기', categoryId: 'sl', measureIndex: 0, target: 7, periodIndex: 0));
       await c.commit(LocalGameRepository(s));
-      expect(s.monsters.map((m) => m.speciesId), ['koala', 'squirrel']);
-      expect(s.chatPartnerUid, s.monsters.first.uid);
+      expect(s.monsters.map((m) => m.speciesId), ['koala']);
+      expect(s.chatPartnerUid, s.monsters.single.uid);
       c.dispose();
     });
 

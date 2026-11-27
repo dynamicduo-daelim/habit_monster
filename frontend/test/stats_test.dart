@@ -11,14 +11,14 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     final s = GameState.sample(gold: 1240, balls: 1);
-    await tester.pumpWidget(withGame(s, const MaterialApp(home: MainShell())));
+    await tester.pumpWidget(withGame(s, const MaterialApp(home: MainShell(initialTab: MainShell.homeTab))));
     await tester.tap(find.text('통계'));
     await tester.pumpAndSettle();
 
     expect(find.text('연속 출석'), findsOneWidget);
     expect(find.textContaining('최장 기록'), findsOneWidget);
     expect(find.text('성실도 그래프 · 최근 7일'), findsOneWidget);
-    expect(find.text('오늘'), findsOneWidget);
+    expect(find.text('오늘'), findsNWidgets(2)); // 그래프 막대 + 아래 '오늘' 탭 (11-26)
     expect(find.text('81'), findsOneWidget); // 샘플 값
     expect(find.text('카테고리별 레벨'), findsOneWidget);
     expect(find.text('미등록'), findsWidgets);
