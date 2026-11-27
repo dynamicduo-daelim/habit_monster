@@ -22,6 +22,10 @@ void main() {
       final store = MemoryUnlockStore();
       final s = GameState.sample();
       s.monsters.removeRange(1, s.monsters.length); // 처음엔 1마리
+      // 목요일 이후엔 샘플 출석으로 주간 퀘스트 선물이 생긴다 → 요일과 무관하게 선물 없이 시작
+      for (final g in s.demoGifts()) {
+        s.claimedQuestRewards.add(g.id);
+      }
       final u = Unlocks(store);
       await u.load();
       await u.startFresh(s.dayCount);

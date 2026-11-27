@@ -16,6 +16,7 @@
 -- v1.12: 주간 퀘스트 시드 3개 · quest_weekly_rate_threshold · QUEST_WEEKLY 적립
 -- v1.13: 선물함 (gift — 출처당 1줄 · 빈 선물 · 내용 수정 · 받음 되돌리기 금지 · 받기 = 원장(ref = 선물 id) · 볼 선물 → 가방 대사 · 권한).
 --        퀘스트 골드는 선물을 거쳐 적립되므로 v1.11 · v1.12 검사의 "완료 + 원장 적립"을 "완료"만으로 바꾸고 적립은 gift 검사로 옮김
+-- v1.14: 월간 배지 (user_month 사용자 · 월 1줄 · 1일만 · 음수 불가 · 배지 시각 한 번만) · 선물 출처 QUEST_MONTHLY · 설정 2개
 -- =====================================================================
 CREATE TEMP TABLE _result (id text, ok boolean, note text);
 
@@ -60,7 +61,9 @@ INSERT INTO _cross_fk_expected VALUES
  -- v1.11
  ('quest.user_quest','identity.users'),
  -- v1.13
- ('gift.gift','identity.users'), ('gift.gift','shop.shop_item');
+ ('gift.gift','identity.users'), ('gift.gift','shop.shop_item'),
+ -- v1.14
+ ('quest.user_month','identity.users');
 -- schema_later.sql을 적용한 DB라면 그 블록의 FK도 허용 목록에 포함
 INSERT INTO _cross_fk_expected
 SELECT * FROM (VALUES
@@ -75,7 +78,7 @@ JOIN pg_class t ON t.oid = c.conrelid JOIN pg_namespace tn ON tn.oid = t.relname
 JOIN pg_class r ON r.oid = c.confrelid JOIN pg_namespace rn ON rn.oid = r.relnamespace
 WHERE c.contype = 'f' AND t.relnamespace <> r.relnamespace;
 INSERT INTO _result
-SELECT 'S-1 스키마 간 FK = 허용 목록과 일치 (MVP 23쌍, 나중 블록 포함 28쌍 — v1.13)',
+SELECT 'S-1 스키마 간 FK = 허용 목록과 일치 (MVP 24쌍, 나중 블록 포함 29쌍 — v1.14)',
        NOT EXISTS (SELECT * FROM _cross_fk_actual EXCEPT SELECT * FROM _cross_fk_expected)
        AND NOT EXISTS (SELECT * FROM _cross_fk_expected EXCEPT SELECT * FROM _cross_fk_actual),
        (SELECT count(*) FROM _cross_fk_actual) || '쌍';
@@ -862,8 +865,37 @@ SELECT 'S-34 원장 QUEST_* = 받은 선물 (ref = 선물 id · 같은 금액, �
                    AND NOT EXISTS (SELECT 1 FROM gift.gift g
                                    WHERE g.source_code = l.reason_code AND g.id::text = l.ref_id AND g.claimed_at IS NOT NULL)), '';
 INSERT INTO _result
-SELECT 'S-36 선물 출처 시드 v1.13 (QUEST_DAILY · QUEST_WEEKLY)',
-       (SELECT string_agg(code, ',' ORDER BY code) FROM gift.gift_source) = 'QUEST_DAILY,QUEST_WEEKLY', '';
+SELECT 'S-36 선물 출처 시드 (QUEST_DAILY · QUEST_WEEKLY v1.13 · QUEST_MONTHLY v1.14)',
+       (SELECT string_agg(code, ',' ORDER BY code) FROM gift.gift_source) = 'QUEST_DAILY,QUEST_MONTHLY,QUEST_WEEKLY', '';
+
+-- ---------- v1.14 월간 배지 ----------
+SELECT pg_temp.expect_ok  ('v1.14 이번 달 줄 (시작값 = 그달 기존 완료 수)',
+  $$INSERT INTO quest.user_month (user_id, month_start, completed_count) VALUES (1,'2026-10-01',3)$$);
+SELECT pg_temp.expect_fail('v1.14 같은 달은 한 줄',
+  $$INSERT INTO quest.user_month (user_id, month_start) VALUES (1,'2026-10-01')$$);
+SELECT pg_temp.expect_fail('v1.14 월 시작은 1일만',
+  $$INSERT INTO quest.user_month (user_id, month_start) VALUES (1,'2026-11-02')$$);
+SELECT pg_temp.expect_fail('v1.14 완료 수 음수 불가',
+  $$UPDATE quest.user_month SET completed_count = -1 WHERE user_id = 1 AND month_start = '2026-10-01'$$);
+SELECT pg_temp.expect_ok  ('v1.14 목표에 닿으면 배지 시각 + 성실볼 선물 (출처 번호 = user_month.id, 골드 0)',
+  $$UPDATE quest.user_month SET completed_count = 20, badge_earned_at = now() WHERE user_id = 1 AND month_start = '2026-10-01';
+    INSERT INTO gift.gift (user_id, source_code, source_ref, title, item_code, item_quantity)
+    SELECT 1, 'QUEST_MONTHLY', m.id::text, '2026년 10월 배지', 'BALL', 1 FROM quest.user_month m
+    WHERE m.user_id = 1 AND m.month_start = '2026-10-01'$$);
+SELECT pg_temp.expect_fail('v1.14 같은 달 배지 선물 두 번 불가 (선물 UNIQUE)',
+  $$INSERT INTO gift.gift (user_id, source_code, source_ref, title, item_code, item_quantity)
+    SELECT 1, 'QUEST_MONTHLY', m.id::text, '2026년 10월 배지', 'BALL', 1 FROM quest.user_month m
+    WHERE m.user_id = 1 AND m.month_start = '2026-10-01'$$);
+SELECT pg_temp.expect_ok  ('v1.14 배지 뒤에도 완료 수는 계속 셈',
+  $$UPDATE quest.user_month SET completed_count = completed_count + 1 WHERE user_id = 1 AND month_start = '2026-10-01'$$);
+SELECT pg_temp.expect_fail('v1.14 받은 배지 되돌리기 불가 (트리거)',
+  $$UPDATE quest.user_month SET badge_earned_at = NULL WHERE user_id = 1 AND month_start = '2026-10-01'$$);
+SELECT pg_temp.expect_fail('v1.14 배지 시각 다시 쓰기 불가 (트리거)',
+  $$UPDATE quest.user_month SET badge_earned_at = now() + interval '1 day' WHERE user_id = 1 AND month_start = '2026-10-01'$$);
+INSERT INTO _result
+SELECT 'S-37 설정값 v1.14 (월간 목표 20 · 성실볼 1)',
+       (SELECT value FROM config.balance_config WHERE key = 'quest_monthly_target') = '20'::jsonb
+   AND (SELECT value FROM config.balance_config WHERE key = 'quest_monthly_ball_reward') = '1'::jsonb, '';
 
 -- ---------- api: 중복 요청 방지 키 (v1.7) ----------
 SELECT pg_temp.expect_ok  ('v1.7 키 등록 (처리 중)',

@@ -39,7 +39,7 @@ public class BalanceConfig {
 		"starter_affection",
 		"timer_max_minutes", "self_report_max_score", "exp_coef_ratio", "exp_coef_range", "exp_coef_binary",
 		"exp_coef_verified", "ai_daily_call_limit", "ai_min_confidence",
-		"quest_enabled", "quest_weekly_rate_threshold");
+		"quest_enabled", "quest_weekly_rate_threshold", "quest_monthly_target", "quest_monthly_ball_reward");
 
 	/**
 	 * 시드에 있지만 이 클래스가 읽지 않는 키 — 다른 곳에서 정하거나(업무 날짜는 {@code application.properties}),
@@ -160,6 +160,10 @@ public class BalanceConfig {
 	public boolean questEnabled() { return values.get("quest_enabled").asBoolean(); }
 	/** 주간 퀘스트 "성실도 N% 이상인 날"의 N (v1.12). */
 	public int questWeeklyRateThreshold() { return integer("quest_weekly_rate_threshold"); }
+	/** 월간 배지: 그달 퀘스트 완료 N개 (v1.14). */
+	public int questMonthlyTarget() { return integer("quest_monthly_target"); }
+	/** 월간 배지 보상 성실볼 개수 — 선물함으로 (v1.14). */
+	public int questMonthlyBallReward() { return integer("quest_monthly_ball_reward"); }
 
 	/** 진화 단계: 0 기본 · 1 1차 · 2 최종 = 넘은 진화 레벨 수. */
 	public int stageOf(int level) {

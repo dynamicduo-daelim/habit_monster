@@ -131,7 +131,9 @@ class InterpretApiTest extends PostgresTest {
 		interpret(a, "오늘 뛰었어").andExpect(status().isOk())
 			.andExpect(jsonPath("$.source").value("TEMPLATE"))
 			.andExpect(jsonPath("$.answers.length()").value(0))
-			.andExpect(jsonPath("$.reply").value(org.hamcrest.Matchers.containsString("아침 러닝")));
+			.andExpect(jsonPath("$.reply").value(org.hamcrest.Matchers.containsString("아침 러닝")))
+			.andExpect(jsonPath("$.reply").value(org.hamcrest.Matchers.containsString("다시 말해 줄래"))) // 11-26: 질문을 되풀이하지 않는다
+			.andExpect(jsonPath("$.reply").value(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("버튼"))));
 
 		modelSays("이건 JSON이 아니야");
 		interpret(a, "오늘 뛰었어").andExpect(status().isOk()).andExpect(jsonPath("$.source").value("TEMPLATE"));
@@ -159,7 +161,7 @@ class InterpretApiTest extends PostgresTest {
 			{"reply": "30분 뛰었네! 25점이야!", "safety": false,
 			 "answers": [{"habitId": %d, "done": true, "value": 30, "evidence": "SHORT", "confidence": 0.9}]}""".formatted(run));
 		interpret(a, "30분 뛰었어").andExpect(status().isOk())
-			.andExpect(jsonPath("$.reply").value("알려줘서 고마워! 아래에서 기록을 확인해 줘."))
+			.andExpect(jsonPath("$.reply").value("알려줘서 고마워!"))
 			.andExpect(jsonPath("$.answers.length()").value(1)) // 기록 후보는 그대로
 			.andExpect(jsonPath("$.source").value("LLM"));
 	}
@@ -239,5 +241,47 @@ class InterpretApiTest extends PostgresTest {
 		interpretRaw(a, "{\"businessDate\": \"" + dates.today() + "\", \"message\": \"뛰었어\", "
 				+ "\"history\": [{\"role\": \"BOT\", \"text\": \" \"}], \"draft\": []}")
 			.andExpect(status().isBadRequest());
+	}
+	@Test
+	void 양을_말하지_않았는데_모델이_목표값을_넣으면_기록하지_않고_얼마나_했는지_묻는다() throws Exception {
+		// 11-26 실제 Gemini: "웅 핶어" · "했어"에 목표값 30을 확신 0.9로 넣었다
+		String a = onboardedUser("ai11@habit.kr");
+		long run = running("ai11@habit.kr");
+		modelSays("""
+			{"reply": "응, 수고했어.", "safety": false,
+			 "answers": [{"habitId": %d, "done": true, "value": 30, "evidence": "SHORT", "confidence": 0.9}]}""".formatted(run));
+		interpret(a, "웅 핶어").andExpect(status().isOk())
+			.andExpect(jsonPath("$.answers.length()").value(0))
+			.andExpect(jsonPath("$.askAgain.habitId").value(run))
+			.andExpect(jsonPath("$.askAgain.question").value(org.hamcrest.Matchers.containsString("얼마나")));
+
+		// 한글로 양을 말하면 기록한다
+		modelSays("""
+			{"reply": "한 시간이나 했구나.", "safety": false,
+			 "answers": [{"habitId": %d, "done": true, "value": 60, "evidence": "SHORT", "confidence": 0.9}]}""".formatted(run));
+		interpret(a, "한 시간 했어").andExpect(jsonPath("$.answers.length()").value(1));
+
+		// 못 했으면 양이 없어도 기록한다 (0)
+		modelSays("""
+			{"reply": "그렇구나.", "safety": false,
+			 "answers": [{"habitId": %d, "done": false, "evidence": "SHORT", "confidence": 0.9}]}""".formatted(run));
+		interpret(a, "못 갔어").andExpect(jsonPath("$.answers.length()").value(1))
+			.andExpect(jsonPath("$.answers[0].value").value(0));
+	}
+
+	@Test
+	void 대답에_이번에_기록한_값은_써도_된다() throws Exception {
+		// 11-26: "반시간 했어" → "30분 했구나"가 지어낸 숫자로 막혀 대본 문구가 떴다
+		String a = onboardedUser("ai12@habit.kr");
+		long run = running("ai12@habit.kr");
+		modelSays("""
+			{"reply": "반시간... 30분 했구나.", "safety": false,
+			 "answers": [{"habitId": %d, "done": true, "value": 30, "evidence": "SHORT", "confidence": 0.9}]}""".formatted(run));
+		interpret(a, "반시간 했어").andExpect(jsonPath("$.reply").value("반시간... 30분 했구나."));
+
+		modelSays("""
+			{"reply": "1시간이나 했네.", "safety": false,
+			 "answers": [{"habitId": %d, "done": true, "value": 60, "evidence": "SHORT", "confidence": 0.9}]}""".formatted(run));
+		interpret(a, "한 시간 했어").andExpect(jsonPath("$.reply").value("1시간이나 했네.")); // 60분 = 1시간
 	}
 }
